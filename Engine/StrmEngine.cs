@@ -149,7 +149,7 @@ public class StrmEngine
                 ?? config.Categories.FirstOrDefault(c => c.IsDefault)
                 ?? new CategoryMapping("Movies", "movies", "movie", new List<int>());
 
-            var files = torrent.FileStats ?? new List<TorrTorrentFile>();
+            var files = torrent.GetEffectiveFiles();
             var videoFiles = files.Where(f => EpisodeMatcher.IsVideoFile(f.Path)).ToList();
 
             // If no video files detected yet (e.g. metadata still loading in TorrServer), treat file 0 as video
@@ -164,19 +164,27 @@ public class StrmEngine
 
             result.VideoFilesCount = videoFiles.Count;
 
-            // Detect if this is a TV series release
-            var isDetectedShow = EpisodeMatcher.IsShowRelease(rawTitle, videoFiles.Select(f => f.Path)) || videoFiles.Count > 1;
-            var isShow = chosenCat.Type.Equals("show", StringComparison.OrdinalIgnoreCase) || isDetectedShow;
+            // Check if chosen category is explicitly a TV show or Movie category
+            var isChosenCatShow = chosenCat.Type.Equals("show", StringComparison.OrdinalIgnoreCase);
+            var isChosenCatMovie = chosenCat.Type.Equals("movie", StringComparison.OrdinalIgnoreCase);
 
-            // Auto-route series to Show category ONLY IF category was not explicitly specified/forced
-            if (!forceCategory && string.IsNullOrWhiteSpace(category) && isShow && chosenCat.Type.Equals("movie", StringComparison.OrdinalIgnoreCase))
+            // Detect if this is a TV series release based on show title keywords or episode tags
+            var isDetectedShow = EpisodeMatcher.IsShowRelease(rawTitle, videoFiles.Select(f => f.Path));
+
+            // Auto-route to Show category ONLY IF category was not explicitly specified and torrent is a detected show
+            if (!forceCategory && string.IsNullOrWhiteSpace(category) && isDetectedShow && isChosenCatMovie)
             {
                 var showCat = config.Categories.FirstOrDefault(c => c.Type.Equals("show", StringComparison.OrdinalIgnoreCase))
                     ?? new CategoryMapping("Shows", "shows", "show", new List<int>());
 
                 _logger.LogInformation("Torrent '{Title}' detected as a TV series. Auto-routing from '{OldCategory}' to '{NewCategory}'", rawTitle, chosenCat.Name, showCat.Name);
                 chosenCat = showCat;
+                isChosenCatShow = true;
+                isChosenCatMovie = false;
             }
+
+            // Treat as TV show ONLY if the category is a show category (or auto-routed to a show category)
+            var isShow = isChosenCatShow;
 
             result.Category = chosenCat.Name;
             var categoryFolder = ResolveMediaRoot(chosenCat.Folder);
@@ -184,14 +192,19 @@ public class StrmEngine
 
             if (!isShow)
             {
-                // Single movie
+                // Movies / Movie Collections
                 var folderTemplate = !string.IsNullOrWhiteSpace(config.MovieFolderTemplate) ? config.MovieFolderTemplate : "{Title} ({Year})";
                 var fileTemplate = !string.IsNullOrWhiteSpace(config.MovieFileTemplate) ? config.MovieFileTemplate : "{Title} ({Year}).strm";
+
+                // Avoid duplicating year in folder name if cleanTitle already contains extractedYear
+                var yearToken = extractedYear.HasValue && !cleanTitle.Contains(extractedYear.Value.ToString(), StringComparison.Ordinal)
+                    ? extractedYear.Value.ToString()
+                    : string.Empty;
 
                 var tokens = new Dictionary<string, string>
                 {
                     ["Title"] = cleanTitle,
-                    ["Year"] = extractedYear.HasValue ? extractedYear.Value.ToString() : string.Empty,
+                    ["Year"] = yearToken,
                     ["RawTitle"] = rawTitle
                 };
 
@@ -218,34 +231,92 @@ public class StrmEngine
                 Directory.CreateDirectory(movieDir);
                 result.FolderPath = movieDir;
 
-                var mainFile = videoFiles.OrderByDescending(f => f.Length).First();
-                string strmName;
-                if (config.EnableMovieRenaming)
+                if (videoFiles.Count == 1)
                 {
-                    var fileName = FormatTemplate(fileTemplate, tokens);
-                    if (!fileName.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
+                    // Single movie file
+                    var mainFile = videoFiles[0];
+                    string strmName;
+                    if (config.EnableMovieRenaming)
                     {
-                        fileName += ".strm";
+                        var fileName = FormatTemplate(fileTemplate, tokens);
+                        if (!fileName.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
+                        {
+                            fileName += ".strm";
+                        }
+                        strmName = TitleCleaner.SanitizeFilename(fileName);
                     }
-                    strmName = TitleCleaner.SanitizeFilename(fileName);
+                    else
+                    {
+                        var cleanMainPath = (mainFile.Path ?? string.Empty).Replace('\\', '/');
+                        var mainFileName = Path.GetFileName(cleanMainPath);
+                        var origBase = Path.GetFileNameWithoutExtension(mainFileName);
+                        if (string.IsNullOrWhiteSpace(origBase))
+                        {
+                            origBase = rawTitle;
+                        }
+                        strmName = TitleCleaner.SanitizeFilename(origBase) + ".strm";
+                    }
+
+                    var strmPath = Path.Combine(movieDir, strmName);
+                    var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream?link={torrent.Hash}&index={mainFile.Id}&play\n";
+                    await File.WriteAllTextAsync(strmPath, streamUrl, Encoding.UTF8, cancellationToken);
+                    result.CreatedStrmFiles.Add(strmPath);
                 }
                 else
                 {
-                    var origBase = Path.GetFileNameWithoutExtension(mainFile.Path);
-                    if (string.IsNullOrWhiteSpace(origBase))
+                    // Multi-movie collection or multi-part movie in a movie library
+                    foreach (var videoFile in videoFiles.OrderBy(f => f.Path))
                     {
-                        origBase = rawTitle;
+                        string strmName;
+                        if (config.EnableMovieRenaming)
+                        {
+                            var fileBase = Path.GetFileNameWithoutExtension(videoFile.Path) ?? string.Empty;
+                            var (itemCleanTitle, itemYear) = TitleCleaner.CleanTitleAndExtractYear(fileBase);
+                            if (!string.IsNullOrWhiteSpace(itemCleanTitle) && itemCleanTitle.Length > 2)
+                            {
+                                var itemYearToken = itemYear.HasValue && !itemCleanTitle.Contains(itemYear.Value.ToString(), StringComparison.Ordinal)
+                                    ? itemYear.Value.ToString()
+                                    : string.Empty;
+
+                                var itemTokens = new Dictionary<string, string>
+                                {
+                                    ["Title"] = itemCleanTitle,
+                                    ["Year"] = itemYearToken,
+                                    ["RawTitle"] = fileBase
+                                };
+                                var itemFileName = FormatTemplate(fileTemplate, itemTokens);
+                                if (!itemFileName.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    itemFileName += ".strm";
+                                }
+                                strmName = TitleCleaner.SanitizeFilename(itemFileName);
+                            }
+                            else
+                            {
+                                strmName = TitleCleaner.SanitizeFilename(fileBase) + ".strm";
+                            }
+                        }
+                        else
+                        {
+                            var cleanVidPath = (videoFile.Path ?? string.Empty).Replace('\\', '/');
+                            var vidFileName = Path.GetFileName(cleanVidPath);
+                            var origBase = Path.GetFileNameWithoutExtension(vidFileName);
+                            if (string.IsNullOrWhiteSpace(origBase))
+                            {
+                                origBase = $"Movie_{videoFile.Id}";
+                            }
+                            strmName = TitleCleaner.SanitizeFilename(origBase) + ".strm";
+                        }
+
+                        var strmPath = Path.Combine(movieDir, strmName);
+                        var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream?link={torrent.Hash}&index={videoFile.Id}&play\n";
+                        await File.WriteAllTextAsync(strmPath, streamUrl, Encoding.UTF8, cancellationToken);
+                        result.CreatedStrmFiles.Add(strmPath);
                     }
-                    strmName = TitleCleaner.SanitizeFilename(origBase) + ".strm";
                 }
 
-                var strmPath = Path.Combine(movieDir, strmName);
-                var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream?link={torrent.Hash}&index={mainFile.Id}&play\n";
-                await File.WriteAllTextAsync(strmPath, streamUrl, Encoding.UTF8, cancellationToken);
-                result.CreatedStrmFiles.Add(strmPath);
-
-                // Write NFO if TMDB ID provided
-                if (tmdbId.HasValue && tmdbId.Value > 0)
+                // Write NFO if TMDB ID provided (for single movie)
+                if (videoFiles.Count == 1 && tmdbId.HasValue && tmdbId.Value > 0)
                 {
                     await WriteMovieNfoAsync(movieDir, folderName, cleanTitle, extractedYear, tmdbId.Value, cancellationToken);
                 }
@@ -266,10 +337,15 @@ public class StrmEngine
                 var seasonFolderTemplate = !string.IsNullOrWhiteSpace(config.ShowSeasonFolderTemplate) ? config.ShowSeasonFolderTemplate : "Season {Season:00}";
                 var epFileTemplate = !string.IsNullOrWhiteSpace(config.ShowEpisodeFileTemplate) ? config.ShowEpisodeFileTemplate : "{Title} - {EpisodeTag}.strm";
 
+                // Avoid duplicating year in show folder name if cleanTitle already contains extractedYear
+                var showYearToken = extractedYear.HasValue && !cleanTitle.Contains(extractedYear.Value.ToString(), StringComparison.Ordinal)
+                    ? extractedYear.Value.ToString()
+                    : string.Empty;
+
                 var showTokens = new Dictionary<string, string>
                 {
                     ["Title"] = cleanTitle,
-                    ["Year"] = extractedYear.HasValue ? extractedYear.Value.ToString() : string.Empty,
+                    ["Year"] = showYearToken,
                     ["RawTitle"] = rawTitle
                 };
 

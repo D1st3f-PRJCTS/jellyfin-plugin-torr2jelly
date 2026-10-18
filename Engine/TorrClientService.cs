@@ -93,6 +93,42 @@ public class TorrTorrent
 
     [JsonPropertyName("file_stats")]
     public List<TorrTorrentFile>? FileStats { get; set; }
+
+    public List<TorrTorrentFile> GetEffectiveFiles()
+    {
+        if (FileStats != null && FileStats.Count > 0)
+        {
+            return FileStats;
+        }
+
+        if (!string.IsNullOrWhiteSpace(Data))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(Data);
+                if (doc.RootElement.TryGetProperty("TorrServer", out var tsProp) &&
+                    tsProp.TryGetProperty("Files", out var filesProp) &&
+                    filesProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    var files = new List<TorrTorrentFile>();
+                    foreach (var f in filesProp.EnumerateArray())
+                    {
+                        var id = f.TryGetProperty("id", out var idProp) ? idProp.GetInt32() : 0;
+                        var path = f.TryGetProperty("path", out var pathProp) ? pathProp.GetString() ?? string.Empty : string.Empty;
+                        var length = f.TryGetProperty("length", out var lenProp) ? lenProp.GetInt64() : 0;
+                        files.Add(new TorrTorrentFile { Id = id, Path = path, Length = length });
+                    }
+                    if (files.Count > 0)
+                    {
+                        return files;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        return FileStats ?? new List<TorrTorrentFile>();
+    }
 }
 
 public class TorrClientService

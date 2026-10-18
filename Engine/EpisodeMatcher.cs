@@ -93,11 +93,6 @@ public static partial class EpisodeMatcher
         if (filePaths != null)
         {
             var videoFiles = filePaths.Where(IsVideoFile).ToList();
-            if (videoFiles.Count > 1)
-            {
-                return true;
-            }
-
             if (videoFiles.Any(f => ParseEpisodeInfo(f).IsMatched))
             {
                 return true;

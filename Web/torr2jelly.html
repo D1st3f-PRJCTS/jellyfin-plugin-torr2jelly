@@ -938,6 +938,57 @@
                         <button type="button" onclick="window.t2jSetCachePreset && window.t2jSetCachePreset(102400)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">100 GB</button>
                       </div>
                     </div>
+
+                    <!-- Preload Cache & ReadAhead -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                      <div class="space-y-1">
+                        <div class="flex items-center justify-between">
+                          <label class="block text-slate-300 font-medium" id="lblCfgPreloadCache">Preload Buffer (%):</label>
+                          <span class="text-[11px] text-emerald-400 font-mono font-semibold" id="cfgPreloadCacheHuman">3% (~3 GB)</span>
+                        </div>
+                        <input type="number" id="cfgPreloadCacheInput" placeholder="3" min="0" max="100" oninput="window.t2jUpdatePreloadHuman && window.t2jUpdatePreloadHuman(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                        <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
+                          <button type="button" onclick="window.t2jSetPreloadPreset && window.t2jSetPreloadPreset(1)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">1%</button>
+                          <button type="button" onclick="window.t2jSetPreloadPreset && window.t2jSetPreloadPreset(3)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">3% (Рек.)</button>
+                          <button type="button" onclick="window.t2jSetPreloadPreset && window.t2jSetPreloadPreset(5)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">5%</button>
+                          <button type="button" onclick="window.t2jSetPreloadPreset && window.t2jSetPreloadPreset(10)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">10%</button>
+                        </div>
+                        <p class="text-[10px] text-slate-500" id="lblCfgPreloadCacheSub">Об'єм буфера перед запуском відео. При кеші 100 ГБ значення 3% (~3 ГБ) забезпечує миттєвий старт без зависання.</p>
+                      </div>
+
+                      <div class="space-y-1">
+                        <div class="flex items-center justify-between">
+                          <label class="block text-slate-300 font-medium" id="lblCfgReaderReadAHead">Reader ReadAhead (%):</label>
+                          <span class="text-[11px] text-emerald-400 font-mono font-semibold" id="cfgReaderReadAHeadHuman">95%</span>
+                        </div>
+                        <input type="number" id="cfgReaderReadAHeadInput" placeholder="95" min="5" max="100" oninput="window.t2jUpdateReaderHuman && window.t2jUpdateReaderHuman(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                        <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
+                          <button type="button" onclick="window.t2jSetReaderPreset && window.t2jSetReaderPreset(80)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">80%</button>
+                          <button type="button" onclick="window.t2jSetReaderPreset && window.t2jSetReaderPreset(90)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">90%</button>
+                          <button type="button" onclick="window.t2jSetReaderPreset && window.t2jSetReaderPreset(95)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">95% (Рек.)</button>
+                          <button type="button" onclick="window.t2jSetReaderPreset && window.t2jSetReaderPreset(100)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">100%</button>
+                        </div>
+                        <p class="text-[10px] text-slate-500" id="lblCfgReaderReadAHeadSub">Відсоток випереджаючого завантаження потоку (рекомендовано 95%).</p>
+                      </div>
+                    </div>
+
+                    <!-- Seeding Timeout -->
+                    <div class="space-y-1.5 pt-1">
+                      <div class="flex items-center justify-between">
+                        <label class="block text-slate-300 font-medium" id="lblCfgDisconnectTimeout">Час роздачі після перегляду (Seeding Duration):</label>
+                        <span class="text-[11px] text-emerald-400 font-mono font-semibold" id="cfgDisconnectTimeoutHuman">24 год (86400 с)</span>
+                      </div>
+                      <input type="number" id="cfgDisconnectTimeoutInput" placeholder="86400" oninput="window.t2jUpdateTimeoutHuman && window.t2jUpdateTimeoutHuman(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                      <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
+                        <button type="button" onclick="window.t2jSetTimeoutPreset && window.t2jSetTimeoutPreset(3600)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">1 год</button>
+                        <button type="button" onclick="window.t2jSetTimeoutPreset && window.t2jSetTimeoutPreset(21600)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">6 год</button>
+                        <button type="button" onclick="window.t2jSetTimeoutPreset && window.t2jSetTimeoutPreset(43200)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">12 год</button>
+                        <button type="button" onclick="window.t2jSetTimeoutPreset && window.t2jSetTimeoutPreset(86400)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">24 год (Рек.)</button>
+                        <button type="button" onclick="window.t2jSetTimeoutPreset && window.t2jSetTimeoutPreset(172800)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">48 год</button>
+                        <button type="button" onclick="window.t2jSetTimeoutPreset && window.t2jSetTimeoutPreset(604800)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">7 днів</button>
+                      </div>
+                      <p class="text-[10px] text-slate-500" id="lblCfgDisconnectTimeoutSub">Скільки часу TorrServer залишається підключеним до роздачі після зупинки плеєра. Кеш на диску зберігається постійно.</p>
+                    </div>
                   </div>
 
                   <div class="pt-2 flex items-center justify-between flex-wrap gap-2">
@@ -1215,6 +1266,12 @@
             lblCfgUseDiskCache: 'Enable Disk Cache (Buffer to SSD/HDD)',
             lblCfgUseDiskCacheSub: 'Recommended when server RAM is limited. Buffers streams directly to disk.',
             lblCfgDiskCachePath: 'Disk Cache Directory Path:',
+            lblCfgPreloadCache: 'Preload Buffer (%):',
+            lblCfgPreloadCacheSub: 'Amount of cache to preload before playback starts. With 100 GB disk cache, 3% (~3 GB) starts immediately without freezing.',
+            lblCfgReaderReadAHead: 'Reader ReadAhead (%):',
+            lblCfgReaderReadAHeadSub: 'Percentage of cache window used for forward read-ahead (recommended 95%).',
+            lblCfgDisconnectTimeout: 'Seeding Duration After Playback:',
+            lblCfgDisconnectTimeoutSub: 'How long TorrServer keeps seeding the torrent after streaming stops (86400s = 24 hours). Disk cache remains permanently.',
             btnRestartTorrServer: 'Test Connection / Sync Cache',
             restarting: 'Restarting...',
             cfgProwlarrTitle: 'Prowlarr & Trackers Customization',
@@ -1314,6 +1371,12 @@
             lblCfgUseDiskCache: 'Кешувати на диск (SSD/HDD замість RAM)',
             lblCfgUseDiskCacheSub: 'Рекомендовано при малій кількості оперативної пам\'яті. Зберігає кеш на швидкий диск.',
             lblCfgDiskCachePath: 'Шлях до папки кешу на диску:',
+            lblCfgPreloadCache: 'Попереднє завантаження кешу (%):',
+            lblCfgPreloadCacheSub: 'Об\'єм буфера перед запуском відео. При кеші 100 ГБ значення 3% (~3 ГБ) забезпечує миттєвий старт без зависання.',
+            lblCfgReaderReadAHead: 'Випереджаюче читання (ReadAhead %):',
+            lblCfgReaderReadAHeadSub: 'Відсоток вікна кешу для читання вперед (рекомендовано 95%).',
+            lblCfgDisconnectTimeout: 'Час роздачі після перегляду (Seeding):',
+            lblCfgDisconnectTimeoutSub: 'Скільки часу TorrServer залишається на роздачі після зупинки плеєра (86400 с = 24 години). Кеш на диску зберігається постійно.',
             btnRestartTorrServer: 'Перевірити зв\'язок / Синхронізувати кеш',
             restarting: 'Перезапуск...',
             cfgProwlarrTitle: 'Prowlarr та кастомізація трекерів',
@@ -1424,6 +1487,12 @@
             'lblCfgUseDiskCache': t.lblCfgUseDiskCache,
             'lblCfgUseDiskCacheSub': t.lblCfgUseDiskCacheSub,
             'lblCfgDiskCachePath': t.lblCfgDiskCachePath,
+            'lblCfgPreloadCache': t.lblCfgPreloadCache,
+            'lblCfgPreloadCacheSub': t.lblCfgPreloadCacheSub,
+            'lblCfgReaderReadAHead': t.lblCfgReaderReadAHead,
+            'lblCfgReaderReadAHeadSub': t.lblCfgReaderReadAHeadSub,
+            'lblCfgDisconnectTimeout': t.lblCfgDisconnectTimeout,
+            'lblCfgDisconnectTimeoutSub': t.lblCfgDisconnectTimeoutSub,
             'btnRestartTorrServerText': t.btnTestTorrServer,
             'btnTestProwlarrText': t.btnTestProwlarr,
             'cfgProwlarrTitle': t.cfgProwlarrTitle,
@@ -2443,6 +2512,21 @@
                 cfgCacheSizeInput.value = cfg.CacheSizeMb || 102400;
                 window.t2jUpdateCacheHuman(cfgCacheSizeInput.value);
             }
+            var cfgPreloadCacheInput = page.querySelector('#cfgPreloadCacheInput');
+            var cfgReaderReadAHeadInput = page.querySelector('#cfgReaderReadAHeadInput');
+            var cfgDisconnectTimeoutInput = page.querySelector('#cfgDisconnectTimeoutInput');
+            if (cfgPreloadCacheInput) {
+                cfgPreloadCacheInput.value = cfg.PreloadCachePercent !== undefined ? cfg.PreloadCachePercent : 3;
+                window.t2jUpdatePreloadHuman(cfgPreloadCacheInput.value);
+            }
+            if (cfgReaderReadAHeadInput) {
+                cfgReaderReadAHeadInput.value = cfg.ReaderReadAHeadPercent !== undefined ? cfg.ReaderReadAHeadPercent : 95;
+                window.t2jUpdateReaderHuman(cfgReaderReadAHeadInput.value);
+            }
+            if (cfgDisconnectTimeoutInput) {
+                cfgDisconnectTimeoutInput.value = cfg.TorrentDisconnectTimeout !== undefined ? cfg.TorrentDisconnectTimeout : 86400;
+                window.t2jUpdateTimeoutHuman(cfgDisconnectTimeoutInput.value);
+            }
             if (cfgStreamUrlInput) cfgStreamUrlInput.value = cfg.TorrServerStreamUrl || '';
             if (cfgProwlarrUrlInput) cfgProwlarrUrlInput.value = cfg.ProwlarrUrl || '';
             if (cfgProwlarrKeyInput) cfgProwlarrKeyInput.value = cfg.ProwlarrApiKey || '';
@@ -2546,6 +2630,9 @@
             UseDiskCache: (page.querySelector('#cfgUseDiskCacheCheck') ? page.querySelector('#cfgUseDiskCacheCheck').checked : true),
             DiskCachePath: (page.querySelector('#cfgDiskCachePathInput') ? page.querySelector('#cfgDiskCachePathInput').value.trim() : '/mnt/sdb/AppFiles/jellyfin/cache/torrserver'),
             CacheSizeMb: parseInt(cfgCacheSizeInput ? cfgCacheSizeInput.value : '102400', 10) || 102400,
+            PreloadCachePercent: parseInt(page.querySelector('#cfgPreloadCacheInput') ? page.querySelector('#cfgPreloadCacheInput').value : '3', 10) || 3,
+            ReaderReadAHeadPercent: parseInt(page.querySelector('#cfgReaderReadAHeadInput') ? page.querySelector('#cfgReaderReadAHeadInput').value : '95', 10) || 95,
+            TorrentDisconnectTimeout: parseInt(page.querySelector('#cfgDisconnectTimeoutInput') ? page.querySelector('#cfgDisconnectTimeoutInput').value : '86400', 10) || 86400,
             TorrServerStreamUrl: cfgStreamUrlInput ? cfgStreamUrlInput.value.trim() : 'http://torrserver:8090',
             ProwlarrUrl: cfgProwlarrUrlInput ? cfgProwlarrUrlInput.value.trim() : '',
             ProwlarrApiKey: cfgProwlarrKeyInput ? cfgProwlarrKeyInput.value.trim() : '',
@@ -2611,13 +2698,77 @@
         var page = getPage();
         if (!page) return;
         var label = page.querySelector('#cfgCacheSizeHuman');
-        if (!label) return;
-        var mb = parseInt(val, 10) || 0;
-        if (mb >= 1024) {
-            label.innerText = (mb / 1024).toFixed(1).replace(/\.0$/, '') + ' GB';
-        } else {
-            label.innerText = mb + ' MB';
+        if (label) {
+            var mb = parseInt(val, 10) || 0;
+            if (mb >= 1024) {
+                label.innerText = (mb / 1024).toFixed(1).replace(/\.0$/, '') + ' GB';
+            } else {
+                label.innerText = mb + ' MB';
+            }
         }
+        var preloadInput = page.querySelector('#cfgPreloadCacheInput');
+        if (preloadInput && window.t2jUpdatePreloadHuman) {
+            window.t2jUpdatePreloadHuman(preloadInput.value);
+        }
+    };
+
+    window.t2jSetPreloadPreset = function(pct) {
+        var page = getPage();
+        if (!page) return;
+        var input = page.querySelector('#cfgPreloadCacheInput');
+        if (input) {
+            input.value = pct;
+            window.t2jUpdatePreloadHuman(pct);
+        }
+    };
+
+    window.t2jUpdatePreloadHuman = function(val) {
+        var page = getPage();
+        if (!page) return;
+        var label = page.querySelector('#cfgPreloadCacheHuman');
+        var cacheInput = page.querySelector('#cfgCacheSizeInput');
+        var totalMb = parseInt(cacheInput ? cacheInput.value : '102400', 10) || 102400;
+        var pct = parseInt(val, 10) || 0;
+        var approxMb = Math.round(totalMb * (pct / 100));
+        var approxStr = (approxMb >= 1024) ? (approxMb / 1024).toFixed(1).replace(/\.0$/, '') + ' GB' : approxMb + ' MB';
+        if (label) label.innerText = pct + '% (~' + approxStr + ')';
+    };
+
+    window.t2jSetReaderPreset = function(pct) {
+        var page = getPage();
+        if (!page) return;
+        var input = page.querySelector('#cfgReaderReadAHeadInput');
+        if (input) {
+            input.value = pct;
+            window.t2jUpdateReaderHuman(pct);
+        }
+    };
+
+    window.t2jUpdateReaderHuman = function(val) {
+        var page = getPage();
+        if (!page) return;
+        var label = page.querySelector('#cfgReaderReadAHeadHuman');
+        if (label) label.innerText = (parseInt(val, 10) || 0) + '%';
+    };
+
+    window.t2jSetTimeoutPreset = function(sec) {
+        var page = getPage();
+        if (!page) return;
+        var input = page.querySelector('#cfgDisconnectTimeoutInput');
+        if (input) {
+            input.value = sec;
+            window.t2jUpdateTimeoutHuman(sec);
+        }
+    };
+
+    window.t2jUpdateTimeoutHuman = function(val) {
+        var page = getPage();
+        if (!page) return;
+        var label = page.querySelector('#cfgDisconnectTimeoutHuman');
+        var sec = parseInt(val, 10) || 0;
+        var hours = (sec / 3600);
+        var str = (hours >= 24) ? (hours / 24).toFixed(1).replace(/\.0$/, '') + ' дн (' + sec + ' с)' : hours.toFixed(1).replace(/\.0$/, '') + ' год (' + sec + ' с)';
+        if (label) label.innerText = str;
     };
 
     window.t2jToggleDiskCacheUI = function(isDisk) {

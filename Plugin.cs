@@ -84,6 +84,8 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 if (!xmlExists && restoredConfig != null)
                 {
                     Configuration = restoredConfig;
+                    if (Configuration.PreloadCachePercent == 50) Configuration.PreloadCachePercent = 3;
+                    if (Configuration.TorrentDisconnectTimeout <= 30) Configuration.TorrentDisconnectTimeout = 86400;
                     Configuration.DeduplicateCategories();
                     Configuration.NormalizeTrackerRules();
                     SaveConfiguration();
@@ -101,11 +103,19 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                     if ((currentLacksProwlarr && backupHasProwlarr) || (currentHasDefaultCats && backupHasCustomCats))
                     {
                         Configuration = restoredConfig;
+                        if (Configuration.PreloadCachePercent == 50) Configuration.PreloadCachePercent = 3;
+                        if (Configuration.TorrentDisconnectTimeout <= 30) Configuration.TorrentDisconnectTimeout = 86400;
                         Configuration.DeduplicateCategories();
                         Configuration.NormalizeTrackerRules();
                         SaveConfiguration();
                         return;
                     }
+                }
+
+                if (Configuration != null)
+                {
+                    if (Configuration.PreloadCachePercent == 50) Configuration.PreloadCachePercent = 3;
+                    if (Configuration.TorrentDisconnectTimeout <= 30) Configuration.TorrentDisconnectTimeout = 86400;
                 }
 
                 Configuration?.DeduplicateCategories();

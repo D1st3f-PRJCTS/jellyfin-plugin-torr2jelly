@@ -106,6 +106,8 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
             var currentReader = rootObj["ReaderReadAHead"]?.GetValue<int>() ?? 0;
             var currentPath = rootObj["TorrentsSavePath"]?.GetValue<string>() ?? string.Empty;
             var currentPort = rootObj["PeersListenPort"]?.GetValue<int>() ?? 0;
+            var currentDisconnect = rootObj["TorrentDisconnectTimeout"]?.GetValue<int>() ?? 0;
+            var currentRemoveOnDrop = rootObj["RemoveCacheOnDrop"]?.GetValue<bool>() ?? true;
 
             // Check if Proton VPN forwarded port file exists
             int? targetPort = null;
@@ -136,13 +138,15 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
                 currentCacheSize != desiredCacheBytes ||
                 currentPreload != config.PreloadCachePercent ||
                 currentReader != config.ReaderReadAHeadPercent ||
-                currentPath != (config.DiskCachePath ?? string.Empty))
+                currentPath != (config.DiskCachePath ?? string.Empty) ||
+                currentDisconnect != config.TorrentDisconnectTimeout ||
+                currentRemoveOnDrop != false)
             {
                 needsUpdate = true;
                 _logger.LogInformation(
-                    "TorrServer cache mismatch detected (Current: Disk={CurDisk}, Size={CurMb}MB, Path='{CurPath}'; Desired: Disk={DesDisk}, Size={DesMb}MB, Path='{DesPath}'). Syncing...",
-                    currentUseDisk, currentCacheSize / (1024 * 1024), currentPath,
-                    config.UseDiskCache, config.CacheSizeMb, config.DiskCachePath);
+                    "TorrServer cache/seeding mismatch detected (Current: Disk={CurDisk}, Size={CurMb}MB, Preload={CurPreload}%, Reader={CurReader}%, Timeout={CurTimeout}s, RemoveOnDrop={CurDrop}; Desired: Disk={DesDisk}, Size={DesMb}MB, Preload={DesPreload}%, Reader={DesReader}%, Timeout={DesTimeout}s, RemoveOnDrop=false). Syncing...",
+                    currentUseDisk, currentCacheSize / (1024 * 1024), currentPreload, currentReader, currentDisconnect, currentRemoveOnDrop,
+                    config.UseDiskCache, config.CacheSizeMb, config.PreloadCachePercent, config.ReaderReadAHeadPercent, config.TorrentDisconnectTimeout);
             }
 
             if (targetPort.HasValue && currentPort != targetPort.Value)
@@ -159,6 +163,8 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
                 rootObj["PreloadCache"] = config.PreloadCachePercent;
                 rootObj["ReaderReadAHead"] = config.ReaderReadAHeadPercent;
                 rootObj["TorrentsSavePath"] = config.DiskCachePath ?? string.Empty;
+                rootObj["TorrentDisconnectTimeout"] = config.TorrentDisconnectTimeout;
+                rootObj["RemoveCacheOnDrop"] = false;
 
                 if (targetPort.HasValue)
                 {
@@ -179,8 +185,9 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
                 if (setResponse.IsSuccessStatusCode)
                 {
                     _logger.LogInformation(
-                        "TorrServer settings synced successfully: {Mb} MB (Disk: {UseDisk}, Path: '{Path}', Port: {Port})",
-                        config.CacheSizeMb, config.UseDiskCache, config.DiskCachePath, rootObj["PeersListenPort"]?.GetValue<int>());
+                        "TorrServer settings synced successfully: {Mb} MB (Disk: {UseDisk}, Path: '{Path}', Port: {Port}, Preload: {Preload}%, Reader: {Reader}%, SeedingTimeout: {Timeout}s, RemoveCacheOnDrop: false)",
+                        config.CacheSizeMb, config.UseDiskCache, config.DiskCachePath, rootObj["PeersListenPort"]?.GetValue<int>(),
+                        config.PreloadCachePercent, config.ReaderReadAHeadPercent, config.TorrentDisconnectTimeout);
                 }
                 else
                 {

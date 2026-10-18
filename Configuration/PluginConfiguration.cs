@@ -29,8 +29,9 @@ public class PluginConfiguration : BasePluginConfiguration
 
     // Torrent Cache & Performance
     public int CacheSizeMb { get; set; } = 102400; // 100 GB default
-    public int PreloadCachePercent { get; set; } = 50;
-    public int ReaderReadAHeadPercent { get; set; } = 95;
+    public int PreloadCachePercent { get; set; } = 3; // 3% of CacheSize (~3 GB for 100GB cache, starts in 2s, provides ~150s buffer)
+    public int ReaderReadAHeadPercent { get; set; } = 95; // 95% sliding read-ahead buffer (recommended)
+    public int TorrentDisconnectTimeout { get; set; } = 86400; // 86400 seconds = 24 hours seeding duration after playback
     public bool UseDiskCache { get; set; } = true;
     public string DiskCachePath { get; set; } = "/mnt/sdb/AppFiles/jellyfin/cache/torrserver";
 

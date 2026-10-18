@@ -10,56 +10,60 @@
 
 ---
 
-## 🌟 Overview
+## 🌟 Огляд / Overview
 
-**Torr2Jelly Plugin** is a native Jellyfin plugin (.NET 8) that brings full torrent streaming directly into your Jellyfin server.
-It connects seamlessly to your TorrServer instance (e.g. Docker container or remote instance via VPN), provides unified Prowlarr & Torznab search directly inside the Jellyfin Web UI, and generates `.strm` files on-demand for movies and TV series with automatic season structuring.
+**Torr2Jelly** — це нативний плагін для **Jellyfin** (.NET 8), який інтегрує торент-стрімінг у Jellyfin без необхідності завантажувати гігабайти файлів на диск наперед.
+Він з'єднується з вашим контейнером **TorrServer**, забезпечує швидкий та зручний глобальний пошук через **Prowlarr** / **Torznab** безпосередньо у веб-інтерфейсі Jellyfin та генерує `.strm` файли на льоту з автоматичною структуризацією сезонів і підтримкою метаданих.
 
-Works seamlessly on **Jellyfin Web**, **Android TV**, **Apple TV**, **Tizen**, and **iOS/Android** mobile clients.
-
----
-
-## ✨ Key Features
-
-- ⚡ **Seamless TorrServer Integration**: Connects directly to TorrServer (e.g. `http://torrserver:8090`), managing connection health, stream URL routing, and RAM cache configuration.
-- 📡 **Prowlarr & Torznab Integration**: Fast async tracker search with category filtering, seeders sorting, and VIP/Gold/Freeleech prioritization.
-- 🍿 **Instant Streaming via `.strm`**: Generates clean `.strm` links directly into your Jellyfin media libraries. Video playback begins in seconds with full seeking (range requests) and audio/subtitle selection.
-- 🗂️ **Smart Season Auto-Organizer**: Automatically parses `S01E02`, `1x05`, and multi-episode formats into clean `Season XX` folder structures.
-- 🎨 **Native Glassmorphic UI**: Integrates into the Jellyfin Web sidebar with dark theme styling, remote D-pad navigation for Smart TVs, and Ukrainian/English localization.
+Чудово працює на **Jellyfin Web**, **Android TV**, **Apple TV**, **Tizen (Samsung)**, **webOS (LG)** та смартфонах iOS / Android.
 
 ---
 
-## 📦 Installation via Jellyfin Plugin Repository
+## ✨ Основні можливості / Key Features
 
-1. Open your **Jellyfin Admin Dashboard**.
-2. Navigate to **Plugins** ➔ **Repositories**.
-3. Click **+** (Add Repository) and enter:
-   - **Repository Name**: `Torr2Jelly Repository`
-   - **Repository URL**: `https://raw.githubusercontent.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/main/manifest.json`
-4. Go to the **Catalog** tab, find **Torr2Jelly**, and click **Install**.
-5. Restart your Jellyfin server.
-6. Open the **Torr2Jelly** section from the sidebar to start streaming!
+- ⚡ **Швидкий стрімінг торентів на льоту**: Відео починає відтворюватись за секунди завдяки TorrServer та `.strm` посиланням, із повною підтримкою перемотування (HTTP range requests), вибору аудіодоріжок і субтитрів.
+- 💾 **Буферизація на швидкий диск (SSD/HDD Cache)**: Підтримка виділення буферного дискового кешу (наприклад, 10-100 ГБ) замість обмеженої оперативної пам'яті (RAM), що запобігає переповненню пам'яті сервера.
+- 🔍 **Інтеграція в глобальний пошук Jellyfin**: Шукайте фільми та серіали через звичайний рядок пошуку Jellyfin — якщо медіа немає на сервері, плагін автоматично знайде роздачі в Prowlarr та додасть їх в один клік.
+- 🏷️ **Фільтри за бонусами (Gold / Freeleech)**: Фільтрація роздач із золотими, срібними та бронзовими бонусами або авторськими роздачами для збереження рейтингу.
+- 📁 **Автоматична організація серіалів і фільмів**: Розумне сортування сезонів (`Season 01`), номерів серій та генерація NFO файлів з прив'язкою до TMDb / IMDb.
+- 🎨 **Сучасний темний інтерфейс (Glassmorphism)**: Налаштування категорій, перевірка з'єднань із TorrServer та Prowlarr, ручне додавання Magnet-посилань, повна локалізація українською та англійською мовами.
+- 🛡️ **Надійність налаштувань**: Автоматичне збереження та відновлення налаштувань плагіна при оновленнях.
 
 ---
 
-## 🛠️ Build from Source
+## 📦 Встановлення через каталог плагінів Jellyfin
+
+1. Відкрийте панель керування Jellyfin (**Панель керування** ➔ **Плагіни**).
+2. Перейдіть на вкладку **Репозиторії** та натисніть **+** (Додати репозиторій):
+   - **Назва репозиторію**: `Torr2Jelly Repository`
+   - **URL-адреса репозиторію**: 
+     ```text
+     https://raw.githubusercontent.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/main/manifest.json
+     ```
+3. Перейдіть на вкладку **Каталог**, знайдіть **Torr2Jelly** та натисніть **Встановити**.
+4. Перезапустіть сервер Jellyfin.
+5. Відкрийте розділ **Torr2Jelly** у боковому меню сервера для налаштування!
+
+---
+
+## 🛠️ Збірка з вихідного коду / Build from Source
 
 ```bash
-# Clone the repository
+# Клонування репозиторію
 git clone https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly.git
 cd jellyfin-plugin-torr2jelly
 
-# Restore dependencies
+# Відновлення залежностей
 dotnet restore
 
-# Build release DLL
+# Компіляція релізу
 dotnet build -c Release
 ```
 
-The resulting `Jellyfin.Plugin.Torr2Jelly.dll` can be placed into your Jellyfin `plugins/Torr2Jelly/` directory.
+Зібраний файл `bin/Release/net8.0/Jellyfin.Plugin.Torr2Jelly.dll` помістіть у папку плагінів Jellyfin: `plugins/Torr2Jelly/`.
 
 ---
 
-## 📄 License
+## 📄 Ліцензія / License
 
-Distributed under the **MIT License**.
+Розповсюджується під ліцензією **MIT License**.

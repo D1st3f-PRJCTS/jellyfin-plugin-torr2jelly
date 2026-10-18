@@ -580,7 +580,7 @@
             <div>
               <div class="flex items-center space-x-2">
                 <h1 class="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">Torr2Jelly</h1>
-                <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30 font-semibold">Plugin v1.0.10</span>
+                
               </div>
               <p class="text-[11px] text-slate-400" id="t2jSubtitleText">Prowlarr ➔ TorrServer ➔ Jellyfin STRM</p>
             </div>
@@ -596,7 +596,7 @@
               </button>
               <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="magnet" onclick="window.t2jSwitchTab && window.t2jSwitchTab('magnet')">
                 <i class="fa-solid fa-magnet text-[11px]"></i>
-                <span id="tabMagnetText">Magnet / Link</span>
+                <span id="tabMagnetText">Magnet</span>
               </button>
               <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="dashboard" onclick="window.t2jSwitchTab && window.t2jSwitchTab('dashboard')">
                 <i class="fa-solid fa-layer-group text-[11px]"></i>
@@ -615,11 +615,7 @@
               <span id="t2jLangText">EN</span>
             </button>
 
-            <!-- Daemon Status Badge -->
-            <div id="t2jDaemonBadge" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span id="t2jDaemonBadgeText">TorrServer Online</span>
-            </div>
+
 
             <!-- Sync Button -->
             <button id="t2jSyncNowBtn" onclick="window.t2jSyncNow && window.t2jSyncNow()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-md shadow-brand-600/25 active:scale-95 transition-all">
@@ -936,11 +932,15 @@
                     </div>
                   </div>
 
-                  <div class="pt-2">
-                    <button type="button" id="restartDaemonBtn" onclick="window.t2jRestartDaemon && window.t2jRestartDaemon()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-all">
-                      <i class="fa-solid fa-rotate text-emerald-400"></i>
-                      <span id="btnRestartTorrServerText">Test Connection / Sync Cache</span>
+                  <div class="pt-2 flex items-center justify-between flex-wrap gap-2">
+                    <button type="button" id="restartDaemonBtn" onclick="window.t2jRestartDaemon && window.t2jRestartDaemon()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-all cursor-pointer">
+                      <i class="fa-solid fa-plug text-cyan-400"></i>
+                      <span id="btnRestartTorrServerText">Перевірити зв'язок з TorrServer</span>
                     </button>
+                    <div id="t2jTorrServerStatusBadge" class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400">
+                      <span class="w-2 h-2 rounded-full bg-slate-600"></span>
+                      <span id="t2jTorrServerStatusText">Не перевірено</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -964,6 +964,17 @@
                   <div>
                     <label class="block text-slate-300 font-medium mb-1">Prowlarr API Key:</label>
                     <input type="password" id="cfgProwlarrKeyInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                  </div>
+
+                  <div class="pt-2 flex items-center justify-between flex-wrap gap-2">
+                    <button type="button" id="testProwlarrBtn" onclick="window.t2jTestProwlarr && window.t2jTestProwlarr()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-all cursor-pointer">
+                      <i class="fa-solid fa-satellite-dish text-amber-400"></i>
+                      <span id="btnTestProwlarrText">Перевірити зв'язок з Prowlarr</span>
+                    </button>
+                    <div id="t2jProwlarrStatusBadge" class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400">
+                      <span class="w-2 h-2 rounded-full bg-slate-600"></span>
+                      <span id="t2jProwlarrStatusText">Не перевірено</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1130,7 +1141,7 @@
     var I18N = {
         en: {
             search: 'Search',
-            magnet: 'Magnet / Link',
+            magnet: 'Magnet',
             streams: 'Streams',
             settings: 'Settings',
             fastRefresh: 'Fast Refresh',
@@ -1206,6 +1217,9 @@
             lblCfgOnlyGoldNonAdmin: 'Only tagged releases for regular non-admin users',
             lblCfgOnlyGoldNonAdminSub: 'Restricts non-admin users from generating torrents without tags/bonuses.',
             lblCfgTrackersList: 'Individual Trackers / Indexers:',
+            lblCfgTrackersDesc: 'Enable/disable individual trackers and select which release tags to include in search.',
+            btnTestTorrServer: 'Test TorrServer',
+            btnTestProwlarr: 'Test Prowlarr',
             lblLoadingTrackers: 'Loading trackers from Prowlarr...',
             cfgStrmStructureTitle: 'STRM File & Folder Structure',
             cfgStrmStructureSub: 'Customize file and directory naming templates',
@@ -1226,7 +1240,7 @@
         },
         uk: {
             search: 'Пошук',
-            magnet: 'Магнет / Лінк',
+            magnet: 'Magnet',
             streams: 'Стріми',
             settings: 'Налаштування',
             fastRefresh: 'Швидке оновлення',
@@ -1302,6 +1316,9 @@
             lblCfgOnlyGoldNonAdmin: 'Лише роздачі з тегами для звичайних користувачів',
             lblCfgOnlyGoldNonAdminSub: 'Обмежує користувачів без прав адміна від завантаження торентів без тегів або бонусів.',
             lblCfgTrackersList: 'Окремі трекери / Індексатори:',
+            lblCfgTrackersDesc: 'Увімкнення/вимкнення окремих трекерів та вибір тегів для пошуку.',
+            btnTestTorrServer: 'Перевірити зв'язок з TorrServer',
+            btnTestProwlarr: 'Перевірити зв'язок з Prowlarr',
             lblLoadingTrackers: 'Завантаження списку трекерів з Prowlarr...',
             cfgStrmStructureTitle: 'Структура файлів і папок STRM',
             cfgStrmStructureSub: 'Налаштування шаблонів назв файлів і каталогів',
@@ -1400,7 +1417,8 @@
             'lblCfgUseDiskCache': t.lblCfgUseDiskCache,
             'lblCfgUseDiskCacheSub': t.lblCfgUseDiskCacheSub,
             'lblCfgDiskCachePath': t.lblCfgDiskCachePath,
-            'btnRestartTorrServerText': t.btnRestartTorrServer,
+            'btnRestartTorrServerText': t.btnTestTorrServer,
+            'btnTestProwlarrText': t.btnTestProwlarr,
             'cfgProwlarrTitle': t.cfgProwlarrTitle,
             'cfgProwlarrSub': t.cfgProwlarrSub,
             'lblCfgSearchGoldDefault': t.lblCfgSearchGoldDefault,
@@ -1819,16 +1837,21 @@
         var dashDaemonEngine = page.querySelector('#dashDaemonEngine');
         var dashCacheSize = page.querySelector('#dashCacheSize');
 
+        var torrStatusBadge = page.querySelector('#t2jTorrServerStatusBadge');
+        var torrStatusText = page.querySelector('#t2jTorrServerStatusText');
+
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Status'), { headers: getAuthHeaders() });
             if (res.ok) {
                 var data = await res.json();
                 var daemonVer = data.DaemonVersion || data.daemonVersion || 'MatriX';
-                var daemonPort = data.DaemonPort || data.daemonPort || 8095;
                 var activeCount = data.ActiveTorrentsCount !== undefined ? data.ActiveTorrentsCount : (data.activeTorrentsCount !== undefined ? data.activeTorrentsCount : 0);
 
-                if (daemonBadge) daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
-                if (daemonBadgeText) daemonBadgeText.innerText = 'TorrServer Online (' + daemonVer + ')';
+                if (torrStatusBadge) {
+                    torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400';
+                    torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span id="t2jTorrServerStatusText">' + (data.StatusMessage || ('Online ' + daemonVer)) + '</span>';
+                }
+
                 var dashDaemonEngineSub = page.querySelector('#dashDaemonEngineSub');
                 if (dashDaemonEngine) dashDaemonEngine.innerText = 'TorrServer ' + daemonVer;
                 if (dashDaemonEngineSub) dashDaemonEngineSub.innerText = data.StatusMessage || 'Connected';
@@ -1840,12 +1863,16 @@
                 if (activeTorrentsBadge) activeTorrentsBadge.innerText = activeCount;
                 if (dashTorrentsCount) dashTorrentsCount.innerText = activeCount;
             } else {
-                if (daemonBadge) daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30';
-                if (daemonBadgeText) daemonBadgeText.innerText = 'TorrServer Offline';
+                if (torrStatusBadge) {
+                    torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-rose-400';
+                    torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span id="t2jTorrServerStatusText">Offline</span>';
+                }
             }
         } catch (e) {
-            if (daemonBadge) daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30';
-            if (daemonBadgeText) daemonBadgeText.innerText = 'TorrServer Offline';
+            if (torrStatusBadge) {
+                torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-rose-400';
+                torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span id="t2jTorrServerStatusText">Offline</span>';
+            }
         }
     }
     window.t2jCheckStatus = checkStatus;
@@ -2599,30 +2626,86 @@
         var page = getPage();
         if (!page) return;
         var restartDaemonBtn = page.querySelector('#restartDaemonBtn');
+        var torrStatusBadge = page.querySelector('#t2jTorrServerStatusBadge');
         var t = I18N[getLang()] || I18N.en;
 
         if (restartDaemonBtn) {
             restartDaemonBtn.disabled = true;
-            restartDaemonBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>' + escapeHtml(t.restarting) + '</span>';
+            restartDaemonBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-cyan-400"></i> <span>' + (getLang() === 'uk' ? 'Перевіряємо...' : 'Testing...') + '</span>';
         }
 
         try {
-            await fetch(getApiUrl('Plugins/Torr2Jelly/Daemon/Restart'), { method: 'POST', headers: getAuthHeaders() });
-            setTimeout(function () {
-                if (restartDaemonBtn) {
-                    restartDaemonBtn.disabled = false;
-                    restartDaemonBtn.innerHTML = '<i class="fa-solid fa-power-off text-amber-400"></i> <span>' + escapeHtml(t.btnRestartTorrServer) + '</span>';
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Daemon/Restart'), { method: 'POST', headers: getAuthHeaders() });
+            var data = await res.json();
+            if (restartDaemonBtn) {
+                restartDaemonBtn.disabled = false;
+                restartDaemonBtn.innerHTML = '<i class="fa-solid fa-plug text-cyan-400"></i> <span>' + escapeHtml(t.btnTestTorrServer) + '</span>';
+            }
+            if (torrStatusBadge) {
+                if (res.ok) {
+                    torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400';
+                    torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>' + (data.status || 'Connected') + '</span>';
+                } else {
+                    torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-rose-400';
+                    torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span>Offline / Помилка</span>';
                 }
-                checkStatus();
-            }, 3000);
+            }
+            checkStatus();
         } catch (e) {
             if (restartDaemonBtn) {
                 restartDaemonBtn.disabled = false;
-                restartDaemonBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Error</span>';
+                restartDaemonBtn.innerHTML = '<i class="fa-solid fa-plug text-cyan-400"></i> <span>' + escapeHtml(t.btnTestTorrServer) + '</span>';
+            }
+            if (torrStatusBadge) {
+                torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-rose-400';
+                torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span>' + escapeHtml(e.message) + '</span>';
             }
         }
     }
     window.t2jRestartDaemon = restartDaemon;
+
+    async function testProwlarr() {
+        var page = getPage();
+        if (!page) return;
+        var btn = page.querySelector('#testProwlarrBtn');
+        var badge = page.querySelector('#t2jProwlarrStatusBadge');
+        var t = I18N[getLang()] || I18N.en;
+
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-amber-400"></i> <span>' + (getLang() === 'uk' ? 'Перевіряємо...' : 'Testing...') + '</span>';
+        }
+
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Indexers'), { headers: getAuthHeaders() });
+            if (res.ok) {
+                var list = await res.json();
+                var count = Array.isArray(list) ? list.length : 0;
+                window.t2jState.indexers = Array.isArray(list) ? list : [];
+                renderIndexersUI();
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-satellite-dish text-amber-400"></i> <span>' + escapeHtml(t.btnTestProwlarr) + '</span>';
+                }
+                if (badge) {
+                    badge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400';
+                    badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>' + (getLang() === 'uk' ? ('Підключено (' + count + ' трекерів)') : ('Connected (' + count + ' indexers)')) + '</span>';
+                }
+            } else {
+                throw new Error('HTTP ' + res.status);
+            }
+        } catch (e) {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-satellite-dish text-amber-400"></i> <span>' + escapeHtml(t.btnTestProwlarr) + '</span>';
+            }
+            if (badge) {
+                badge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-rose-400';
+                badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span>Помилка підключення</span>';
+            }
+        }
+    }
+    window.t2jTestProwlarr = testProwlarr;
 
     // Filter & Sort handlers
     window.t2jFilter = function (filterType) {

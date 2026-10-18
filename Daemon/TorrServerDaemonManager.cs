@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.Torr2Jelly.Configuration;
+using Jellyfin.Plugin.Torr2Jelly.Web;
 using MediaBrowser.Common.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -102,6 +103,7 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        WebPatcher.TryPatchWebClient(_logger);
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
         if (!config.UseEmbeddedTorrServer)
         {

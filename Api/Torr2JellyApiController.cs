@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -251,6 +252,24 @@ public class Torr2JellyApiController : ControllerBase
     {
         await _daemonManager.RestartAsync(cancellationToken);
         return Ok(new { success = true, status = _daemonManager.StatusMessage });
+    }
+
+        [HttpGet("search.js")]
+    [AllowAnonymous]
+    [Produces("application/javascript")]
+    public ActionResult GetSearchScript()
+    {
+        var assembly = typeof(Plugin).Assembly;
+        var resourceName = $"{typeof(Plugin).Namespace}.Web.torr2jellysearch.js";
+        using var stream = assembly.GetManifestResourceStream(resourceName);
+        if (stream == null)
+        {
+            return NotFound("/* Search script resource not found */");
+        }
+
+        using var reader = new StreamReader(stream);
+        var content = reader.ReadToEnd();
+        return Content(content, "application/javascript");
     }
 
     [HttpPost("Library/Scan")]

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Jellyfin.Plugin.Torr2Jelly.Configuration;
+using Jellyfin.Plugin.Torr2Jelly.Web;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
@@ -46,6 +47,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             {
                 Name = "torr2jellycss",
                 EmbeddedResourcePath = $"{GetType().Namespace}.Web.torr2jelly.css"
+            },
+            new PluginPageInfo
+            {
+                Name = "torr2jellysearch",
+                EmbeddedResourcePath = $"{GetType().Namespace}.Web.torr2jellysearch.js"
             }
         };
     }

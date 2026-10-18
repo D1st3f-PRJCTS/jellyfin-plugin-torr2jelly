@@ -317,20 +317,20 @@
           <div class="flex items-center space-x-3">
             <!-- Nav Tabs -->
             <nav class="flex items-center space-x-1 bg-slate-950/70 p-1 rounded-xl border border-slate-800/80 shadow-inner">
-              <button type="button" class="t2j-nav-btn active px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="search" onclick="window.t2jSwitchTab && window.t2jSwitchTab(\'search\')">
+              <button type="button" class="t2j-nav-btn active px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="search" onclick="window.t2jSwitchTab && window.t2jSwitchTab('search')">
                 <i class="fa-solid fa-magnifying-glass text-[11px]"></i>
                 <span id="tabSearchText">Пошук</span>
               </button>
-              <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="magnet" onclick="window.t2jSwitchTab && window.t2jSwitchTab(\'magnet\')">
+              <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="magnet" onclick="window.t2jSwitchTab && window.t2jSwitchTab('magnet')">
                 <i class="fa-solid fa-magnet text-[11px]"></i>
                 <span id="tabMagnetText">Магнет / Лінк</span>
               </button>
-              <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="dashboard" onclick="window.t2jSwitchTab && window.t2jSwitchTab(\'dashboard\')">
+              <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="dashboard" onclick="window.t2jSwitchTab && window.t2jSwitchTab('dashboard')">
                 <i class="fa-solid fa-layer-group text-[11px]"></i>
                 <span id="tabTorrentsText">Стріми</span>
                 <span id="activeTorrentsBadge" class="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-[10px] font-bold">0</span>
               </button>
-              <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="settings" onclick="window.t2jSwitchTab && window.t2jSwitchTab(\'settings\')">
+              <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="settings" onclick="window.t2jSwitchTab && window.t2jSwitchTab('settings')">
                 <i class="fa-solid fa-gear text-[11px]"></i>
                 <span id="tabSettingsText">Налаштування</span>
               </button>
@@ -396,8 +396,8 @@
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4 pt-4 border-t border-slate-800 text-xs">
               <div class="flex items-center space-x-3 text-slate-400">
                 <span class="font-medium text-[11px]">Фільтр:</span>
-                <button type="button" id="filterAllBtn" onclick="window.t2jFilter && window.t2jFilter(\'all\')" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-slate-800 border-slate-600 text-white font-bold">Усі роздачі</button>
-                <button type="button" id="filterGoldBtn" onclick="window.t2jFilter && window.t2jFilter(\'gold\')" class="px-2.5 py-1 rounded-lg border text-xs transition-all border-slate-800 hover:bg-slate-800/60 text-amber-400/80 flex items-center space-x-1.5">
+                <button type="button" id="filterAllBtn" onclick="window.t2jFilter && window.t2jFilter('all')" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-slate-800 border-slate-600 text-white font-bold">Усі роздачі</button>
+                <button type="button" id="filterGoldBtn" onclick="window.t2jFilter && window.t2jFilter('gold')" class="px-2.5 py-1 rounded-lg border text-xs transition-all border-slate-800 hover:bg-slate-800/60 text-amber-400/80 flex items-center space-x-1.5">
                   <span>⚡ Тільки Золоті (Freeleech)</span>
                   <span id="goldCountBadge" class="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold">0</span>
                 </button>

@@ -1,4 +1,4 @@
-<div id="torr2jellyPage" data-role="page" class="page type-interior pluginConfigurationPage fullWidthContent" >
+<div id="torr2jellyPage" data-role="page" class="page type-interior pluginConfigurationPage fullWidthContent">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
 /* Torr2Jelly Modern Tailwind & Glassmorphism Replica */
@@ -24,7 +24,7 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.torr2jelly-root .t2j-nav-btn {
+.torr2jelly-root .t2j-nav-btn { pointer-events: auto !important; position: relative !important; z-index: 50 !important;
     background: transparent;
     border: none;
     color: #94a3b8;
@@ -193,7 +193,7 @@
     cursor: pointer !important;
 }
 
-#torr2jellyPage .t2j-nav-btn {
+#torr2jellyPage .t2j-nav-btn { pointer-events: auto !important; position: relative !important; z-index: 50 !important;
     background: transparent !important;
     border: none !important;
     color: #94a3b8 !important;
@@ -295,8 +295,7 @@
 
 </style>
 
-
-  <div class="content-primary">
+<div class="content-primary">
     <div class="torr2jelly-root bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
 
       <!-- Header Navigation Bar -->
@@ -318,20 +317,20 @@
           <div class="flex items-center space-x-3">
             <!-- Nav Tabs -->
             <nav class="flex items-center space-x-1 bg-slate-950/70 p-1 rounded-xl border border-slate-800/80 shadow-inner">
-              <button type="button" class="t2j-nav-btn active px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="search">
+              <button type="button" class="t2j-nav-btn active px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="search" onclick="window.t2jSwitchTab && window.t2jSwitchTab(\'search\')">
                 <i class="fa-solid fa-magnifying-glass text-[11px]"></i>
                 <span id="tabSearchText">Пошук</span>
               </button>
-              <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="magnet">
+              <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="magnet" onclick="window.t2jSwitchTab && window.t2jSwitchTab(\'magnet\')">
                 <i class="fa-solid fa-magnet text-[11px]"></i>
                 <span id="tabMagnetText">Магнет / Лінк</span>
               </button>
-              <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="dashboard">
+              <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="dashboard" onclick="window.t2jSwitchTab && window.t2jSwitchTab(\'dashboard\')">
                 <i class="fa-solid fa-layer-group text-[11px]"></i>
                 <span id="tabTorrentsText">Стріми</span>
                 <span id="activeTorrentsBadge" class="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-[10px] font-bold">0</span>
               </button>
-              <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="settings">
+              <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="settings" onclick="window.t2jSwitchTab && window.t2jSwitchTab(\'settings\')">
                 <i class="fa-solid fa-gear text-[11px]"></i>
                 <span id="tabSettingsText">Налаштування</span>
               </button>
@@ -344,7 +343,7 @@
             </div>
 
             <!-- Sync Button -->
-            <button id="t2jSyncNowBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-md shadow-brand-600/25 active:scale-95 transition-all">
+            <button id="t2jSyncNowBtn" onclick="window.t2jSyncNow && window.t2jSyncNow()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-md shadow-brand-600/25 active:scale-95 transition-all">
               <i class="fa-solid fa-rotate text-xs"></i>
               <span id="t2jSyncText">Синхронізація</span>
             </button>
@@ -397,8 +396,8 @@
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4 pt-4 border-t border-slate-800 text-xs">
               <div class="flex items-center space-x-3 text-slate-400">
                 <span class="font-medium text-[11px]">Фільтр:</span>
-                <button type="button" id="filterAllBtn" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-slate-800 border-slate-600 text-white font-bold">Усі роздачі</button>
-                <button type="button" id="filterGoldBtn" class="px-2.5 py-1 rounded-lg border text-xs transition-all border-slate-800 hover:bg-slate-800/60 text-amber-400/80 flex items-center space-x-1.5">
+                <button type="button" id="filterAllBtn" onclick="window.t2jFilter && window.t2jFilter(\'all\')" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-slate-800 border-slate-600 text-white font-bold">Усі роздачі</button>
+                <button type="button" id="filterGoldBtn" onclick="window.t2jFilter && window.t2jFilter(\'gold\')" class="px-2.5 py-1 rounded-lg border text-xs transition-all border-slate-800 hover:bg-slate-800/60 text-amber-400/80 flex items-center space-x-1.5">
                   <span>⚡ Тільки Золоті (Freeleech)</span>
                   <span id="goldCountBadge" class="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold">0</span>
                 </button>
@@ -533,11 +532,11 @@
               </div>
 
               <div class="flex items-center space-x-2">
-                <button type="button" id="refreshTorrentsBtn" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 flex items-center space-x-1.5 transition-all">
+                <button type="button" id="refreshTorrentsBtn" onclick="window.t2jLoadTorrents && window.t2jLoadTorrents()" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 flex items-center space-x-1.5 transition-all">
                   <i class="fa-solid fa-arrows-rotate text-xs"></i>
                   <span>Оновити</span>
                 </button>
-                <button type="button" id="scanLibraryBtn" class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-md shadow-brand-600/30 flex items-center space-x-1.5 transition-all">
+                <button type="button" id="scanLibraryBtn" onclick="window.t2jScanLibrary && window.t2jScanLibrary()" class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-md shadow-brand-600/30 flex items-center space-x-1.5 transition-all">
                   <i class="fa-solid fa-folder-tree text-xs"></i>
                   <span>Сканувати медіатеку</span>
                 </button>
@@ -567,7 +566,7 @@
                 <p class="text-xs text-slate-400 mt-1">Конфігурація автономного торент-рушія, параметрів кешування та інтеграції з Prowlarr.</p>
               </div>
 
-              <button type="button" id="saveSettingsBtn"
+              <button type="button" id="saveSettingsBtn" onclick="window.t2jSaveSettings && window.t2jSaveSettings()"
                       class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-brand-600/30 active:scale-95 transition-all flex items-center space-x-2">
                 <i class="fa-solid fa-floppy-disk"></i>
                 <span id="saveSettingsBtnText">Зберегти налаштування</span>
@@ -608,7 +607,7 @@
                   </div>
 
                   <div class="pt-2">
-                    <button type="button" id="restartDaemonBtn" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-all">
+                    <button type="button" id="restartDaemonBtn" onclick="window.t2jRestartDaemon && window.t2jRestartDaemon()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-all">
                       <i class="fa-solid fa-power-off text-amber-400"></i>
                       <span>Перезапустити торент-рушій</span>
                     </button>
@@ -664,23 +663,15 @@
       </main>
     </div>
   </div>
-</div>
 
-" style="display:none;" onload="window.initTorr2Jelly &amp;&amp; window.initTorr2Jelly()" onerror="window.initTorr2Jelly &amp;&amp; window.initTorr2Jelly()" />
+<script id="t2jMainScript" type="text/javascript">
 
-" style="display:none;" onload="window.initTorr2Jelly &amp;&amp; window.initTorr2Jelly()" onerror="window.initTorr2Jelly &amp;&amp; window.initTorr2Jelly()" />
-
-<img src="data:image/svg+xml;utf8,<svg/>" style="display:none;" onload="var p=document.getElementById('torr2jellyPage'); if(p && !p._scRun){ p._scRun=true; var s=p.querySelectorAll('script[type=\'text/javascript\']'); s.forEach(function(sc){ var ns=document.createElement('script'); ns.text=sc.text; document.head.appendChild(ns); }); }" onerror="var p=document.getElementById('torr2jellyPage'); if(p && !p._scRun){ p._scRun=true; var s=p.querySelectorAll('script[type=\'text/javascript\']'); s.forEach(function(sc){ var ns=document.createElement('script'); ns.text=sc.text; document.head.appendChild(ns); }); }" />
-
-<script type="text/javascript">
 (function () {
     'use strict';
 
+    var currentView = null;
+
     function initTorr2Jelly(view) {
-        if (!view) view = document.getElementById('torr2jellyPage');
-        if (!view) return;
-        if (view._t2jInitialized) return;
-        view._t2jInitialized = true;
         // State
         let currentTab = 'search';
         let searchResults = [];
@@ -1243,6 +1234,81 @@
 
     window.initTorr2Jelly = initTorr2Jelly;
 
+    window.t2jSwitchTab = function(tab) {
+        var page = document.getElementById('torr2jellyPage');
+        if (!page) return;
+        if (!page._t2jInitialized) initTorr2Jelly(page);
+
+        var btns = page.querySelectorAll('.t2j-nav-btn');
+        for (var i = 0; i < btns.length; i++) {
+            if (btns[i].getAttribute('data-tab') === tab) {
+                btns[i].classList.add('active');
+            } else {
+                btns[i].classList.remove('active');
+            }
+        }
+
+        var contents = page.querySelectorAll('.t2j-tab-content');
+        for (var j = 0; j < contents.length; j++) {
+            contents[j].classList.add('hidden');
+        }
+
+        if (tab === 'search') {
+            var s = page.querySelector('#t2jTabSearch');
+            if (s) s.classList.remove('hidden');
+        } else if (tab === 'magnet') {
+            var m = page.querySelector('#t2jTabMagnet');
+            if (m) m.classList.remove('hidden');
+        } else if (tab === 'dashboard') {
+            var d = page.querySelector('#t2jTabDashboard');
+            if (d) d.classList.remove('hidden');
+            if (window.t2jLoadTorrents) window.t2jLoadTorrents();
+        } else if (tab === 'settings') {
+            var st = page.querySelector('#t2jTabSettings');
+            if (st) st.classList.remove('hidden');
+            if (window.t2jLoadSettings) window.t2jLoadSettings();
+        }
+    };
+
+    window.t2jBoot = function() {
+        var page = document.getElementById('torr2jellyPage');
+        if (page && !page._t2jInitialized) {
+            initTorr2Jelly(page);
+        }
+    };
+
+    // Expose helpers for inline onclick
+    window.t2jSyncNow = function() {
+        var btn = document.getElementById('t2jSyncNowBtn');
+        if (btn) btn.click();
+    };
+    window.t2jFilter = function(f) {
+        if (f === 'all') {
+            var b = document.getElementById('filterAllBtn');
+            if (b) b.click();
+        } else {
+            var b = document.getElementById('filterGoldBtn');
+            if (b) b.click();
+        }
+    };
+    window.t2jLoadTorrents = function() {
+        var b = document.getElementById('refreshTorrentsBtn');
+        if (b) b.click();
+    };
+    window.t2jScanLibrary = function() {
+        var b = document.getElementById('scanLibraryBtn');
+        if (b) b.click();
+    };
+    window.t2jSaveSettings = function() {
+        var b = document.getElementById('saveSettingsBtn');
+        if (b) b.click();
+    };
+    window.t2jRestartDaemon = function() {
+        var b = document.getElementById('restartDaemonBtn');
+        if (b) b.click();
+    };
+
+    // Lifecycle events
     function tryInit() {
         var page = document.getElementById('torr2jellyPage');
         if (page) {
@@ -1267,5 +1333,9 @@
         });
     }
 })();
+
 </script>
+
+<img src="data:image/svg+xml;utf8,<svg/>" style="display:none;" onload="if(!window.t2jBoot){try{eval(document.getElementById('t2jMainScript').textContent);}catch(e){console.error(e);}} if(window.t2jBoot)window.t2jBoot();" onerror="if(!window.t2jBoot){try{eval(document.getElementById('t2jMainScript').textContent);}catch(e){console.error(e);}} if(window.t2jBoot)window.t2jBoot();" />
+
 </div>

@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/main/logo.png",
     "versions": [
       {
+        "version": "1.0.4.0",
+        "changelog": "Inline onclick tab and action handlers with direct global state dispatch to guarantee button clicks work in Jellyfin SPA.",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/releases/download/v1.0.4/Torr2Jelly_1.0.4.0.zip",
+        "checksum": "d80001dfc7650f35fb409815890cba18",
+        "timestamp": "2026-10-18T19:58:00Z"
+      },
+      {
         "version": "1.0.3.0",
         "changelog": "Fix Jellyfin querySelector('div[data-role=page]') stripping: moved style, fontawesome, and runner script inside the page div wrapper.",
         "targetAbi": "10.9.0.0",

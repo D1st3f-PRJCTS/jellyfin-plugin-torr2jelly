@@ -105,6 +105,7 @@ public class Torr2JellyApiController : ControllerBase
         [FromQuery] string query,
         [FromQuery] string? category = null,
         [FromQuery] bool? onlyGold = null,
+        [FromQuery] bool? onlyTags = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -112,7 +113,8 @@ public class Torr2JellyApiController : ControllerBase
             return Ok(new List<TorrentSearchResult>());
         }
 
-        var results = await _searchService.SearchAsync(query, category, onlyGold, isUserAdmin: true, cancellationToken);
+        var filter = onlyTags ?? onlyGold;
+        var results = await _searchService.SearchAsync(query, category, filter, isUserAdmin: true, cancellationToken);
         return Ok(results);
     }
 

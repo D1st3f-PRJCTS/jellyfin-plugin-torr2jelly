@@ -116,6 +116,8 @@ public class TorznabSearchProvider : ITorrentSearchProvider
                 int peers = 0;
                 string infoHash = string.Empty;
                 bool isGold = false;
+                bool isHalfleech = false;
+                var tags = new List<string>();
 
                 foreach (var attr in item.Elements(TorznabNs + "attr"))
                 {
@@ -134,10 +136,53 @@ public class TorznabSearchProvider : ITorrentSearchProvider
                     {
                         infoHash = attrVal ?? string.Empty;
                     }
-                    else if (attrName == "downloadvolumefactor" && double.TryParse(attrVal, out var factor) && factor == 0)
+                    else if (attrName == "tag" && !string.IsNullOrWhiteSpace(attrVal))
                     {
-                        isGold = true;
+                        if (!tags.Contains(attrVal, StringComparer.OrdinalIgnoreCase))
+                        {
+                            tags.Add(attrVal.Trim());
+                        }
                     }
+                    else if (attrName == "downloadvolumefactor" && double.TryParse(attrVal, out var factor))
+                    {
+                        if (factor == 0)
+                        {
+                            isGold = true;
+                            if (!tags.Contains("freeleech", StringComparer.OrdinalIgnoreCase))
+                                tags.Add("freeleech");
+                        }
+                        else if (factor == 0.5)
+                        {
+                            isHalfleech = true;
+                            if (!tags.Contains("halfleech", StringComparer.OrdinalIgnoreCase))
+                                tags.Add("halfleech");
+                        }
+                        else if (factor == 0.75)
+                        {
+                            if (!tags.Contains("bronze", StringComparer.OrdinalIgnoreCase))
+                                tags.Add("bronze");
+                        }
+                    }
+                    else if (attrName == "uploadvolumefactor" && double.TryParse(attrVal, out var upFactor) && upFactor > 1)
+                    {
+                        if (!tags.Contains("doubleupload", StringComparer.OrdinalIgnoreCase))
+                            tags.Add("doubleupload");
+                    }
+                }
+
+                if ((title.Contains("[Авторськ", StringComparison.OrdinalIgnoreCase) ||
+                     title.Contains("Авторський", StringComparison.OrdinalIgnoreCase) ||
+                     title.Contains("Власна роздача", StringComparison.OrdinalIgnoreCase)) &&
+                    !tags.Contains("internal", StringComparer.OrdinalIgnoreCase))
+                {
+                    tags.Add("internal");
+                }
+
+                if ((title.Contains("[Exclusive]", StringComparison.OrdinalIgnoreCase) ||
+                     title.Contains("Ексклюзив", StringComparison.OrdinalIgnoreCase)) &&
+                    !tags.Contains("exclusive", StringComparer.OrdinalIgnoreCase))
+                {
+                    tags.Add("exclusive");
                 }
 
                 var downloadUrl = enclosureUrl ?? link ?? string.Empty;
@@ -156,12 +201,13 @@ public class TorznabSearchProvider : ITorrentSearchProvider
                     MagnetUrl = magnetUrl,
                     InfoHash = infoHash,
                     IsGold = isGold,
-                    IsFreeleech = isGold
+                    IsFreeleech = isGold || isHalfleech,
+                    Tags = tags
                 });
             }
 
             return results
-                .OrderByDescending(r => r.IsGold ? 1 : 0)
+                .OrderByDescending(r => (r.Tags != null && r.Tags.Count > 0) ? (r.IsGold ? 3 : 2) : 0)
                 .ThenByDescending(r => r.Seeders)
                 .ToList();
         }

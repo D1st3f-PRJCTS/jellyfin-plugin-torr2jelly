@@ -519,12 +519,12 @@
                 <option value="">All Categories</option>
               </select>
 
-              <!-- Gold Only Quick Filter -->
+              <!-- Tagged Only Quick Filter -->
               <label class="flex items-center space-x-2 px-3.5 py-2.5 bg-slate-900 border border-slate-700 hover:border-amber-500/50 rounded-xl cursor-pointer text-xs text-slate-300 select-none transition-all">
                 <input type="checkbox" id="t2jSearchGoldOnlyCheck" class="rounded text-amber-500 focus:ring-amber-500 bg-slate-950 border-slate-700 w-4 h-4">
                 <span class="flex items-center space-x-1 font-semibold">
-                  <span class="text-amber-400">⭐</span>
-                  <span id="t2jSearchGoldOnlyLabel">Gold Only</span>
+                  <span class="text-amber-400">🏷️</span>
+                  <span id="t2jSearchGoldOnlyLabel">With Tags</span>
                 </span>
               </label>
 
@@ -549,9 +549,9 @@
                   <span id="t2jResultsFoundText">releases found</span>
                 </h3>
                 <span class="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center space-x-1 font-medium">
-                  <span>⭐</span>
+                  <span>🏷️</span>
                   <span id="goldCountBadge">0</span>
-                  <span id="goldBadgeText">Gold (Freeleech)</span>
+                  <span id="goldBadgeText">Tagged</span>
                 </span>
               </div>
 
@@ -560,15 +560,15 @@
                 <span class="text-slate-400" id="filterLabelText">Filter:</span>
                 <button type="button" id="filterAllBtn" onclick="window.t2jFilter && window.t2jFilter('all')" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-slate-800 border-slate-600 text-white font-bold">All</button>
                 <button type="button" id="filterGoldBtn" onclick="window.t2jFilter && window.t2jFilter('gold')" class="px-2.5 py-1 rounded-lg border text-xs transition-all border-slate-800 hover:bg-slate-800/60 text-amber-400/80 flex items-center space-x-1.5">
-                  <span>⭐ Gold</span>
+                  <span>🏷️ With Tags</span>
                 </button>
 
                 <span class="text-slate-400 ml-2" id="sortLabelText">Sort:</span>
                 <select id="sortSelect" onchange="window.t2jSort && window.t2jSort(this.value)" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-brand-500">
-                  <option value="priority">Priority (Gold first)</option>
-                  <option value="seeders">Seeders</option>
-                  <option value="size_desc">Size (Large first)</option>
-                  <option value="size_asc">Size (Small first)</option>
+                  <option value="priority" id="sortOptPriority">Priority (Tagged first)</option>
+                  <option value="seeders" id="sortOptSeeders">Seeders</option>
+                  <option value="size_desc" id="sortOptSizeDesc">Size (Large first)</option>
+                  <option value="size_asc" id="sortOptSizeAsc">Size (Small first)</option>
                 </select>
               </div>
             </div>
@@ -962,19 +962,20 @@
             searchDesc: 'Searches via connected Prowlarr indexers. Click on a title to view the torrent details.',
             searchPlaceholder: 'Enter movie or series title (e.g. Dune, House of the Dragon, Inception)...',
             allCategories: 'All Categories',
-            goldOnly: 'Gold Only',
+            goldOnly: 'With Tags',
             btnSearch: 'Search',
             searchingIndexers: 'Searching indexers...',
             releasesFound: 'releases found',
-            goldFreeleech: 'Gold (Freeleech)',
+            goldFreeleech: 'Tagged',
             filter: 'Filter:',
             filterAll: 'All',
-            filterGold: '⭐ Gold',
+            filterGold: '🏷️ With Tags',
             sort: 'Sort:',
-            sortPriority: 'Priority (Gold first)',
+            sortPriority: 'Priority (Tagged first)',
             sortSeeders: 'Seeders',
             sortSizeDesc: 'Size (Large first)',
             sortSizeAsc: 'Size (Small first)',
+            categoryLabel: 'Category:',
             addToLibrary: 'Add to Library',
             adding: 'Adding...',
             addedToLib: '✓ Added to Library',
@@ -1022,11 +1023,11 @@
             btnRestartTorrServer: 'Test / Restart TorrServer',
             restarting: 'Restarting...',
             cfgProwlarrTitle: 'Prowlarr & Trackers Customization',
-            cfgProwlarrSub: 'Enable/disable individual trackers and gold-only filters',
-            lblCfgSearchGoldDefault: 'Search only Gold (Freeleech) torrents by default',
-            lblCfgSearchGoldDefaultSub: 'When enabled, search queries automatically filter for Gold/Freeleech releases.',
-            lblCfgOnlyGoldNonAdmin: 'Only Gold releases for regular non-admin users',
-            lblCfgOnlyGoldNonAdminSub: 'Restricts non-admin users from generating torrents with high upload requirements.',
+            cfgProwlarrSub: 'Enable/disable individual trackers and tag filters',
+            lblCfgSearchGoldDefault: 'Search only releases with tags by default (Gold, Bronze, Author, etc.)',
+            lblCfgSearchGoldDefaultSub: 'When enabled, search queries automatically filter for releases with tracker tags or bonuses.',
+            lblCfgOnlyGoldNonAdmin: 'Only tagged releases for regular non-admin users',
+            lblCfgOnlyGoldNonAdminSub: 'Restricts non-admin users from generating torrents without tags/bonuses.',
             lblCfgTrackersList: 'Individual Trackers / Indexers:',
             lblLoadingTrackers: 'Loading trackers from Prowlarr...',
             cfgStrmStructureTitle: 'STRM File & Folder Structure',
@@ -1052,19 +1053,20 @@
             searchDesc: 'Шукає через підключені індексатори Prowlarr. Клік на назву відкриває сторінку роздачі на трекері.',
             searchPlaceholder: 'Введіть назву фільму або серіалу (наприклад: Dune, Дім Дракона, Початок)...',
             allCategories: 'Усі категорії',
-            goldOnly: 'Тільки золоті',
+            goldOnly: 'Тільки з тегами',
             btnSearch: 'Знайти',
             searchingIndexers: 'Шукаємо на трекерах...',
             releasesFound: 'роздач знайдено',
-            goldFreeleech: 'ЗОЛОТА (Freeleech)',
+            goldFreeleech: 'З тегами',
             filter: 'Фільтр:',
             filterAll: 'Всі',
-            filterGold: '⭐ Золоті',
+            filterGold: '🏷️ З тегами',
             sort: 'Сортування:',
-            sortPriority: 'Пріоритет (Золоті перші)',
+            sortPriority: 'Пріоритет (З тегами перші)',
             sortSeeders: 'За роздаючими',
             sortSizeDesc: 'Розмір (спадання)',
             sortSizeAsc: 'Розмір (зростання)',
+            categoryLabel: 'Категорія:',
             addToLibrary: 'Додати в бібліотеку',
             adding: 'Додаємо...',
             addedToLib: '✓ Додано в бібліотеку',
@@ -1112,11 +1114,11 @@
             btnRestartTorrServer: 'Перевірити / Перезапустити торент-рушій',
             restarting: 'Перезапуск...',
             cfgProwlarrTitle: 'Prowlarr та кастомізація трекерів',
-            cfgProwlarrSub: 'Увімкнення/вимкнення трекерів та фільтри золотих роздач',
-            lblCfgSearchGoldDefault: 'Шукати лише Золоті (Freeleech) торенти за замовчуванням',
-            lblCfgSearchGoldDefaultSub: 'Якщо увімкнено, пошукові запити автоматично фільтрують безлімітні роздачі.',
-            lblCfgOnlyGoldNonAdmin: 'Лише Золоті роздачі для звичайних користувачів',
-            lblCfgOnlyGoldNonAdminSub: 'Обмежує користувачів без прав адміна від завантаження торентів із високими вимогами.',
+            cfgProwlarrSub: 'Увімкнення/вимкнення трекерів та фільтри роздач із тегами',
+            lblCfgSearchGoldDefault: 'Шукати лише релізи з тегами за замовчуванням',
+            lblCfgSearchGoldDefaultSub: 'Якщо увімкнено, пошукові запити фільтрують релізи з бонусами та тегами (Золоті, Бронзові, Авторські тощо).',
+            lblCfgOnlyGoldNonAdmin: 'Лише роздачі з тегами для звичайних користувачів',
+            lblCfgOnlyGoldNonAdminSub: 'Обмежує користувачів без прав адміна від завантаження торентів без тегів або бонусів.',
             lblCfgTrackersList: 'Окремі трекери / Індексатори:',
             lblLoadingTrackers: 'Завантаження списку трекерів з Prowlarr...',
             cfgStrmStructureTitle: 'Структура файлів і папок STRM',
@@ -1237,6 +1239,18 @@
 
         var searchInput = page.querySelector('#t2jSearchInput');
         if (searchInput) searchInput.placeholder = t.searchPlaceholder;
+
+        var filterGoldBtn = page.querySelector('#filterGoldBtn');
+        if (filterGoldBtn) filterGoldBtn.innerHTML = '<span>' + t.filterGold + '</span>';
+
+        var sortOptPriority = page.querySelector('#sortOptPriority');
+        if (sortOptPriority) sortOptPriority.innerText = t.sortPriority;
+        var sortOptSeeders = page.querySelector('#sortOptSeeders');
+        if (sortOptSeeders) sortOptSeeders.innerText = t.sortSeeders;
+        var sortOptSizeDesc = page.querySelector('#sortOptSizeDesc');
+        if (sortOptSizeDesc) sortOptSizeDesc.innerText = t.sortSizeDesc;
+        var sortOptSizeAsc = page.querySelector('#sortOptSizeAsc');
+        if (sortOptSizeAsc) sortOptSizeAsc.innerText = t.sortSizeAsc;
 
         if (window.t2jState.currentTab === 'search' && window.t2jState.searchResults.length > 0) {
             renderSearchResults();
@@ -1555,11 +1569,16 @@
         var searchCategorySelect = page.querySelector('#t2jSearchCategorySelect');
 
         var items = (window.t2jState.searchResults || []).slice();
-        var goldTotal = items.filter(function (r) { return r.IsGold || r.isGold; }).length;
-        if (goldCountBadge) goldCountBadge.innerText = goldTotal;
+        var hasTagsFn = function (r) {
+            var tg = r.Tags || r.tags || [];
+            return tg.length > 0 || r.IsGold || r.isGold || r.IsFreeleech || r.isFreeleech;
+        };
+
+        var tagsTotal = items.filter(hasTagsFn).length;
+        if (goldCountBadge) goldCountBadge.innerText = tagsTotal;
 
         if (window.t2jState.activeFilter === 'gold') {
-            items = items.filter(function (r) { return r.IsGold || r.isGold; });
+            items = items.filter(hasTagsFn);
         }
 
         if (window.t2jState.currentSort === 'seeders') {
@@ -1568,6 +1587,14 @@
             items.sort(function (a, b) { return (b.Size || b.size || 0) - (a.Size || a.size || 0); });
         } else if (window.t2jState.currentSort === 'size_asc') {
             items.sort(function (a, b) { return (a.Size || a.size || 0) - (b.Size || b.size || 0); });
+        } else {
+            // priority: items with tags first, then seeders
+            items.sort(function (a, b) {
+                var aHas = hasTagsFn(a) ? 1 : 0;
+                var bHas = hasTagsFn(b) ? 1 : 0;
+                if (aHas !== bHas) return bHas - aHas;
+                return (b.Seeders || b.seeders || 0) - (a.Seeders || a.seeders || 0);
+            });
         }
 
         window.t2jState.filteredResults = items;
@@ -1600,18 +1627,45 @@
 
             var isShowRelease = /(?:s\d{1,2}|season|сезон|\d{1,2}x\d{1,2}|серій|серії|серії|ep\d{1,3})/i.test(title);
 
-            var goldBadge = isGold
-                ? '<span class="text-xs px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border border-amber-500/40 font-bold flex items-center space-x-1 shadow-sm shadow-amber-500/20"><span>⚡ ' + escapeHtml(t.goldFreeleech) + '</span></span>'
-                : (isFreeleech ? '<span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-400/20 text-slate-300 border border-slate-400/40 font-bold">50% Freeleech</span>' : '');
+            // Extract tags
+            var rawTags = (item.Tags || item.tags || []).slice();
+            if (isGold && !rawTags.some(function (tg) { return /freeleech|gold/i.test(tg); })) {
+                rawTags.unshift('freeleech');
+            } else if (isFreeleech && !rawTags.some(function (tg) { return /halfleech|50%/i.test(tg); })) {
+                rawTags.unshift('halfleech');
+            }
 
-            var btnClass = isGold
+            var hasAnyTag = rawTags.length > 0;
+            var isUk = getLang() === 'uk';
+            var tagBadgesHtml = '';
+
+            rawTags.forEach(function (tg) {
+                var ltg = tg.toLowerCase();
+                if (ltg === 'freeleech' || ltg === 'gold') {
+                    tagBadgesHtml += '<span class="text-xs px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border border-amber-500/40 font-bold flex items-center space-x-1 shadow-sm shadow-amber-500/20"><span>⚡ ' + (isUk ? 'Золота (Freeleech)' : 'Freeleech') + '</span></span>';
+                } else if (ltg === 'halfleech' || ltg === 'silver') {
+                    tagBadgesHtml += '<span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-400/20 text-slate-200 border border-slate-400/40 font-bold flex items-center space-x-1"><span>🥈 ' + (isUk ? 'Срібна (50%)' : 'Silver (50%)') + '</span></span>';
+                } else if (ltg === 'bronze') {
+                    tagBadgesHtml += '<span class="text-xs px-2.5 py-0.5 rounded-full bg-orange-600/20 text-orange-300 border border-orange-500/40 font-bold flex items-center space-x-1"><span>🥉 ' + (isUk ? 'Бронзова' : 'Bronze') + '</span></span>';
+                } else if (ltg === 'internal' || ltg === 'author' || ltg.indexOf('автор') !== -1) {
+                    tagBadgesHtml += '<span class="text-xs px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold flex items-center space-x-1"><span>💎 ' + (isUk ? 'Авторський реліз' : 'Author Release') + '</span></span>';
+                } else if (ltg === 'exclusive' || ltg.indexOf('ексклюзив') !== -1) {
+                    tagBadgesHtml += '<span class="text-xs px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold flex items-center space-x-1"><span>🔥 ' + (isUk ? 'Ексклюзив' : 'Exclusive') + '</span></span>';
+                } else if (ltg === 'doubleupload' || ltg === '2xupload') {
+                    tagBadgesHtml += '<span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold flex items-center space-x-1"><span>🚀 ' + (isUk ? '2x Аплоад' : '2x Upload') + '</span></span>';
+                } else {
+                    tagBadgesHtml += '<span class="text-xs px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold">🏷️ ' + escapeHtml(tg) + '</span>';
+                }
+            });
+
+            var btnClass = hasAnyTag
                 ? 'bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-bold'
                 : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-600/30';
 
-            html += '<div class="t2j-result-row flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 ' + (isGold ? 'is-gold' : '') + '">';
+            html += '<div class="t2j-result-row flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 ' + (hasAnyTag ? 'is-gold' : '') + '">';
             html += '  <div class="flex-1 min-w-0 space-y-1.5">';
             html += '    <div class="flex items-center space-x-2 flex-wrap gap-y-1">';
-            html += '      ' + goldBadge;
+            html += '      ' + tagBadgesHtml;
             html += '      <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-semibold">' + escapeHtml(indexer) + '</span>';
             html += '      <span class="text-xs text-slate-400 font-medium">' + escapeHtml(size) + '</span>';
             html += '      <span class="text-xs text-emerald-400 font-semibold flex items-center space-x-1">';
@@ -1633,8 +1687,12 @@
             html += '    </div>';
             html += '  </div>';
 
-            html += '  <div class="flex items-center gap-2 shrink-0">';
-            html += '    <select id="t2jCatSelect_' + i + '" class="t2j-row-cat-select bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-500 cursor-pointer">';
+            html += '  <div class="flex flex-col items-stretch gap-1.5 shrink-0 w-full sm:w-48">';
+            html += '    <div class="flex items-center space-x-1 text-[11px] text-slate-400 font-semibold px-0.5">';
+            html += '      <i class="fa-solid fa-folder text-brand-400"></i>';
+            html += '      <span>' + escapeHtml(t.categoryLabel || 'Category:') + '</span>';
+            html += '    </div>';
+            html += '    <select id="t2jCatSelect_' + i + '" class="t2j-row-cat-select w-full bg-slate-900 border border-slate-700 hover:border-slate-500 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500 cursor-pointer">';
 
             cats.forEach(function (c) {
                 var selected = false;
@@ -1649,7 +1707,7 @@
             });
 
             html += '    </select>';
-            html += '    <button type="button" data-index="' + i + '" onclick="window.t2jAddResult && window.t2jAddResult(this)" class="t2j-add-row-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center justify-center space-x-1.5 ' + btnClass + '" style="cursor: pointer !important; pointer-events: auto !important;">';
+            html += '    <button type="button" data-index="' + i + '" onclick="window.t2jAddResult && window.t2jAddResult(this)" class="t2j-add-row-btn w-full px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center justify-center space-x-1.5 ' + btnClass + '" style="cursor: pointer !important; pointer-events: auto !important;">';
             html += '      <i class="fa-solid fa-play text-[10px]"></i>';
             html += '      <span>' + escapeHtml(t.addToLibrary) + '</span>';
             html += '    </button>';
@@ -1692,7 +1750,7 @@
 
             var url = getApiUrl('Plugins/Torr2Jelly/Search?query=' + encodeURIComponent(query));
             if (cat) url += '&category=' + encodeURIComponent(cat);
-            if (isGoldOnly) url += '&onlyGold=true';
+            if (isGoldOnly) url += '&onlyGold=true&onlyTags=true';
 
             var res = await fetch(url, { headers: getAuthHeaders() });
             if (!res.ok) {

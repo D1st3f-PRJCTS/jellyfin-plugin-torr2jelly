@@ -98,17 +98,17 @@ public class TorrentSearchService
             results = results.Where(r => !disabled.Contains(r.Indexer)).ToList();
         }
 
-        // Apply Gold filter: explicit parameter wins, otherwise default from config
-        var filterGold = onlyGold ?? config.SearchOnlyGoldByDefault;
-        if (filterGold)
+        // Apply Tagged filter: explicit parameter wins, otherwise default from config
+        var filterTagged = onlyGold ?? config.SearchOnlyGoldByDefault;
+        if (filterTagged)
         {
-            results = results.Where(r => r.IsGold || r.IsFreeleech).ToList();
+            results = results.Where(r => r.IsGold || r.IsFreeleech || (r.Tags != null && r.Tags.Count > 0)).ToList();
         }
 
-        // Apply Gold/Freeleech filter for regular users if configured
+        // Apply Tagged filter for regular users if configured
         if (!isUserAdmin && config.OnlyGoldTorrentsForNonAdmins)
         {
-            results = results.Where(r => r.IsGold || r.IsFreeleech).ToList();
+            results = results.Where(r => r.IsGold || r.IsFreeleech || (r.Tags != null && r.Tags.Count > 0)).ToList();
         }
 
         // Deduplicate by InfoHash if present, otherwise by Title
@@ -130,7 +130,7 @@ public class TorrentSearchService
         }
 
         return deduped
-            .OrderByDescending(r => r.IsGold ? 2 : (r.IsFreeleech ? 1 : 0))
+            .OrderByDescending(r => (r.Tags != null && r.Tags.Count > 0) ? (r.IsGold ? 3 : 2) : 0)
             .ThenByDescending(r => r.Seeders)
             .ToList();
     }

@@ -17,6 +17,7 @@ public class TorrentSearchResult
     public string InfoHash { get; set; } = string.Empty;
     public bool IsFreeleech { get; set; }
     public bool IsGold { get; set; }
+    public List<string> Tags { get; set; } = new();
     public DateTime? PublishDate { get; set; }
     public List<int> Categories { get; set; } = new();
     public string? PosterUrl { get; set; }

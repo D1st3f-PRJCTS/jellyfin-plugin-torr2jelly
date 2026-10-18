@@ -75,6 +75,9 @@ public class ProwlarrRawItem
     [JsonPropertyName("downloadVolumeFactor")]
     public double? DownloadVolumeFactor { get; set; }
 
+    [JsonPropertyName("uploadVolumeFactor")]
+    public double? UploadVolumeFactor { get; set; }
+
     [JsonPropertyName("categories")]
     public List<ProwlarrCategoryItem>? Categories { get; set; }
 }
@@ -201,15 +204,61 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
                 }
 
                 var flags = item.IndexerFlags ?? new List<string>();
+                var tags = new List<string>();
+
+                foreach (var f in flags)
+                {
+                    if (!string.IsNullOrWhiteSpace(f) && !tags.Contains(f, StringComparer.OrdinalIgnoreCase))
+                    {
+                        tags.Add(f.Trim());
+                    }
+                }
+
                 var isFreeleech = flags.Any(f => f.Equals("freeleech", StringComparison.OrdinalIgnoreCase)) ||
                                   (item.DownloadVolumeFactor.HasValue && item.DownloadVolumeFactor.Value == 0);
                 var isHalfleech = flags.Any(f => f.Equals("halfleech", StringComparison.OrdinalIgnoreCase)) ||
                                   (item.DownloadVolumeFactor.HasValue && item.DownloadVolumeFactor.Value == 0.5);
+                var isBronze = (item.DownloadVolumeFactor.HasValue && item.DownloadVolumeFactor.Value == 0.75) ||
+                               flags.Any(f => f.Equals("bronze", StringComparison.OrdinalIgnoreCase));
+
+                if (isFreeleech && !tags.Contains("freeleech", StringComparer.OrdinalIgnoreCase))
+                {
+                    tags.Add("freeleech");
+                }
+                else if (isHalfleech && !tags.Contains("halfleech", StringComparer.OrdinalIgnoreCase))
+                {
+                    tags.Add("halfleech");
+                }
+                else if (isBronze && !tags.Contains("bronze", StringComparer.OrdinalIgnoreCase))
+                {
+                    tags.Add("bronze");
+                }
+
+                if (item.UploadVolumeFactor.HasValue && item.UploadVolumeFactor.Value > 1 && !tags.Contains("doubleupload", StringComparer.OrdinalIgnoreCase))
+                {
+                    tags.Add("doubleupload");
+                }
+
+                var rawTitle = item.Title ?? string.Empty;
+                if ((rawTitle.Contains("[Авторськ", StringComparison.OrdinalIgnoreCase) ||
+                     rawTitle.Contains("Авторський", StringComparison.OrdinalIgnoreCase) ||
+                     rawTitle.Contains("Власна роздача", StringComparison.OrdinalIgnoreCase)) &&
+                    !tags.Contains("internal", StringComparer.OrdinalIgnoreCase))
+                {
+                    tags.Add("internal");
+                }
+
+                if ((rawTitle.Contains("[Exclusive]", StringComparison.OrdinalIgnoreCase) ||
+                     rawTitle.Contains("Ексклюзив", StringComparison.OrdinalIgnoreCase)) &&
+                    !tags.Contains("exclusive", StringComparer.OrdinalIgnoreCase))
+                {
+                    tags.Add("exclusive");
+                }
 
                 var searchResult = new TorrentSearchResult
                 {
                     Id = item.Guid ?? item.InfoHash ?? Guid.NewGuid().ToString("N"),
-                    Title = item.Title.Trim(),
+                    Title = (item.Title ?? string.Empty).Trim(),
                     Size = item.Size,
                     SizeFormatted = TorrentSearchResult.FormatBytes(item.Size),
                     Seeders = item.Seeders,
@@ -220,6 +269,7 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
                     InfoHash = item.InfoHash ?? string.Empty,
                     IsGold = isFreeleech,
                     IsFreeleech = isFreeleech || isHalfleech,
+                    Tags = tags,
                     PublishDate = item.PublishDate,
                     Categories = item.Categories?.Select(c => c.Id).ToList() ?? new List<int>()
                 };
@@ -227,9 +277,9 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
                 results.Add(searchResult);
             }
 
-            // Priority sorting: Gold -> Regular, then by seeders desc
+            // Priority sorting: Tagged/Gold -> Regular, then by seeders desc
             return results
-                .OrderByDescending(r => r.IsGold ? 2 : (r.IsFreeleech ? 1 : 0))
+                .OrderByDescending(r => (r.Tags != null && r.Tags.Count > 0) ? (r.IsGold ? 3 : 2) : 0)
                 .ThenByDescending(r => r.Seeders)
                 .ToList();
         }

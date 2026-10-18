@@ -55,10 +55,7 @@ public class Torr2JellyApiController : ControllerBase
         var status = new PluginStatusDto
         {
             IsDaemonRunning = _daemonManager.IsRunning,
-            DaemonPid = _daemonManager.ProcessId,
             DaemonVersion = _daemonManager.DaemonVersion,
-            DaemonPort = config.EmbeddedTorrServerPort,
-            Mode = config.UseEmbeddedTorrServer ? "Embedded" : "External",
             StatusMessage = _daemonManager.StatusMessage,
             EffectiveUrl = _daemonManager.GetEffectiveUrl(),
             StreamBaseUrl = _daemonManager.GetStreamBaseUrl(),
@@ -346,6 +343,7 @@ public class Torr2JellyApiController : ControllerBase
     public ActionResult<PluginConfiguration> GetSettings()
     {
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        config.DeduplicateCategories();
         return Ok(config);
     }
 
@@ -360,20 +358,9 @@ public class Torr2JellyApiController : ControllerBase
             return StatusCode(StatusCodes.Status500InternalServerError);
         }
 
-        var oldConfig = Plugin.Instance.Configuration;
-        var needsDaemonRestart = oldConfig.UseEmbeddedTorrServer != newConfig.UseEmbeddedTorrServer ||
-                                 oldConfig.EmbeddedTorrServerPort != newConfig.EmbeddedTorrServerPort;
-
+        newConfig.DeduplicateCategories();
         Plugin.Instance.UpdateConfiguration(newConfig);
-
-        if (needsDaemonRestart)
-        {
-            await _daemonManager.RestartAsync(cancellationToken);
-        }
-        else
-        {
-            await _daemonManager.ConfigureDaemonSettingsAsync(cancellationToken);
-        }
+        await _daemonManager.ConfigureDaemonSettingsAsync(cancellationToken);
 
         return Ok(new { success = true });
     }

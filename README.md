@@ -13,7 +13,7 @@
 ## 🌟 Overview
 
 **Torr2Jelly Plugin** is a native Jellyfin plugin (.NET 8) that brings full torrent streaming directly into your Jellyfin server.
-It operates as a **complete standalone solution**: upon installation, the plugin automatically downloads and manages an embedded TorrServer-Matrix daemon, provides unified Prowlarr & Torznab search inside the Jellyfin Web UI, and generates `.strm` files on-demand for movies and TV series with automatic season structuring.
+It connects seamlessly to your TorrServer instance (e.g. Docker container or remote instance via VPN), provides unified Prowlarr & Torznab search directly inside the Jellyfin Web UI, and generates `.strm` files on-demand for movies and TV series with automatic season structuring.
 
 Works seamlessly on **Jellyfin Web**, **Android TV**, **Apple TV**, **Tizen**, and **iOS/Android** mobile clients.
 
@@ -21,12 +21,11 @@ Works seamlessly on **Jellyfin Web**, **Android TV**, **Apple TV**, **Tizen**, a
 
 ## ✨ Key Features
 
-- ⚡ **100% Standalone (Zero-Config)**: Embedded TorrServer process supervisor automatically downloads the binary for your platform (Linux x64/arm64, Windows, macOS) and manages its lifecycle.
+- ⚡ **Seamless TorrServer Integration**: Connects directly to TorrServer (e.g. `http://torrserver:8090`), managing connection health, stream URL routing, and RAM cache configuration.
 - 📡 **Prowlarr & Torznab Integration**: Fast async tracker search with category filtering, seeders sorting, and VIP/Gold/Freeleech prioritization.
 - 🍿 **Instant Streaming via `.strm`**: Generates clean `.strm` links directly into your Jellyfin media libraries. Video playback begins in seconds with full seeking (range requests) and audio/subtitle selection.
 - 🗂️ **Smart Season Auto-Organizer**: Automatically parses `S01E02`, `1x05`, and multi-episode formats into clean `Season XX` folder structures.
 - 🎨 **Native Glassmorphic UI**: Integrates into the Jellyfin Web sidebar with dark theme styling, remote D-pad navigation for Smart TVs, and Ukrainian/English localization.
-- 🔄 **Dual-Mode Support**: Use the built-in embedded daemon or connect to an existing remote TorrServer instance.
 
 ---
 

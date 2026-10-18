@@ -854,13 +854,13 @@
                   <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">⚡</div>
                   <div>
                     <h3 class="font-bold text-sm text-white" id="cfgTorrServerTitle">TorrServer (Streaming Engine)</h3>
-                    <p class="text-[11px] text-slate-400" id="cfgTorrServerSub">External server (e.g. via VPN) or embedded binary process</p>
+                    <p class="text-[11px] text-slate-400" id="cfgTorrServerSub">TorrServer connection and RAM cache settings</p>
                   </div>
                 </div>
 
                 <div class="space-y-3 text-xs">
                   <div>
-                    <label class="block text-slate-300 font-medium mb-1" id="lblCfgExternalUrl">External TorrServer URL (API & Streaming):</label>
+                    <label class="block text-slate-300 font-medium mb-1" id="lblCfgExternalUrl">TorrServer URL (API & Streaming):</label>
                     <input type="text" id="cfgExternalUrlInput" placeholder="http://torrserver:8090" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
                   </div>
 
@@ -869,29 +869,15 @@
                     <input type="text" id="cfgStreamUrlInput" placeholder="http://torrserver:8090" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
                   </div>
 
-                  <div class="pt-2 border-t border-slate-800/60">
-                    <label class="flex items-center space-x-3 cursor-pointer">
-                      <input type="checkbox" id="cfgEmbeddedCheck" class="rounded text-brand-600 focus:ring-brand-500 bg-slate-950 border-slate-700 w-4 h-4">
-                      <span class="font-semibold text-white" id="lblCfgEmbedded">Use Embedded TorrServer Process</span>
-                    </label>
-                  </div>
-
-                  <div class="grid grid-cols-2 gap-3">
-                    <div>
-                      <label class="block text-slate-300 font-medium mb-1" id="lblCfgPort">Port:</label>
-                      <input type="number" id="cfgPortInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
-                    </div>
-
-                    <div>
-                      <label class="block text-slate-300 font-medium mb-1" id="lblCfgCacheSize">RAM Cache (MB):</label>
-                      <input type="number" id="cfgCacheSizeInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
-                    </div>
+                  <div>
+                    <label class="block text-slate-300 font-medium mb-1" id="lblCfgCacheSize">RAM Cache (MB):</label>
+                    <input type="number" id="cfgCacheSizeInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
                   </div>
 
                   <div class="pt-2">
                     <button type="button" id="restartDaemonBtn" onclick="window.t2jRestartDaemon && window.t2jRestartDaemon()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-all">
-                      <i class="fa-solid fa-power-off text-amber-400"></i>
-                      <span id="btnRestartTorrServerText">Test / Restart TorrServer</span>
+                      <i class="fa-solid fa-rotate text-emerald-400"></i>
+                      <span id="btnRestartTorrServerText">Test Connection / Sync Cache</span>
                     </button>
                   </div>
                 </div>
@@ -1123,13 +1109,11 @@
             lblCfgMediaRoot: 'Default Media Root Directory (Media Dir):',
             lblCfgMediaRootHint: 'Fallback root path. You can customize exact folder paths for each category below.',
             cfgTorrServerTitle: 'TorrServer (Streaming Engine)',
-            cfgTorrServerSub: 'External server (e.g. via VPN) or embedded binary process',
-            lblCfgExternalUrl: 'External TorrServer URL (API & Streaming):',
+            cfgTorrServerSub: 'TorrServer connection and RAM cache settings',
+            lblCfgExternalUrl: 'TorrServer URL (API & Streaming):',
             lblCfgStreamUrl: 'TorrServer Stream URL (for .strm files):',
-            lblCfgEmbedded: 'Use Embedded TorrServer Process',
-            lblCfgPort: 'Port:',
-            lblCfgCacheSize: 'RAM Cache (MB):',
-            btnRestartTorrServer: 'Test / Restart TorrServer',
+                                    lblCfgCacheSize: 'RAM Cache (MB):',
+            btnRestartTorrServer: 'Test Connection / Sync Cache',
             restarting: 'Restarting...',
             cfgProwlarrTitle: 'Prowlarr & Trackers Customization',
             cfgProwlarrSub: 'Enable/disable individual trackers and tag filters',
@@ -1218,13 +1202,11 @@
             lblCfgMediaRoot: 'Коренева папка за замовчуванням (Media Dir):',
             lblCfgMediaRootHint: 'Резервний шлях. Ви можете налаштувати точні шляхи для кожної категорії нижче.',
             cfgTorrServerTitle: 'TorrServer (Торент-рушій)',
-            cfgTorrServerSub: 'Зовнішній сервер (наприклад через VPN) або вбудований процес',
-            lblCfgExternalUrl: 'Зовнішня адреса TorrServer (API & стрімінг):',
+            cfgTorrServerSub: 'Підключення до TorrServer та налаштування RAM кешу',
+            lblCfgExternalUrl: 'Адреса TorrServer (API & стрімінг):',
             lblCfgStreamUrl: 'Адреса потоку для .strm (Stream URL):',
-            lblCfgEmbedded: 'Використовувати вбудований TorrServer',
-            lblCfgPort: 'Порт:',
-            lblCfgCacheSize: 'Розмір RAM кешу (МБ):',
-            btnRestartTorrServer: 'Перевірити / Перезапустити торент-рушій',
+                                    lblCfgCacheSize: 'Розмір RAM кешу (МБ):',
+            btnRestartTorrServer: 'Перевірити зв\'язок / Синхронізувати кеш',
             restarting: 'Перезапуск...',
             cfgProwlarrTitle: 'Prowlarr та кастомізація трекерів',
             cfgProwlarrSub: 'Увімкнення/вимкнення трекерів та фільтри роздач із тегами',
@@ -1327,8 +1309,6 @@
             'cfgTorrServerSub': t.cfgTorrServerSub,
             'lblCfgExternalUrl': t.lblCfgExternalUrl,
             'lblCfgStreamUrl': t.lblCfgStreamUrl,
-            'lblCfgEmbedded': t.lblCfgEmbedded,
-            'lblCfgPort': t.lblCfgPort,
             'lblCfgCacheSize': t.lblCfgCacheSize,
             'btnRestartTorrServerText': t.btnRestartTorrServer,
             'cfgProwlarrTitle': t.cfgProwlarrTitle,
@@ -1755,13 +1735,12 @@
                 var daemonPort = data.DaemonPort || data.daemonPort || 8095;
                 var activeCount = data.ActiveTorrentsCount !== undefined ? data.ActiveTorrentsCount : (data.activeTorrentsCount !== undefined ? data.activeTorrentsCount : 0);
 
-                var mode = data.Mode || data.mode || 'External';
                 if (daemonBadge) daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
-                if (daemonBadgeText) daemonBadgeText.innerText = 'TorrServer Online (' + (mode === 'External' ? 'External' : daemonVer) + ')';
+                if (daemonBadgeText) daemonBadgeText.innerText = 'TorrServer Online (' + daemonVer + ')';
                 var dashDaemonEngineSub = page.querySelector('#dashDaemonEngineSub');
-                if (dashDaemonEngine) dashDaemonEngine.innerText = mode === 'External' ? 'TorrServer (External)' : ('TorrServer ' + daemonVer);
-                if (dashDaemonEngineSub) dashDaemonEngineSub.innerText = mode === 'External' ? (data.StatusMessage || 'Connected via VPN') : 'Embedded Process';
-                if (dashCacheSize) dashCacheSize.innerText = mode === 'External' ? (data.EffectiveUrl || 'http://torrserver:8090') : ('Port ' + daemonPort);
+                if (dashDaemonEngine) dashDaemonEngine.innerText = 'TorrServer ' + daemonVer;
+                if (dashDaemonEngineSub) dashDaemonEngineSub.innerText = data.StatusMessage || 'Connected';
+                if (dashCacheSize) dashCacheSize.innerText = data.EffectiveUrl || 'http://torrserver:8090';
                 if (activeTorrentsBadge) activeTorrentsBadge.innerText = activeCount;
                 if (dashTorrentsCount) dashTorrentsCount.innerText = activeCount;
             } else {
@@ -2299,8 +2278,6 @@
         if (!page) return;
         var cfgLanguageSelect = page.querySelector('#cfgLanguageSelect');
         var cfgExternalUrlInput = page.querySelector('#cfgExternalUrlInput');
-        var cfgEmbeddedCheck = page.querySelector('#cfgEmbeddedCheck');
-        var cfgPortInput = page.querySelector('#cfgPortInput');
         var cfgCacheSizeInput = page.querySelector('#cfgCacheSizeInput');
         var cfgStreamUrlInput = page.querySelector('#cfgStreamUrlInput');
         var cfgProwlarrUrlInput = page.querySelector('#cfgProwlarrUrlInput');
@@ -2325,8 +2302,6 @@
 
             if (cfgLanguageSelect) cfgLanguageSelect.value = cfg.DefaultLanguage || 'en';
             if (cfgExternalUrlInput) cfgExternalUrlInput.value = cfg.ExternalTorrServerUrl || 'http://torrserver:8090';
-            if (cfgEmbeddedCheck) cfgEmbeddedCheck.checked = !!cfg.UseEmbeddedTorrServer;
-            if (cfgPortInput) cfgPortInput.value = cfg.EmbeddedTorrServerPort || 8095;
             if (cfgCacheSizeInput) cfgCacheSizeInput.value = cfg.CacheSizeMb || 256;
             if (cfgStreamUrlInput) cfgStreamUrlInput.value = cfg.TorrServerStreamUrl || '';
             if (cfgProwlarrUrlInput) cfgProwlarrUrlInput.value = cfg.ProwlarrUrl || '';
@@ -2363,9 +2338,7 @@
         if (!page) return;
 
         var cfgLanguageSelect = page.querySelector('#cfgLanguageSelect');
-        var cfgEmbeddedCheck = page.querySelector('#cfgEmbeddedCheck');
         var cfgExternalUrlInput = page.querySelector('#cfgExternalUrlInput');
-        var cfgPortInput = page.querySelector('#cfgPortInput');
         var cfgCacheSizeInput = page.querySelector('#cfgCacheSizeInput');
         var cfgStreamUrlInput = page.querySelector('#cfgStreamUrlInput');
         var cfgProwlarrUrlInput = page.querySelector('#cfgProwlarrUrlInput');
@@ -2421,9 +2394,7 @@
 
         var payload = {
             DefaultLanguage: selectedLang,
-            UseEmbeddedTorrServer: cfgEmbeddedCheck ? cfgEmbeddedCheck.checked : false,
             ExternalTorrServerUrl: cfgExternalUrlInput ? cfgExternalUrlInput.value.trim() : 'http://torrserver:8090',
-            EmbeddedTorrServerPort: parseInt(cfgPortInput ? cfgPortInput.value : '8095', 10) || 8095,
             CacheSizeMb: parseInt(cfgCacheSizeInput ? cfgCacheSizeInput.value : '256', 10) || 256,
             TorrServerStreamUrl: cfgStreamUrlInput ? cfgStreamUrlInput.value.trim() : 'http://torrserver:8090',
             ProwlarrUrl: cfgProwlarrUrlInput ? cfgProwlarrUrlInput.value.trim() : '',

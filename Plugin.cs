@@ -23,6 +23,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         : base(applicationPaths, xmlSerializer)
     {
         Instance = this;
+        Configuration?.DeduplicateCategories();
     }
 
     public IEnumerable<PluginPageInfo> GetPages()

@@ -47,8 +47,6 @@
         const refreshTorrentsBtn = view.querySelector('#refreshTorrentsBtn');
         const scanLibraryBtn = view.querySelector('#scanLibraryBtn');
 
-        const cfgEmbeddedCheck = view.querySelector('#cfgEmbeddedCheck');
-        const cfgPortInput = view.querySelector('#cfgPortInput');
         const cfgCacheSizeInput = view.querySelector('#cfgCacheSizeInput');
         const cfgStreamUrlInput = view.querySelector('#cfgStreamUrlInput');
         const cfgProwlarrUrlInput = view.querySelector('#cfgProwlarrUrlInput');
@@ -148,7 +146,7 @@
                     daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
                     daemonBadgeText.innerText = `TorrServer Online (${data.DaemonVersion || 'MatriX'})`;
                     dashDaemonEngine.innerText = `TorrServer ${data.DaemonVersion || 'MatriX'}`;
-                    dashCacheSize.innerText = `${data.DaemonPort ? 'Порт ' + data.DaemonPort : '256 MB'}`;
+                    dashCacheSize.innerText = data.EffectiveUrl || 'http://torrserver:8090';
                     activeTorrentsBadge.innerText = data.ActiveTorrentsCount || 0;
                     dashTorrentsCount.innerText = data.ActiveTorrentsCount || 0;
                 } else {
@@ -488,8 +486,6 @@
             try {
                 const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), { headers: getAuthHeaders() });
                 const cfg = await res.json();
-                cfgEmbeddedCheck.checked = cfg.UseEmbeddedTorrServer;
-                cfgPortInput.value = cfg.EmbeddedTorrServerPort;
                 cfgCacheSizeInput.value = cfg.CacheSizeMb;
                 cfgStreamUrlInput.value = cfg.TorrServerStreamUrl || '';
                 cfgProwlarrUrlInput.value = cfg.ProwlarrUrl || '';
@@ -507,8 +503,6 @@
             saveSettingsBtnText.innerText = 'Збереження...';
 
             const payload = {
-                UseEmbeddedTorrServer: cfgEmbeddedCheck.checked,
-                EmbeddedTorrServerPort: parseInt(cfgPortInput.value, 10) || 8095,
                 CacheSizeMb: parseInt(cfgCacheSizeInput.value, 10) || 256,
                 TorrServerStreamUrl: cfgStreamUrlInput.value.trim(),
                 ProwlarrUrl: cfgProwlarrUrlInput.value.trim(),

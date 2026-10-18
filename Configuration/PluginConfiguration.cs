@@ -23,11 +23,9 @@ public class TrackerRule
 
 public class PluginConfiguration : BasePluginConfiguration
 {
-    // Embedded Standalone TorrServer Daemon settings
-    public bool UseEmbeddedTorrServer { get; set; } = false;
-    public int EmbeddedTorrServerPort { get; set; } = 8095;
+    // TorrServer Settings
     public string ExternalTorrServerUrl { get; set; } = "http://torrserver:8090";
-    public string TorrServerStreamUrl { get; set; } = "http://torrserver:8090"; // URL embedded into .strm files
+    public string TorrServerStreamUrl { get; set; } = "http://torrserver:8090"; // URL written into .strm files for playback
 
     // Torrent Cache & Performance
     public int CacheSizeMb { get; set; } = 256;
@@ -68,14 +66,37 @@ public class PluginConfiguration : BasePluginConfiguration
     public string ShowSeasonFolderTemplate { get; set; } = "Season {Season:00}";
     public string ShowEpisodeFileTemplate { get; set; } = "{Title} - {EpisodeTag}.strm";
 
-    // Categories
-    public List<CategoryMapping> Categories { get; set; } = new()
+    // Categories (initialized empty to prevent XmlSerializer from appending to defaults upon deserialization)
+    public List<CategoryMapping> Categories { get; set; } = new();
+
+    public static List<CategoryMapping> GetDefaultCategories() => new()
     {
-        new CategoryMapping("Movies", "movies", "movie", new List<int> { 2000, 2010, 2020, 2030, 2040, 2045, 2050, 2060, 2070 }, true),
-        new CategoryMapping("Shows", "shows", "show", new List<int> { 5000, 5010, 5020, 5030, 5040, 5045, 5050, 5060 }, true),
-        new CategoryMapping("Cartoons", "cartoons", "movie", new List<int> { 2000, 5000 }, false),
-        new CategoryMapping("Anime", "anime", "show", new List<int> { 5070 }, false)
+        new CategoryMapping("Movies", "/mnt/sdb/media/movies", "movie", new List<int> { 2000, 2010, 2020, 2030, 2040, 2045, 2050, 2060, 2070 }, true),
+        new CategoryMapping("Shows", "/mnt/sdb/media/shows", "show", new List<int> { 5000, 5010, 5020, 5030, 5040, 5045, 5050, 5060 }, true),
+        new CategoryMapping("Cartoons", "/mnt/sdb/media/cartoons", "movie", new List<int> { 2000, 5000 }, false),
+        new CategoryMapping("Anime", "/mnt/sdb/media/anime", "show", new List<int> { 5070 }, false)
     };
+
+    public void DeduplicateCategories()
+    {
+        if (Categories == null || Categories.Count == 0)
+        {
+            Categories = GetDefaultCategories();
+            return;
+        }
+
+        var unique = new List<CategoryMapping>();
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cat in Categories)
+        {
+            if (string.IsNullOrWhiteSpace(cat.Name)) continue;
+            if (seenNames.Add(cat.Name.Trim()))
+            {
+                unique.Add(cat);
+            }
+        }
+        Categories = unique;
+    }
 
     public PluginConfiguration()
     {

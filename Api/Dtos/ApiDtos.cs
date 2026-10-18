@@ -31,10 +31,7 @@ public class ServerLibraryDto
 public class PluginStatusDto
 {
     public bool IsDaemonRunning { get; set; }
-    public int? DaemonPid { get; set; }
     public string DaemonVersion { get; set; } = string.Empty;
-    public int DaemonPort { get; set; }
-    public string Mode { get; set; } = "Embedded";
     public string StatusMessage { get; set; } = string.Empty;
     public string EffectiveUrl { get; set; } = string.Empty;
     public string StreamBaseUrl { get; set; } = string.Empty;

@@ -195,25 +195,51 @@ public class StrmEngine
                     ["RawTitle"] = rawTitle
                 };
 
-                var folderName = TitleCleaner.SanitizeFilename(FormatTemplate(folderTemplate, tokens));
+                string folderName;
+                if (config.EnableMovieRenaming)
+                {
+                    folderName = TitleCleaner.SanitizeFilename(FormatTemplate(folderTemplate, tokens));
+                    if (string.IsNullOrWhiteSpace(folderName))
+                    {
+                        folderName = TitleCleaner.SanitizeFilename(TitleCleaner.FormatFolderTitle(cleanTitle, extractedYear));
+                    }
+                }
+                else
+                {
+                    folderName = TitleCleaner.SanitizeFilename(rawTitle);
+                }
+
                 if (string.IsNullOrWhiteSpace(folderName))
                 {
-                    folderName = TitleCleaner.SanitizeFilename(TitleCleaner.FormatFolderTitle(cleanTitle, extractedYear));
+                    folderName = TitleCleaner.SanitizeFilename(rawTitle);
                 }
 
                 var movieDir = Path.Combine(categoryFolder, folderName);
                 Directory.CreateDirectory(movieDir);
                 result.FolderPath = movieDir;
 
-                var fileName = FormatTemplate(fileTemplate, tokens);
-                if (!fileName.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
-                {
-                    fileName += ".strm";
-                }
-                var strmName = TitleCleaner.SanitizeFilename(fileName);
-                var strmPath = Path.Combine(movieDir, strmName);
-
                 var mainFile = videoFiles.OrderByDescending(f => f.Length).First();
+                string strmName;
+                if (config.EnableMovieRenaming)
+                {
+                    var fileName = FormatTemplate(fileTemplate, tokens);
+                    if (!fileName.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
+                    {
+                        fileName += ".strm";
+                    }
+                    strmName = TitleCleaner.SanitizeFilename(fileName);
+                }
+                else
+                {
+                    var origBase = Path.GetFileNameWithoutExtension(mainFile.Path);
+                    if (string.IsNullOrWhiteSpace(origBase))
+                    {
+                        origBase = rawTitle;
+                    }
+                    strmName = TitleCleaner.SanitizeFilename(origBase) + ".strm";
+                }
+
+                var strmPath = Path.Combine(movieDir, strmName);
                 var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream?link={torrent.Hash}&index={mainFile.Id}&play\n";
                 await File.WriteAllTextAsync(strmPath, streamUrl, Encoding.UTF8, cancellationToken);
                 result.CreatedStrmFiles.Add(strmPath);
@@ -247,10 +273,23 @@ public class StrmEngine
                     ["RawTitle"] = rawTitle
                 };
 
-                var seriesFolder = TitleCleaner.SanitizeFilename(FormatTemplate(showFolderTemplate, showTokens));
+                string seriesFolder;
+                if (config.EnableShowRenaming)
+                {
+                    seriesFolder = TitleCleaner.SanitizeFilename(FormatTemplate(showFolderTemplate, showTokens));
+                    if (string.IsNullOrWhiteSpace(seriesFolder))
+                    {
+                        seriesFolder = TitleCleaner.SanitizeFilename(TitleCleaner.FormatFolderTitle(cleanTitle, extractedYear));
+                    }
+                }
+                else
+                {
+                    seriesFolder = TitleCleaner.SanitizeFilename(rawTitle);
+                }
+
                 if (string.IsNullOrWhiteSpace(seriesFolder))
                 {
-                    seriesFolder = TitleCleaner.SanitizeFilename(TitleCleaner.FormatFolderTitle(cleanTitle, extractedYear));
+                    seriesFolder = TitleCleaner.SanitizeFilename(rawTitle);
                 }
 
                 var seriesDir = Path.Combine(categoryFolder, seriesFolder);
@@ -285,10 +324,23 @@ public class StrmEngine
                         ["EpisodeTag"] = epTag
                     };
 
-                    var epFileName = FormatTemplate(epFileTemplate, epTokens);
-                    if (!epFileName.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
+                    string epFileName;
+                    if (config.EnableShowRenaming)
                     {
-                        epFileName += ".strm";
+                        epFileName = FormatTemplate(epFileTemplate, epTokens);
+                        if (!epFileName.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
+                        {
+                            epFileName += ".strm";
+                        }
+                    }
+                    else
+                    {
+                        var origEpBase = Path.GetFileNameWithoutExtension(videoFile.Path);
+                        if (string.IsNullOrWhiteSpace(origEpBase))
+                        {
+                            origEpBase = $"Episode {episodeIndex:00}";
+                        }
+                        epFileName = origEpBase + ".strm";
                     }
 
                     var strmFileName = TitleCleaner.SanitizeFilename(epFileName);

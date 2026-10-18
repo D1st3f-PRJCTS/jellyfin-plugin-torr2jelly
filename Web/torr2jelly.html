@@ -883,6 +883,24 @@
                     </div>
                   </div>
 
+                  <div class="pt-2 border-t border-slate-800/60 space-y-2">
+                    <label class="flex items-start space-x-3 cursor-pointer">
+                      <input type="checkbox" id="cfgEnableMovieRenamingCheck" checked class="mt-0.5 rounded text-teal-500 focus:ring-teal-500 bg-slate-950 border-slate-700 w-4 h-4">
+                      <div>
+                        <span class="font-semibold text-white" id="lblCfgEnableMovieRenaming">Rename Movies using template</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5" id="lblCfgEnableMovieRenamingSub">When disabled, original torrent file and folder names are preserved.</p>
+                      </div>
+                    </label>
+
+                    <label class="flex items-start space-x-3 cursor-pointer">
+                      <input type="checkbox" id="cfgEnableShowRenamingCheck" checked class="mt-0.5 rounded text-teal-500 focus:ring-teal-500 bg-slate-950 border-slate-700 w-4 h-4">
+                      <div>
+                        <span class="font-semibold text-white" id="lblCfgEnableShowRenaming">Rename Series using template</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5" id="lblCfgEnableShowRenamingSub">When disabled, original torrent file and episode names are preserved.</p>
+                      </div>
+                    </label>
+                  </div>
+
                   <div class="pt-2 border-t border-slate-800/60">
                     <div class="text-[11px] text-slate-400 mb-1" id="lblTemplateTokensTitle">Available Tokens:</div>
                     <div class="flex flex-wrap gap-1 text-[10px] font-mono">
@@ -1038,6 +1056,10 @@
             lblCfgSeasonFolder: 'Season Folder:',
             lblCfgEpisodeFile: 'Episode File (.strm):',
             lblTemplateTokensTitle: 'Available Tokens:',
+            lblCfgEnableMovieRenaming: 'Rename Movies using templates',
+            lblCfgEnableMovieRenamingSub: 'When disabled, original torrent file & folder names are preserved.',
+            lblCfgEnableShowRenaming: 'Rename Series using templates',
+            lblCfgEnableShowRenamingSub: 'When disabled, original torrent file & episode names are preserved.',
             cfgCategoriesTitle: 'Server Libraries & Folder Paths',
             cfgCategoriesSub: 'Specify the exact disk paths for each library where .strm files will be saved.',
             btnAutofillText: 'Auto-fill from Jellyfin',
@@ -1129,6 +1151,10 @@
             lblCfgSeasonFolder: 'Папка сезону:',
             lblCfgEpisodeFile: 'Файл серії (.strm):',
             lblTemplateTokensTitle: 'Доступні теги шаблону:',
+            lblCfgEnableMovieRenaming: 'Перейменовувати фільми за шаблоном',
+            lblCfgEnableMovieRenamingSub: 'Якщо вимкнено, зберігаються оригінальні назви папок та файлів із торента.',
+            lblCfgEnableShowRenaming: 'Перейменовувати серіали за шаблоном',
+            lblCfgEnableShowRenamingSub: 'Якщо вимкнено, зберігаються оригінальні назви серій та папок із торента.',
             cfgCategoriesTitle: 'Бібліотеки сервера та шляхи до папок',
             cfgCategoriesSub: 'Вкажіть точні шляхи на диску для кожної бібліотеки, де зберігатимуться .strm файли.',
             btnAutofillText: 'Виявити з Jellyfin',
@@ -1226,6 +1252,10 @@
             'lblCfgSeasonFolder': t.lblCfgSeasonFolder,
             'lblCfgEpisodeFile': t.lblCfgEpisodeFile,
             'lblTemplateTokensTitle': t.lblTemplateTokensTitle,
+            'lblCfgEnableMovieRenaming': t.lblCfgEnableMovieRenaming,
+            'lblCfgEnableMovieRenamingSub': t.lblCfgEnableMovieRenamingSub,
+            'lblCfgEnableShowRenaming': t.lblCfgEnableShowRenaming,
+            'lblCfgEnableShowRenamingSub': t.lblCfgEnableShowRenamingSub,
             'cfgCategoriesTitle': t.cfgCategoriesTitle,
             'cfgCategoriesSub': t.cfgCategoriesSub,
             'btnAutofillText': t.btnAutofillText,
@@ -1662,9 +1692,9 @@
                 ? 'bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-bold'
                 : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-600/30';
 
-            html += '<div class="t2j-result-row flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 ' + (hasAnyTag ? 'is-gold' : '') + '">';
-            html += '  <div class="flex-1 min-w-0 space-y-1.5">';
-            html += '    <div class="flex items-center space-x-2 flex-wrap gap-y-1">';
+            html += '<div class="t2j-result-row ' + (hasAnyTag ? 'is-gold' : '') + '" style="display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: space-between !important; gap: 16px !important; width: 100% !important; box-sizing: border-box !important;">';
+            html += '  <div class="t2j-row-main" style="flex: 1 1 0% !important; min-width: 0 !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">';
+            html += '    <div style="display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 6px !important;">';
             html += '      ' + tagBadgesHtml;
             html += '      <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-semibold">' + escapeHtml(indexer) + '</span>';
             html += '      <span class="text-xs text-slate-400 font-medium">' + escapeHtml(size) + '</span>';
@@ -1681,18 +1711,17 @@
             }
             html += '    </div>';
             html += '    <div>';
-            html += '      <div class="text-sm font-bold text-white hover:text-amber-400 transition-colors line-clamp-1" title="' + escapeHtml(title) + '">';
+            html += '      <div class="text-sm font-bold text-white hover:text-amber-400 transition-colors line-clamp-1" title="' + escapeHtml(title) + '" style="overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important;">';
             html += '        ' + escapeHtml(title);
             html += '      </div>';
             html += '    </div>';
             html += '  </div>';
 
-            html += '  <div class="flex flex-col items-stretch gap-1.5 shrink-0 w-full sm:w-48">';
-            html += '    <div class="flex items-center space-x-1 text-[11px] text-slate-400 font-semibold px-0.5">';
-            html += '      <i class="fa-solid fa-folder text-brand-400"></i>';
-            html += '      <span>' + escapeHtml(t.categoryLabel || 'Category:') + '</span>';
+            html += '  <div class="t2j-row-side" style="flex: 0 0 210px !important; width: 210px !important; min-width: 210px !important; max-width: 210px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">';
+            html += '    <div style="display: flex !important; align-items: center !important; justify-content: space-between !important; font-size: 11px !important; color: #94a3b8 !important; font-weight: 600 !important; padding: 0 2px !important;">';
+            html += '      <span style="display: flex !important; align-items: center !important; gap: 4px !important;"><i class="fa-solid fa-folder text-brand-400"></i> ' + escapeHtml(t.categoryLabel || 'Category:') + '</span>';
             html += '    </div>';
-            html += '    <select id="t2jCatSelect_' + i + '" class="t2j-row-cat-select w-full bg-slate-900 border border-slate-700 hover:border-slate-500 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500 cursor-pointer">';
+            html += '    <select id="t2jCatSelect_' + i + '" class="t2j-row-cat-select" style="width: 100% !important; box-sizing: border-box !important; background: #0f172a !important; color: #f1f5f9 !important; border: 1px solid #334155 !important; border-radius: 8px !important; padding: 5px 8px !important; font-size: 11px !important; outline: none !important; cursor: pointer !important;">';
 
             cats.forEach(function (c) {
                 var selected = false;
@@ -1707,7 +1736,7 @@
             });
 
             html += '    </select>';
-            html += '    <button type="button" data-index="' + i + '" onclick="window.t2jAddResult && window.t2jAddResult(this)" class="t2j-add-row-btn w-full px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center justify-center space-x-1.5 ' + btnClass + '" style="cursor: pointer !important; pointer-events: auto !important;">';
+            html += '    <button type="button" data-index="' + i + '" onclick="window.t2jAddResult && window.t2jAddResult(this)" class="t2j-add-row-btn ' + btnClass + '" style="width: 100% !important; box-sizing: border-box !important; padding: 7px 12px !important; border-radius: 8px !important; font-size: 11px !important; font-weight: 700 !important; cursor: pointer !important; pointer-events: auto !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 6px !important; border: none !important;">';
             html += '      <i class="fa-solid fa-play text-[10px]"></i>';
             html += '      <span>' + escapeHtml(t.addToLibrary) + '</span>';
             html += '    </button>';
@@ -2064,6 +2093,8 @@
         var cfgShowFolderTemplateInput = page.querySelector('#cfgShowFolderTemplateInput');
         var cfgShowSeasonFolderTemplateInput = page.querySelector('#cfgShowSeasonFolderTemplateInput');
         var cfgShowEpisodeFileTemplateInput = page.querySelector('#cfgShowEpisodeFileTemplateInput');
+        var cfgEnableMovieRenamingCheck = page.querySelector('#cfgEnableMovieRenamingCheck');
+        var cfgEnableShowRenamingCheck = page.querySelector('#cfgEnableShowRenamingCheck');
         var dashMediaDir = page.querySelector('#dashMediaDir');
 
         loadIndexers();
@@ -2091,6 +2122,10 @@
             if (cfgShowFolderTemplateInput) cfgShowFolderTemplateInput.value = cfg.ShowFolderTemplate || '{Title} ({Year})';
             if (cfgShowSeasonFolderTemplateInput) cfgShowSeasonFolderTemplateInput.value = cfg.ShowSeasonFolderTemplate || 'Season {Season:00}';
             if (cfgShowEpisodeFileTemplateInput) cfgShowEpisodeFileTemplateInput.value = cfg.ShowEpisodeFileTemplate || '{Title} - {EpisodeTag}.strm';
+            var cfgEnableMovieRenamingCheck = page.querySelector('#cfgEnableMovieRenamingCheck');
+            var cfgEnableShowRenamingCheck = page.querySelector('#cfgEnableShowRenamingCheck');
+            if (cfgEnableMovieRenamingCheck) cfgEnableMovieRenamingCheck.checked = cfg.EnableMovieRenaming !== false;
+            if (cfgEnableShowRenamingCheck) cfgEnableShowRenamingCheck.checked = cfg.EnableShowRenaming !== false;
 
             if (dashMediaDir) dashMediaDir.innerText = cfg.MediaRootPath || '/media';
 
@@ -2169,7 +2204,9 @@
             MovieFileTemplate: cfgMovieFileTemplateInput ? cfgMovieFileTemplateInput.value.trim() : '{Title} ({Year}).strm',
             ShowFolderTemplate: cfgShowFolderTemplateInput ? cfgShowFolderTemplateInput.value.trim() : '{Title} ({Year})',
             ShowSeasonFolderTemplate: cfgShowSeasonFolderTemplateInput ? cfgShowSeasonFolderTemplateInput.value.trim() : 'Season {Season:00}',
-            ShowEpisodeFileTemplate: cfgShowEpisodeFileTemplateInput ? cfgShowEpisodeFileTemplateInput.value.trim() : '{Title} - {EpisodeTag}.strm'
+            ShowEpisodeFileTemplate: cfgShowEpisodeFileTemplateInput ? cfgShowEpisodeFileTemplateInput.value.trim() : '{Title} - {EpisodeTag}.strm',
+            EnableMovieRenaming: cfgEnableMovieRenamingCheck ? cfgEnableMovieRenamingCheck.checked : true,
+            EnableShowRenaming: cfgEnableShowRenamingCheck ? cfgEnableShowRenamingCheck.checked : true
         };
 
         try {

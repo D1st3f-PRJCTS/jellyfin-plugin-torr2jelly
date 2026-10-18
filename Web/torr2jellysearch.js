@@ -24,6 +24,7 @@
             foundTitle: isUk ? 'Також доступно на торентах (Torr2Jelly)' : 'Also available on torrents (Torr2Jelly)',
             subtitle: isUk ? 'Додайте в один клік — відео миттєво з\'явиться в Jellyfin та транслюватиметься на льоту' : 'Add in one click — streams instantly without downloading the whole file',
             releasesFound: isUk ? 'роздач знайдено' : 'releases found',
+            categoryLabel: isUk ? 'Категорія / Бібліотека:' : 'Category / Library:',
             goldBadge: isUk ? '⭐ Золотий' : '⭐ Gold',
             addBtn: isUk ? '+ Додати & Дивитися' : '+ Add & Watch',
             adding: isUk ? 'Додаємо...' : 'Adding...',
@@ -144,6 +145,31 @@
             color: #fbbf24;
             border: 1px solid rgba(245, 158, 11, 0.4);
         }
+        .t2j-badge-silver {
+            background: rgba(148, 163, 184, 0.2);
+            color: #e2e8f0;
+            border: 1px solid rgba(148, 163, 184, 0.4);
+        }
+        .t2j-badge-bronze {
+            background: rgba(234, 88, 12, 0.2);
+            color: #fdba74;
+            border: 1px solid rgba(234, 88, 12, 0.4);
+        }
+        .t2j-badge-author {
+            background: rgba(168, 85, 247, 0.2);
+            color: #d8b4fe;
+            border: 1px solid rgba(168, 85, 247, 0.4);
+        }
+        .t2j-badge-exclusive {
+            background: rgba(244, 63, 94, 0.2);
+            color: #fda4af;
+            border: 1px solid rgba(244, 63, 94, 0.4);
+        }
+        .t2j-badge-double {
+            background: rgba(16, 185, 129, 0.2);
+            color: #6ee7b7;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
         .t2j-badge-seeders {
             background: rgba(34, 197, 94, 0.15);
             color: #4ade80;
@@ -168,12 +194,37 @@
         }
         .t2j-card-footer {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
+            flex-direction: column;
             gap: 8px;
             margin-top: auto;
             padding-top: 10px;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .t2j-card-cat-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .t2j-card-cat-label {
+            font-size: 0.72em;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+        .t2j-card-cat-select {
+            width: 100%;
+            background: #0f172a;
+            color: #f1f5f9;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            padding: 5px 8px;
+            font-size: 0.75em;
+            font-weight: 500;
+            outline: none;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+        .t2j-card-cat-select:focus {
+            border-color: #10b981;
         }
         .t2j-add-btn {
             background: linear-gradient(135deg, #10b981, #059669);
@@ -313,7 +364,7 @@
             }
 
             var results = await res.json();
-            renderSearchResults(query, results || []);
+            await renderSearchResults(query, results || []);
         } catch (err) {
             if (err.name !== 'AbortError') {
                 console.error('[Torr2Jelly] Search error:', err);
@@ -379,7 +430,27 @@
         `;
     }
 
-    function renderSearchResults(query, results) {
+        var _t2jCachedLibs = null;
+    async function getAvailableLibraries() {
+        if (_t2jCachedLibs && _t2jCachedLibs.length > 0) return _t2jCachedLibs;
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Libraries'), { headers: getAuthHeaders() });
+            if (res.ok) {
+                var libs = await res.json();
+                if (Array.isArray(libs) && libs.length > 0) {
+                    _t2jCachedLibs = libs;
+                    return _t2jCachedLibs;
+                }
+            }
+        } catch (e) {}
+        return [
+            { Name: 'Movies', Type: 'movie' },
+            { Name: 'Shows', Type: 'show' },
+            { Name: 'Cartoons', Type: 'movie' }
+        ];
+    }
+
+    async function renderSearchResults(query, results) {
         var i18n = getI18n();
         if (!results || results.length === 0) {
             var target = getSearchTargetContainer();
@@ -442,28 +513,90 @@
             </div>
         `;
 
+        var libs = await getAvailableLibraries();
+        var showLib = libs.find(function (l) {
+            var n = (l.Name || '').toLowerCase();
+            var t = (l.Type || '').toLowerCase();
+            return t === 'show' || t === 'tvshows' || n.indexOf('show') !== -1 || n.indexOf('серіал') !== -1;
+        });
+        var movieLib = libs.find(function (l) {
+            var n = (l.Name || '').toLowerCase();
+            var t = (l.Type || '').toLowerCase();
+            return t === 'movie' || n.indexOf('movie') !== -1 || n.indexOf('фільм') !== -1;
+        });
+
         var cardsHtml = '<div class="t2j-cards-grid">';
-        displayResults.forEach(function (item) {
+        displayResults.forEach(function (item, idx) {
             var rawLink = item.DownloadUrl || item.MagnetUrl || '';
             var title = item.Title || '';
             var size = item.SizeFormatted || '';
             var seeds = item.Seeders || 0;
             var tracker = item.Indexer || 'Torrent';
             var isGold = item.IsGold || item.IsFreeleech;
+            var isShow = /(?:s\d{1,2}|season|сезон|\d{1,2}x\d{1,2}|серій|сері\u0457|серії|ep\d{1,3})/i.test(title);
+
+            var rawTags = (item.Tags || item.tags || []).slice();
+            if (isGold && !rawTags.some(function (tg) { return /freeleech|gold/i.test(tg); })) {
+                rawTags.unshift('freeleech');
+            } else if (item.IsFreeleech && !rawTags.some(function (tg) { return /halfleech|50%/i.test(tg); })) {
+                rawTags.unshift('halfleech');
+            }
+
+            var tagBadgesHtml = '';
+            var isUk = getLang() === 'uk';
+            rawTags.forEach(function (tg) {
+                var ltg = tg.toLowerCase();
+                if (ltg === 'freeleech' || ltg === 'gold') {
+                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-gold">' + i18n.goldBadge + '</span>';
+                } else if (ltg === 'halfleech' || ltg === 'silver') {
+                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-silver">🥈 ' + (isUk ? 'Срібна' : 'Silver') + '</span>';
+                } else if (ltg === 'bronze') {
+                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-bronze">🥉 ' + (isUk ? 'Бронзова' : 'Bronze') + '</span>';
+                } else if (ltg === 'internal' || ltg === 'author' || ltg.indexOf('автор') !== -1) {
+                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-author">💎 ' + (isUk ? 'Авторський' : 'Author') + '</span>';
+                } else if (ltg === 'exclusive' || ltg.indexOf('ексклюзив') !== -1) {
+                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-exclusive">🔥 ' + (isUk ? 'Ексклюзив' : 'Exclusive') + '</span>';
+                } else if (ltg === 'doubleupload' || ltg === '2xupload') {
+                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-double">🚀 2x</span>';
+                }
+            });
+
+            var targetLibName = isShow ? (showLib ? showLib.Name : 'Shows') : (movieLib ? movieLib.Name : 'Movies');
+            var cardCatId = 't2jGlobalCat_' + idx;
+            var catOptionsHtml = '';
+            var matched = false;
+
+            libs.forEach(function (lib) {
+                var libName = typeof lib === 'string' ? lib : (lib.Name || '');
+                var isSelected = (libName === targetLibName);
+                if (isSelected) matched = true;
+                catOptionsHtml += '<option value="' + escapeHtml(libName) + '"' + (isSelected ? ' selected' : '') + '>' + escapeHtml(libName) + '</option>';
+            });
+
+            if (!matched && libs.length > 0) {
+                catOptionsHtml = '<option value="' + escapeHtml(targetLibName) + '" selected>' + escapeHtml(targetLibName) + '</option>' + catOptionsHtml;
+            }
 
             cardsHtml += `
                 <div class="t2j-card">
                     <div>
                         <div class="t2j-card-meta">
                             <span class="t2j-badge t2j-badge-tracker">${escapeHtml(tracker)}</span>
-                            ${isGold ? '<span class="t2j-badge t2j-badge-gold">' + i18n.goldBadge + '</span>' : ''}
+                            ${tagBadgesHtml}
                             <span class="t2j-badge t2j-badge-seeders">▲ ${seeds}</span>
                             <span class="t2j-badge t2j-badge-size">${escapeHtml(size)}</span>
+                            ${isShow ? '<span class="t2j-badge t2j-badge-tracker" style="color: #67e8f9; border-color: rgba(6, 182, 212, 0.4);">📺 Series</span>' : ''}
                         </div>
                         <div class="t2j-card-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
                     </div>
                     <div class="t2j-card-footer">
-                        <button type="button" class="t2j-add-btn" data-link="${encodeURIComponent(rawLink)}" data-title="${encodeURIComponent(title)}" data-poster="${encodeURIComponent(item.PosterUrl || '')}" data-tmdb="${item.TmdbId || 0}">
+                        <div class="t2j-card-cat-wrap">
+                            <span class="t2j-card-cat-label">${escapeHtml(i18n.categoryLabel)}</span>
+                            <select class="t2j-card-cat-select" id="${cardCatId}">
+                                ${catOptionsHtml}
+                            </select>
+                        </div>
+                        <button type="button" class="t2j-add-btn" data-cat-id="${cardCatId}" data-link="${encodeURIComponent(rawLink)}" data-title="${encodeURIComponent(title)}" data-poster="${encodeURIComponent(item.PosterUrl || '')}" data-tmdb="${item.TmdbId || 0}">
                             <span>${i18n.addBtn}</span>
                         </button>
                     </div>
@@ -482,12 +615,14 @@
                 var itemTitle = decodeURIComponent(btn.getAttribute('data-title') || '');
                 var posterUrl = decodeURIComponent(btn.getAttribute('data-poster') || '');
                 var tmdbId = parseInt(btn.getAttribute('data-tmdb') || '0', 10);
+                var catId = btn.getAttribute('data-cat-id');
+                var catSelect = catId ? document.getElementById(catId) : null;
 
                 if (!link) return;
 
-                // Auto-detect series vs movie category
+                // Pick selected category from dropdown, fallback to auto-detection
                 var isShow = /(?:s\d{1,2}|season|сезон|\d{1,2}x\d{1,2}|серій|сері\u0457|серії|ep\d{1,3})/i.test(itemTitle);
-                var category = isShow ? 'Shows' : 'Movies';
+                var category = (catSelect && catSelect.value) ? catSelect.value : (isShow ? 'Shows' : 'Movies');
 
                 btn.disabled = true;
                 btn.innerHTML = '<span class="t2j-status-spinner"></span> <span>' + i18n.adding + '</span>';

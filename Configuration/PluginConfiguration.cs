@@ -38,6 +38,10 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool AutoSyncTorrents { get; set; } = true;
     public int AutoSyncIntervalMinutes { get; set; } = 15;
 
+    // Renaming toggles
+    public bool EnableMovieRenaming { get; set; } = true;
+    public bool EnableShowRenaming { get; set; } = true;
+
     // STRM File & Folder Structure Templates
     public string MovieFolderTemplate { get; set; } = "{Title} ({Year})";
     public string MovieFileTemplate { get; set; } = "{Title} ({Year}).strm";

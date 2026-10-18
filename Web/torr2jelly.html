@@ -404,7 +404,7 @@
 
               <div class="flex items-center space-x-2 text-slate-400">
                 <span class="text-[11px] font-medium">Сортування:</span>
-                <select id="t2jSortSelect" class="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500 cursor-pointer shadow-sm">
+                <select id="t2jSortSelect" onchange="window.t2jSort && window.t2jSort(this.value)" class="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500 cursor-pointer shadow-sm">
                   <option value="priority">⚡ Пріоритет (Золоті спочатку)</option>
                   <option value="seeders">👥 Сідери (більше ↓)</option>
                   <option value="size_desc">💾 Розмір (більші ↓)</option>
@@ -663,585 +663,209 @@
   </div>
 
 <script id="t2jMainScript" type="text/javascript">
-
 (function () {
     'use strict';
 
-    var currentView = null;
+    // Global state container
+    window.t2jState = window.t2jState || {
+        currentTab: 'search',
+        searchResults: [],
+        filteredResults: [],
+        activeFilter: 'all',
+        currentSort: 'priority',
+        torrents: [],
+        refreshInterval: null
+    };
 
-    function initTorr2Jelly(view) {
-        // State
-        let currentTab = 'search';
-        let searchResults = [];
-        let activeFilter = 'all'; // 'all' or 'gold'
-        let currentSort = 'priority';
-        let torrents = [];
-        let refreshInterval = null;
-
-        // Elements
-        const daemonBadge = view.querySelector('#t2jDaemonBadge');
-        const daemonBadgeText = view.querySelector('#t2jDaemonBadgeText');
-        const activeTorrentsBadge = view.querySelector('#activeTorrentsBadge');
-        const syncNowBtn = view.querySelector('#t2jSyncNowBtn');
-        const syncText = view.querySelector('#t2jSyncText');
-
-        const searchForm = view.querySelector('#t2jSearchForm');
-        const searchInput = view.querySelector('#t2jSearchInput');
-        const clearSearchBtn = view.querySelector('#t2jClearSearchBtn');
-        const searchCategorySelect = view.querySelector('#t2jSearchCategorySelect');
-        const searchBtnText = view.querySelector('#t2jSearchBtnText');
-        const searchSpinner = view.querySelector('#t2jSearchSpinner');
-        const resultsWrapper = view.querySelector('#t2jResultsWrapper');
-        const resultsList = view.querySelector('#t2jResultsList');
-        const resultsCount = view.querySelector('#t2jResultsCount');
-        const goldCountBadge = view.querySelector('#goldCountBadge');
-        const filterAllBtn = view.querySelector('#filterAllBtn');
-        const filterGoldBtn = view.querySelector('#filterGoldBtn');
-        const sortSelect = view.querySelector('#t2jSortSelect');
-
-        const directLinkForm = view.querySelector('#t2jDirectLinkForm');
-        const directLinkInput = view.querySelector('#directLinkInput');
-        const directTitleInput = view.querySelector('#directTitleInput');
-        const directCategorySelect = view.querySelector('#directCategorySelect');
-        const directSyncCheck = view.querySelector('#directSyncCheck');
-        const directSubmitBtn = view.querySelector('#directSubmitBtn');
-
-        const dashTorrentsCount = view.querySelector('#dashTorrentsCount');
-        const dashDaemonEngine = view.querySelector('#dashDaemonEngine');
-        const dashCacheSize = view.querySelector('#dashCacheSize');
-        const dashMediaDir = view.querySelector('#dashMediaDir');
-        const torrentsListTable = view.querySelector('#torrentsListTable');
-        const torrentsEmptyNotice = view.querySelector('#torrentsEmptyNotice');
-        const refreshTorrentsBtn = view.querySelector('#refreshTorrentsBtn');
-        const scanLibraryBtn = view.querySelector('#scanLibraryBtn');
-
-        const cfgEmbeddedCheck = view.querySelector('#cfgEmbeddedCheck');
-        const cfgPortInput = view.querySelector('#cfgPortInput');
-        const cfgCacheSizeInput = view.querySelector('#cfgCacheSizeInput');
-        const cfgStreamUrlInput = view.querySelector('#cfgStreamUrlInput');
-        const cfgProwlarrUrlInput = view.querySelector('#cfgProwlarrUrlInput');
-        const cfgProwlarrKeyInput = view.querySelector('#cfgProwlarrKeyInput');
-        const cfgMediaDirInput = view.querySelector('#cfgMediaDirInput');
-        const cfgOnlyGoldCheck = view.querySelector('#cfgOnlyGoldCheck');
-        const saveSettingsBtn = view.querySelector('#saveSettingsBtn');
-        const saveSettingsBtnText = view.querySelector('#saveSettingsBtnText');
-        const restartDaemonBtn = view.querySelector('#restartDaemonBtn');
-
-        if (!document.getElementById('torr2jelly-custom-css')) {
-            const link = document.createElement('link');
-            link.id = 'torr2jelly-custom-css';
-            link.rel = 'stylesheet';
-            link.href = (window.ApiClient && typeof window.ApiClient.getUrl === 'function') 
-                ? window.ApiClient.getUrl('ConfigurationPage', { name: 'torr2jellycss' }) 
-                : 'ConfigurationPage?name=torr2jellycss';
-            document.head.appendChild(link);
+    function getApiUrl(path) {
+        if (window.ApiClient && typeof window.ApiClient.getUrl === 'function') {
+            return window.ApiClient.getUrl(path);
         }
-        if (!document.getElementById('torr2jelly-fontawesome')) {
-            const fa = document.createElement('link');
-            fa.id = 'torr2jelly-fontawesome';
-            fa.rel = 'stylesheet';
-            fa.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css';
-            document.head.appendChild(fa);
+        return path;
+    }
+    window.getApiUrl = getApiUrl;
+
+    function getAuthHeaders() {
+        var headers = { 'Content-Type': 'application/json' };
+        if (window.ApiClient && typeof window.ApiClient.accessToken === 'function') {
+            headers['X-Emby-Token'] = window.ApiClient.accessToken();
         }
+        return headers;
+    }
+    window.getAuthHeaders = getAuthHeaders;
 
-        function getApiUrl(path) {
-            if (window.ApiClient && typeof window.ApiClient.getUrl === 'function') {
-                return window.ApiClient.getUrl(path);
-            }
-            return path;
-        }
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    window.escapeHtml = escapeHtml;
 
-        function getAuthHeaders() {
-            const headers = { 'Content-Type': 'application/json' };
-            if (window.ApiClient && typeof window.ApiClient.accessToken === 'function') {
-                headers['X-Emby-Token'] = window.ApiClient.accessToken();
-            }
-            return headers;
-        }
+    function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        var k = 1024;
+        var sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        var i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    window.formatBytes = formatBytes;
 
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        }
-
-        function formatBytes(bytes) {
-            if (!bytes || bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
-
-        // Tab Navigation
-        view.querySelectorAll('.t2j-nav-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const tab = btn.getAttribute('data-tab');
-                switchTab(tab);
-            });
-        });
-
-        function switchTab(tab) {
-            currentTab = tab;
-            view.querySelectorAll('.t2j-nav-btn').forEach(b => {
-                if (b.getAttribute('data-tab') === tab) {
-                    b.classList.add('active');
-                } else {
-                    b.classList.remove('active');
-                }
-            });
-
-            view.querySelectorAll('.t2j-tab-content').forEach(c => c.classList.add('hidden'));
-
-            if (tab === 'search') view.querySelector('#t2jTabSearch').classList.remove('hidden');
-            if (tab === 'magnet') view.querySelector('#t2jTabMagnet').classList.remove('hidden');
-            if (tab === 'dashboard') {
-                view.querySelector('#t2jTabDashboard').classList.remove('hidden');
-                loadTorrents();
-                startPolling();
-            } else {
-                stopPolling();
-            }
-            if (tab === 'settings') {
-                view.querySelector('#t2jTabSettings').classList.remove('hidden');
-                loadSettings();
-            }
-        }
-
-        // Check Daemon Status
-        async function checkStatus() {
-            try {
-                const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Status'), { headers: getAuthHeaders() });
-                if (res.ok) {
-                    const data = await res.json();
-                    daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
-                    daemonBadgeText.innerText = `TorrServer Online (${data.DaemonVersion || 'MatriX'})`;
-                    dashDaemonEngine.innerText = `TorrServer ${data.DaemonVersion || 'MatriX'}`;
-                    dashCacheSize.innerText = `${data.DaemonPort ? 'Порт ' + data.DaemonPort : '256 MB'}`;
-                    activeTorrentsBadge.innerText = data.ActiveTorrentsCount || 0;
-                    dashTorrentsCount.innerText = data.ActiveTorrentsCount || 0;
-                } else {
-                    daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30';
-                    daemonBadgeText.innerText = 'TorrServer Offline';
-                }
-            } catch {
-                daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30';
-                daemonBadgeText.innerText = 'TorrServer Offline';
-            }
-        }
-
-        // Search Action
-        searchForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const query = searchInput.value.trim();
-            if (!query) return;
-
-            searchSpinner.classList.remove('hidden');
-            resultsWrapper.classList.add('hidden');
-            resultsList.innerHTML = '';
-            searchBtnText.innerText = 'Шукаємо...';
-
-            try {
-                const cat = searchCategorySelect.value;
-                const url = getApiUrl(`Plugins/Torr2Jelly/Search?query=${encodeURIComponent(query)}&category=${encodeURIComponent(cat)}`);
-                const res = await fetch(url, { headers: getAuthHeaders() });
-                searchResults = await res.json();
-
-                renderSearchResults();
-            } catch (err) {
-                resultsList.innerHTML = `<div class="p-6 text-center text-rose-400 font-medium">Помилка пошуку: ${err.message}</div>`;
-                resultsWrapper.classList.remove('hidden');
-            } finally {
-                searchSpinner.classList.add('hidden');
-                searchBtnText.innerText = 'Знайти';
-            }
-        });
-
-        searchInput.addEventListener('input', () => {
-            if (searchInput.value.trim()) {
-                clearSearchBtn.classList.remove('hidden');
-            } else {
-                clearSearchBtn.classList.add('hidden');
-            }
-        });
-
-        clearSearchBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            clearSearchBtn.classList.add('hidden');
-            resultsWrapper.classList.add('hidden');
-            searchResults = [];
-        });
-
-        // Filter & Sort
-        filterAllBtn.addEventListener('click', () => {
-            activeFilter = 'all';
-            filterAllBtn.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all bg-slate-800 border-slate-600 text-white font-bold';
-            filterGoldBtn.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all border-slate-800 hover:bg-slate-800/60 text-amber-400/80 flex items-center space-x-1.5';
-            renderSearchResults();
-        });
-
-        filterGoldBtn.addEventListener('click', () => {
-            activeFilter = 'gold';
-            filterGoldBtn.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all bg-amber-500/20 border-amber-500/40 text-amber-300 font-bold flex items-center space-x-1.5';
-            filterAllBtn.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all border-slate-800 hover:bg-slate-800/60 text-slate-400';
-            renderSearchResults();
-        });
-
-        sortSelect.addEventListener('change', () => {
-            currentSort = sortSelect.value;
-            renderSearchResults();
-        });
-
-        function renderSearchResults() {
-            if (!searchResults) searchResults = [];
-
-            let filtered = searchResults.slice();
-            const goldTotal = filtered.filter(r => r.IsGold || r.isGold).length;
-            goldCountBadge.innerText = goldTotal;
-
-            if (activeFilter === 'gold') {
-                filtered = filtered.filter(r => r.IsGold || r.isGold);
-            }
-
-            // Sort
-            if (currentSort === 'seeders') {
-                filtered.sort((a, b) => (b.Seeders || b.seeders || 0) - (a.Seeders || a.seeders || 0));
-            } else if (currentSort === 'size_desc') {
-                filtered.sort((a, b) => (b.Size || b.size || 0) - (a.Size || a.size || 0));
-            } else if (currentSort === 'size_asc') {
-                filtered.sort((a, b) => (a.Size || a.size || 0) - (b.Size || b.size || 0));
-            }
-
-            resultsCount.innerText = filtered.length;
-            resultsList.innerHTML = '';
-
-            if (filtered.length === 0) {
-                resultsList.innerHTML = '<div class="p-8 text-center text-slate-400">Нічого не знайдено за заданими критеріями фільтрації.</div>';
-                resultsWrapper.classList.remove('hidden');
-                return;
-            }
-
-            filtered.forEach(item => {
-                const isGold = item.IsGold || item.isGold;
-                const isFreeleech = item.IsFreeleech || item.isFreeleech;
-                const title = item.Title || item.title || '';
-                const size = item.SizeFormatted || formatBytes(item.Size || item.size || 0);
-                const seeders = item.Seeders || item.seeders || 0;
-                const peers = item.Peers || item.peers || 0;
-                const indexer = item.Indexer || item.indexer || 'Tracker';
-                const link = item.MagnetUrl || item.magnetUrl || item.DownloadUrl || item.downloadUrl || '';
-
-                const row = document.createElement('div');
-                row.className = `t2j-result-row flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isGold ? 'is-gold' : ''}`;
-
-                const goldBadge = isGold
-                    ? `<span class="text-xs px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border border-amber-500/40 font-bold flex items-center space-x-1 shadow-sm shadow-amber-500/20">
-                         <span>⚡ ЗОЛОТА (Freeleech)</span>
-                       </span>`
-                    : (isFreeleech ? `<span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-400/20 text-slate-300 border border-slate-400/40 font-bold">50% Freeleech</span>` : '');
-
-                row.innerHTML = `
-                  <div class="flex-1 min-w-0 space-y-1.5">
-                    <div class="flex items-center space-x-2 flex-wrap gap-y-1">
-                      ${goldBadge}
-                      <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-semibold">${escapeHtml(indexer)}</span>
-                      <span class="text-xs text-slate-400 font-medium">${size}</span>
-                      <span class="text-xs text-emerald-400 font-semibold flex items-center space-x-1">
-                        <i class="fa-solid fa-arrow-up text-[10px]"></i>
-                        <span>${seeders} сидів</span>
-                      </span>
-                      <span class="text-xs text-slate-500 flex items-center space-x-1">
-                        <i class="fa-solid fa-arrow-down text-[10px]"></i>
-                        <span>${peers} пірів</span>
-                      </span>
-                    </div>
-
-                    <div>
-                      <div class="text-sm font-bold text-white hover:text-amber-400 transition-colors line-clamp-1" title="${escapeHtml(title)}">
-                        ${escapeHtml(title)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="flex items-center gap-2 shrink-0">
-                    <select class="t2j-row-cat-select bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-500">
-                      <option value="Movies" ${searchCategorySelect.value === 'Movies' ? 'selected' : ''}>Фільми</option>
-                      <option value="Shows" ${searchCategorySelect.value === 'Shows' ? 'selected' : ''}>Серіали</option>
-                      <option value="Cartoons" ${searchCategorySelect.value === 'Cartoons' ? 'selected' : ''}>Мультфільми</option>
-                      <option value="Anime" ${searchCategorySelect.value === 'Anime' ? 'selected' : ''}>Аніме</option>
-                    </select>
-
-                    <button type="button" class="t2j-add-row-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center justify-center space-x-1.5 ${isGold ? 'bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-bold' : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-600/30'}">
-                      <i class="fa-solid fa-play text-[10px]"></i>
-                      <span>Додати в бібліотеку</span>
-                    </button>
-                  </div>
-                `;
-
-                const addBtn = row.querySelector('.t2j-add-row-btn');
-                const catSelect = row.querySelector('.t2j-row-cat-select');
-
-                addBtn.addEventListener('click', async () => {
-                    addBtn.disabled = true;
-                    addBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> <span>Додаємо...</span>';
-
-                    try {
-                        const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), {
-                            method: 'POST',
-                            headers: getAuthHeaders(),
-                            body: JSON.stringify({
-                                Link: link,
-                                Title: title,
-                                Category: catSelect.value,
-                                SyncNow: true
-                            })
-                        });
-
-                        if (res.ok) {
-                            addBtn.className = 'px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 text-white flex items-center space-x-1.5';
-                            addBtn.innerHTML = '<i class="fa-solid fa-check text-xs"></i> <span>Додано в медіатеку!</span>';
-                            checkStatus();
-                        } else {
-                            addBtn.disabled = false;
-                            addBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-xs"></i> <span>Помилка</span>';
-                        }
-                    } catch {
-                        addBtn.disabled = false;
-                        addBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-xs"></i> <span>Помилка</span>';
-                    }
-                });
-
-                resultsList.appendChild(row);
-            });
-
-            resultsWrapper.classList.remove('hidden');
-        }
-
-        // Direct Link submit
-        directLinkForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const link = directLinkInput.value.trim();
-            if (!link) return;
-
-            directSubmitBtn.disabled = true;
-            directSubmitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Додаємо...</span>';
-
-            try {
-                const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), {
-                    method: 'POST',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({
-                        Link: link,
-                        Title: directTitleInput.value.trim() || null,
-                        Category: directCategorySelect.value,
-                        SyncNow: directSyncCheck.checked
-                    })
-                });
-
-                if (res.ok) {
-                    directSubmitBtn.innerHTML = '<i class="fa-solid fa-check"></i> <span>Успішно додано!</span>';
-                    directLinkInput.value = '';
-                    directTitleInput.value = '';
-                    setTimeout(() => {
-                        directSubmitBtn.disabled = false;
-                        directSubmitBtn.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Додати в медіатеку</span>';
-                    }, 2500);
-                    checkStatus();
-                } else {
-                    directSubmitBtn.disabled = false;
-                    directSubmitBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка</span>';
-                }
-            } catch {
-                directSubmitBtn.disabled = false;
-                directSubmitBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка</span>';
-            }
-        });
-
-        // Load Torrents
-        async function loadTorrents() {
-            try {
-                const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), { headers: getAuthHeaders() });
-                torrents = await res.json();
-
-                dashTorrentsCount.innerText = torrents.length;
-                activeTorrentsBadge.innerText = torrents.length;
-                torrentsListTable.innerHTML = '';
-
-                if (!torrents || torrents.length === 0) {
-                    torrentsEmptyNotice.classList.remove('hidden');
-                    return;
-                }
-
-                torrentsEmptyNotice.classList.add('hidden');
-
-                torrents.forEach(t => {
-                    const title = t.title || t.Title || t.hash || t.Hash;
-                    const hash = t.hash || t.Hash;
-                    const size = formatBytes(t.torrent_size || t.TorrentSize || 0);
-                    const loaded = formatBytes(t.loaded_size || t.LoadedSize || 0);
-                    const statusStr = t.stat_string || t.StatString || 'Активний';
-
-                    const row = document.createElement('div');
-                    row.className = 'py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3';
-                    row.innerHTML = `
-                      <div class="flex-1 min-w-0">
-                        <h4 class="text-sm font-bold text-white truncate" title="${escapeHtml(title)}">${escapeHtml(title)}</h4>
-                        <div class="flex items-center space-x-3 text-xs text-slate-400 mt-1">
-                          <span class="text-emerald-400 font-semibold">${escapeHtml(statusStr)}</span>
-                          <span>Розмір: ${size}</span>
-                          <span>Кеш: ${loaded}</span>
-                          <span class="font-mono text-[10px] text-slate-600 truncate max-w-[120px]">${hash}</span>
-                        </div>
-                      </div>
-
-                      <div class="flex items-center space-x-2">
-                        <button type="button" class="t2j-del-torrent-btn px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all">
-                          <i class="fa-solid fa-trash-can text-[11px] mr-1"></i> Видалити
-                        </button>
-                      </div>
-                    `;
-
-                    row.querySelector('.t2j-del-torrent-btn').addEventListener('click', async () => {
-                        if (confirm(`Видалити торент "${title}" та відповідні .strm файли з медіатеки?`)) {
-                            await fetch(getApiUrl(`Plugins/Torr2Jelly/Torrents/${hash}?deleteStrm=true`), {
-                                method: 'DELETE',
-                                headers: getAuthHeaders()
-                            });
-                            loadTorrents();
-                            checkStatus();
-                        }
-                    });
-
-                    torrentsListTable.appendChild(row);
-                });
-            } catch (err) {
-                torrentsListTable.innerHTML = `<div class="p-4 text-rose-400 text-xs">Помилка завантаження: ${err.message}</div>`;
-            }
-        }
-
-        refreshTorrentsBtn.addEventListener('click', loadTorrents);
-        scanLibraryBtn.addEventListener('click', async () => {
-            scanLibraryBtn.disabled = true;
-            scanLibraryBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> <span>Скануємо...</span>';
-            await fetch(getApiUrl('Plugins/Torr2Jelly/Library/Scan'), { method: 'POST', headers: getAuthHeaders() });
-            setTimeout(() => {
-                scanLibraryBtn.disabled = false;
-                scanLibraryBtn.innerHTML = '<i class="fa-solid fa-folder-tree text-xs"></i> <span>Сканувати медіатеку</span>';
-            }, 2000);
-        });
-
-        syncNowBtn.addEventListener('click', async () => {
-            syncNowBtn.disabled = true;
-            syncText.innerText = 'Синхронізація...';
-            await fetch(getApiUrl('Plugins/Torr2Jelly/Library/Scan'), { method: 'POST', headers: getAuthHeaders() });
-            setTimeout(() => {
-                syncNowBtn.disabled = false;
-                syncText.innerText = 'Синхронізація';
-            }, 2000);
-        });
-
-        function startPolling() {
-            stopPolling();
-            refreshInterval = setInterval(loadTorrents, 5000);
-        }
-
-        function stopPolling() {
-            if (refreshInterval) {
-                clearInterval(refreshInterval);
-                refreshInterval = null;
-            }
-        }
-
-        // Settings load & save
-        async function loadSettings() {
-            try {
-                const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), { headers: getAuthHeaders() });
-                const cfg = await res.json();
-                cfgEmbeddedCheck.checked = cfg.UseEmbeddedTorrServer;
-                cfgPortInput.value = cfg.EmbeddedTorrServerPort;
-                cfgCacheSizeInput.value = cfg.CacheSizeMb;
-                cfgStreamUrlInput.value = cfg.TorrServerStreamUrl || '';
-                cfgProwlarrUrlInput.value = cfg.ProwlarrUrl || '';
-                cfgProwlarrKeyInput.value = cfg.ProwlarrApiKey || '';
-                cfgMediaDirInput.value = cfg.MediaRootPath || '';
-                cfgOnlyGoldCheck.checked = cfg.OnlyGoldTorrentsForNonAdmins;
-                dashMediaDir.innerText = cfg.MediaRootPath || '/media';
-            } catch (err) {
-                console.error('Failed to load settings', err);
-            }
-        }
-
-        saveSettingsBtn.addEventListener('click', async () => {
-            saveSettingsBtn.disabled = true;
-            saveSettingsBtnText.innerText = 'Збереження...';
-
-            const payload = {
-                UseEmbeddedTorrServer: cfgEmbeddedCheck.checked,
-                EmbeddedTorrServerPort: parseInt(cfgPortInput.value, 10) || 8095,
-                CacheSizeMb: parseInt(cfgCacheSizeInput.value, 10) || 256,
-                TorrServerStreamUrl: cfgStreamUrlInput.value.trim(),
-                ProwlarrUrl: cfgProwlarrUrlInput.value.trim(),
-                ProwlarrApiKey: cfgProwlarrKeyInput.value.trim(),
-                MediaRootPath: cfgMediaDirInput.value.trim(),
-                OnlyGoldTorrentsForNonAdmins: cfgOnlyGoldCheck.checked
-            };
-
-            try {
-                const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), {
-                    method: 'POST',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify(payload)
-                });
-
-                if (res.ok) {
-                    saveSettingsBtnText.innerText = '✓ Збережено!';
-                    setTimeout(() => {
-                        saveSettingsBtnText.innerText = 'Зберегти налаштування';
-                        saveSettingsBtn.disabled = false;
-                    }, 2000);
-                    checkStatus();
-                } else {
-                    saveSettingsBtnText.innerText = 'Помилка';
-                    saveSettingsBtn.disabled = false;
-                }
-            } catch {
-                saveSettingsBtnText.innerText = 'Помилка';
-                saveSettingsBtn.disabled = false;
-            }
-        });
-
-        restartDaemonBtn.addEventListener('click', async () => {
-            restartDaemonBtn.disabled = true;
-            restartDaemonBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Перезапуск...</span>';
-
-            try {
-                await fetch(getApiUrl('Plugins/Torr2Jelly/Daemon/Restart'), { method: 'POST', headers: getAuthHeaders() });
-                setTimeout(() => {
-                    restartDaemonBtn.disabled = false;
-                    restartDaemonBtn.innerHTML = '<i class="fa-solid fa-power-off text-amber-400"></i> <span>Перезапустити торент-рушій</span>';
-                    checkStatus();
-                }, 3000);
-            } catch {
-                restartDaemonBtn.disabled = false;
-                restartDaemonBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка</span>';
-            }
-        });
-
-        // Initialize
-        checkStatus();
+    function getPage() {
+        return document.getElementById('torr2jellyPage');
     }
 
-    
-    window.t2jDoSearch = async function() {
-        var view = document.getElementById('torr2jellyPage');
-        if (!view) return;
-        if (!view._t2jInitialized) initTorr2Jelly(view);
+    // Status check
+    async function checkStatus() {
+        var page = getPage();
+        if (!page) return;
+        var daemonBadge = page.querySelector('#t2jDaemonBadge');
+        var daemonBadgeText = page.querySelector('#t2jDaemonBadgeText');
+        var activeTorrentsBadge = page.querySelector('#activeTorrentsBadge');
+        var dashTorrentsCount = page.querySelector('#dashTorrentsCount');
+        var dashDaemonEngine = page.querySelector('#dashDaemonEngine');
+        var dashCacheSize = page.querySelector('#dashCacheSize');
 
-        var searchInput = view.querySelector('#t2jSearchInput');
-        var searchCategorySelect = view.querySelector('#t2jSearchCategorySelect');
-        var searchSpinner = view.querySelector('#t2jSearchSpinner');
-        var resultsWrapper = view.querySelector('#t2jResultsWrapper');
-        var resultsList = view.querySelector('#t2jResultsList');
-        var searchBtnText = view.querySelector('#t2jSearchBtnText');
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Status'), { headers: getAuthHeaders() });
+            if (res.ok) {
+                var data = await res.json();
+                var daemonVer = data.DaemonVersion || data.daemonVersion || 'MatriX';
+                var daemonPort = data.DaemonPort || data.daemonPort || 8095;
+                var activeCount = data.ActiveTorrentsCount !== undefined ? data.ActiveTorrentsCount : (data.activeTorrentsCount !== undefined ? data.activeTorrentsCount : 0);
+
+                if (daemonBadge) daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+                if (daemonBadgeText) daemonBadgeText.innerText = 'TorrServer Online (' + daemonVer + ')';
+                if (dashDaemonEngine) dashDaemonEngine.innerText = 'TorrServer ' + daemonVer;
+                if (dashCacheSize) dashCacheSize.innerText = daemonPort ? ('Порт ' + daemonPort) : '256 MB';
+                if (activeTorrentsBadge) activeTorrentsBadge.innerText = activeCount;
+                if (dashTorrentsCount) dashTorrentsCount.innerText = activeCount;
+            } else {
+                if (daemonBadge) daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30';
+                if (daemonBadgeText) daemonBadgeText.innerText = 'TorrServer Offline';
+            }
+        } catch (e) {
+            if (daemonBadge) daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30';
+            if (daemonBadgeText) daemonBadgeText.innerText = 'TorrServer Offline';
+        }
+    }
+    window.t2jCheckStatus = checkStatus;
+
+    // Search results renderer
+    function renderSearchResults() {
+        var page = getPage();
+        if (!page) return;
+
+        var goldCountBadge = page.querySelector('#goldCountBadge');
+        var resultsCount = page.querySelector('#t2jResultsCount');
+        var resultsList = page.querySelector('#t2jResultsList');
+        var resultsWrapper = page.querySelector('#t2jResultsWrapper');
+        var searchCategorySelect = page.querySelector('#t2jSearchCategorySelect');
+
+        var items = (window.t2jState.searchResults || []).slice();
+        var goldTotal = items.filter(function (r) { return r.IsGold || r.isGold; }).length;
+        if (goldCountBadge) goldCountBadge.innerText = goldTotal;
+
+        if (window.t2jState.activeFilter === 'gold') {
+            items = items.filter(function (r) { return r.IsGold || r.isGold; });
+        }
+
+        if (window.t2jState.currentSort === 'seeders') {
+            items.sort(function (a, b) { return (b.Seeders || b.seeders || 0) - (a.Seeders || a.seeders || 0); });
+        } else if (window.t2jState.currentSort === 'size_desc') {
+            items.sort(function (a, b) { return (b.Size || b.size || 0) - (a.Size || a.size || 0); });
+        } else if (window.t2jState.currentSort === 'size_asc') {
+            items.sort(function (a, b) { return (a.Size || a.size || 0) - (b.Size || b.size || 0); });
+        }
+
+        window.t2jState.filteredResults = items;
+
+        if (resultsCount) resultsCount.innerText = items.length;
+        if (resultsList) resultsList.innerHTML = '';
+
+        if (items.length === 0) {
+            if (resultsList) resultsList.innerHTML = '<div class="p-8 text-center text-slate-400">Нічого не знайдено за заданими критеріями фільтрації.</div>';
+            if (resultsWrapper) resultsWrapper.classList.remove('hidden');
+            return;
+        }
+
+        var defaultCategory = searchCategorySelect ? searchCategorySelect.value : 'Movies';
+        var html = '';
+
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            var isGold = item.IsGold || item.isGold;
+            var isFreeleech = item.IsFreeleech || item.isFreeleech;
+            var title = item.Title || item.title || '';
+            var size = item.SizeFormatted || formatBytes(item.Size || item.size || 0);
+            var seeders = item.Seeders || item.seeders || 0;
+            var peers = item.Peers || item.peers || 0;
+            var indexer = item.Indexer || item.indexer || 'Tracker';
+
+            var goldBadge = isGold
+                ? '<span class="text-xs px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border border-amber-500/40 font-bold flex items-center space-x-1 shadow-sm shadow-amber-500/20"><span>⚡ ЗОЛОТА (Freeleech)</span></span>'
+                : (isFreeleech ? '<span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-400/20 text-slate-300 border border-slate-400/40 font-bold">50% Freeleech</span>' : '');
+
+            var moviesSel = defaultCategory === 'Movies' ? 'selected' : '';
+            var showsSel = defaultCategory === 'Shows' ? 'selected' : '';
+            var cartoonsSel = defaultCategory === 'Cartoons' ? 'selected' : '';
+            var animeSel = defaultCategory === 'Anime' ? 'selected' : '';
+
+            var btnClass = isGold
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-bold'
+                : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-600/30';
+
+            html += '<div class="t2j-result-row flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 ' + (isGold ? 'is-gold' : '') + '">';
+            html += '  <div class="flex-1 min-w-0 space-y-1.5">';
+            html += '    <div class="flex items-center space-x-2 flex-wrap gap-y-1">';
+            html += '      ' + goldBadge;
+            html += '      <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-semibold">' + escapeHtml(indexer) + '</span>';
+            html += '      <span class="text-xs text-slate-400 font-medium">' + escapeHtml(size) + '</span>';
+            html += '      <span class="text-xs text-emerald-400 font-semibold flex items-center space-x-1">';
+            html += '        <i class="fa-solid fa-arrow-up text-[10px]"></i>';
+            html += '        <span>' + seeders + ' сидів</span>';
+            html += '      </span>';
+            html += '      <span class="text-xs text-slate-500 flex items-center space-x-1">';
+            html += '        <i class="fa-solid fa-arrow-down text-[10px]"></i>';
+            html += '        <span>' + peers + ' пірів</span>';
+            html += '      </span>';
+            html += '    </div>';
+            html += '    <div>';
+            html += '      <div class="text-sm font-bold text-white hover:text-amber-400 transition-colors line-clamp-1" title="' + escapeHtml(title) + '">';
+            html += '        ' + escapeHtml(title);
+            html += '      </div>';
+            html += '    </div>';
+            html += '  </div>';
+            html += '  <div class="flex items-center gap-2 shrink-0">';
+            html += '    <select id="t2jCatSelect_' + i + '" class="t2j-row-cat-select bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-500">';
+            html += '      <option value="Movies" ' + moviesSel + '>Фільми</option>';
+            html += '      <option value="Shows" ' + showsSel + '>Серіали</option>';
+            html += '      <option value="Cartoons" ' + cartoonsSel + '>Мультфільми</option>';
+            html += '      <option value="Anime" ' + animeSel + '>Аніме</option>';
+            html += '    </select>';
+            html += '    <button type="button" data-index="' + i + '" onclick="window.t2jAddResult && window.t2jAddResult(this)" class="t2j-add-row-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center justify-center space-x-1.5 ' + btnClass + '" style="cursor: pointer !important; pointer-events: auto !important;">';
+            html += '      <i class="fa-solid fa-play text-[10px]"></i>';
+            html += '      <span>Додати в бібліотеку</span>';
+            html += '    </button>';
+            html += '  </div>';
+            html += '</div>';
+        }
+
+        if (resultsList) resultsList.innerHTML = html;
+        if (resultsWrapper) resultsWrapper.classList.remove('hidden');
+    }
+    window.renderSearchResults = renderSearchResults;
+
+    // Search action
+    window.t2jDoSearch = async function () {
+        var page = getPage();
+        if (!page) return;
+        if (!page._t2jInitialized) initTorr2Jelly(page);
+
+        var searchInput = page.querySelector('#t2jSearchInput');
+        var searchCategorySelect = page.querySelector('#t2jSearchCategorySelect');
+        var searchSpinner = page.querySelector('#t2jSearchSpinner');
+        var resultsWrapper = page.querySelector('#t2jResultsWrapper');
+        var resultsList = page.querySelector('#t2jResultsList');
+        var searchBtnText = page.querySelector('#t2jSearchBtnText');
 
         var query = (searchInput ? searchInput.value : '').trim();
         if (!query) return;
@@ -1252,13 +876,17 @@
         if (searchBtnText) searchBtnText.innerText = 'Шукаємо...';
 
         try {
-            var cat = searchCategorySelect ? searchCategorySelect.value : '';
+            var cat = searchCategorySelect ? searchCategorySelect.value : 'Movies';
             var url = getApiUrl('Plugins/Torr2Jelly/Search?query=' + encodeURIComponent(query) + '&category=' + encodeURIComponent(cat));
             var res = await fetch(url, { headers: getAuthHeaders() });
-            searchResults = await res.json();
+            if (!res.ok) {
+                throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+            }
+            var data = await res.json();
+            window.t2jState.searchResults = Array.isArray(data) ? data : [];
             renderSearchResults();
         } catch (err) {
-            if (resultsList) resultsList.innerHTML = '<div class="p-6 text-center text-rose-400 font-medium">Помилка пошуку: ' + err.message + '</div>';
+            if (resultsList) resultsList.innerHTML = '<div class="p-6 text-center text-rose-400 font-medium">Помилка пошуку: ' + escapeHtml(err.message) + '</div>';
             if (resultsWrapper) resultsWrapper.classList.remove('hidden');
         } finally {
             if (searchSpinner) searchSpinner.classList.add('hidden');
@@ -1266,22 +894,66 @@
         }
     };
 
-    window.t2jDoDirectLink = async function() {
-        var view = document.getElementById('torr2jellyPage');
-        if (!view) return;
-        if (!view._t2jInitialized) initTorr2Jelly(view);
+    // Add search result to library
+    window.t2jAddResult = async function (btn) {
+        if (!btn) return;
+        var index = parseInt(btn.getAttribute('data-index'), 10);
+        var items = window.t2jState.filteredResults || window.t2jState.searchResults;
+        var item = items ? items[index] : null;
+        if (!item) return;
 
-        var directLinkInput = view.querySelector('#directLinkInput');
-        var directTitleInput = view.querySelector('#directTitleInput');
-        var directCategorySelect = view.querySelector('#directCategorySelect');
-        var directSyncCheck = view.querySelector('#directSyncCheck');
-        var directSubmitBtn = view.querySelector('#directSubmitBtn');
+        var catSelect = document.getElementById('t2jCatSelect_' + index);
+        var category = catSelect ? catSelect.value : 'Movies';
+        var link = item.MagnetUrl || item.magnetUrl || item.DownloadUrl || item.downloadUrl || '';
+        var title = item.Title || item.title || '';
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> <span>Додаємо...</span>';
+
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    Link: link,
+                    Title: title,
+                    Category: category,
+                    SyncNow: true
+                })
+            });
+
+            if (res.ok) {
+                btn.className = 'px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center space-x-1.5';
+                btn.innerHTML = '<i class="fa-solid fa-check text-xs"></i> <span>Додано в медіатеку</span>';
+                checkStatus();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-xs"></i> <span>Помилка сервера</span>';
+            }
+        } catch (err) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-xs"></i> <span>Помилка: ' + escapeHtml(err.message) + '</span>';
+        }
+    };
+
+    // Direct link / Magnet add
+    window.t2jDoDirectLink = async function () {
+        var page = getPage();
+        if (!page) return;
+
+        var directLinkInput = page.querySelector('#directLinkInput');
+        var directTitleInput = page.querySelector('#directTitleInput');
+        var directCategorySelect = page.querySelector('#directCategorySelect');
+        var directSyncCheck = page.querySelector('#directSyncCheck');
+        var directSubmitBtn = page.querySelector('#directSubmitBtn');
 
         var link = (directLinkInput ? directLinkInput.value : '').trim();
         if (!link) return;
 
-        directSubmitBtn.disabled = true;
-        directSubmitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Додаємо...</span>';
+        if (directSubmitBtn) {
+            directSubmitBtn.disabled = true;
+            directSubmitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Додаємо...</span>';
+        }
 
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), {
@@ -1296,30 +968,293 @@
             });
 
             if (res.ok) {
-                directSubmitBtn.innerHTML = '<i class="fa-solid fa-check"></i> <span>Успішно додано!</span>';
+                if (directSubmitBtn) directSubmitBtn.innerHTML = '<i class="fa-solid fa-check"></i> <span>Успішно додано!</span>';
                 if (directLinkInput) directLinkInput.value = '';
                 if (directTitleInput) directTitleInput.value = '';
-                setTimeout(function() {
-                    directSubmitBtn.disabled = false;
-                    directSubmitBtn.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Додати в медіатеку</span>';
+                setTimeout(function () {
+                    if (directSubmitBtn) {
+                        directSubmitBtn.disabled = false;
+                        directSubmitBtn.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Додати в медіатеку</span>';
+                    }
                 }, 2500);
                 checkStatus();
             } else {
-                directSubmitBtn.disabled = false;
-                directSubmitBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка сервера</span>';
+                if (directSubmitBtn) {
+                    directSubmitBtn.disabled = false;
+                    directSubmitBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка сервера</span>';
+                }
             }
         } catch (err) {
-            directSubmitBtn.disabled = false;
-            directSubmitBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка: ' + err.message + '</span>';
+            if (directSubmitBtn) {
+                directSubmitBtn.disabled = false;
+                directSubmitBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка: ' + escapeHtml(err.message) + '</span>';
+            }
         }
     };
 
-    window.initTorr2Jelly = initTorr2Jelly;
-
-    window.t2jSwitchTab = function(tab) {
-        var page = document.getElementById('torr2jellyPage');
+    // Load torrents dashboard
+    async function loadTorrents() {
+        var page = getPage();
         if (!page) return;
-        if (!page._t2jInitialized) initTorr2Jelly(page);
+        var dashTorrentsCount = page.querySelector('#dashTorrentsCount');
+        var activeTorrentsBadge = page.querySelector('#activeTorrentsBadge');
+        var torrentsListTable = page.querySelector('#torrentsListTable');
+        var torrentsEmptyNotice = page.querySelector('#torrentsEmptyNotice');
+
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), { headers: getAuthHeaders() });
+            var torrents = await res.json();
+            window.t2jState.torrents = Array.isArray(torrents) ? torrents : [];
+
+            if (dashTorrentsCount) dashTorrentsCount.innerText = window.t2jState.torrents.length;
+            if (activeTorrentsBadge) activeTorrentsBadge.innerText = window.t2jState.torrents.length;
+            if (torrentsListTable) torrentsListTable.innerHTML = '';
+
+            if (!window.t2jState.torrents || window.t2jState.torrents.length === 0) {
+                if (torrentsEmptyNotice) torrentsEmptyNotice.classList.remove('hidden');
+                return;
+            }
+
+            if (torrentsEmptyNotice) torrentsEmptyNotice.classList.add('hidden');
+
+            var html = '';
+            for (var i = 0; i < window.t2jState.torrents.length; i++) {
+                var t = window.t2jState.torrents[i];
+                var title = t.title || t.Title || t.hash || t.Hash || 'Unknown';
+                var hash = t.hash || t.Hash || '';
+                var size = formatBytes(t.torrent_size || t.TorrentSize || 0);
+                var loaded = formatBytes(t.loaded_size || t.LoadedSize || 0);
+                var statusStr = t.stat_string || t.StatString || 'Активний';
+
+                html += '<div class="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/60">';
+                html += '  <div class="flex-1 min-w-0">';
+                html += '    <h4 class="text-sm font-bold text-white truncate" title="' + escapeHtml(title) + '">' + escapeHtml(title) + '</h4>';
+                html += '    <div class="flex items-center space-x-3 text-xs text-slate-400 mt-1">';
+                html += '      <span class="text-emerald-400 font-semibold">' + escapeHtml(statusStr) + '</span>';
+                html += '      <span>Розмір: ' + escapeHtml(size) + '</span>';
+                html += '      <span>Кеш: ' + escapeHtml(loaded) + '</span>';
+                html += '      <span class="font-mono text-[10px] text-slate-600 truncate max-w-[120px]">' + escapeHtml(hash) + '</span>';
+                html += '    </div>';
+                html += '  </div>';
+                html += '  <div class="flex items-center space-x-2">';
+                html += '    <button type="button" data-hash="' + escapeHtml(hash) + '" data-title="' + escapeHtml(title) + '" onclick="window.t2jDeleteTorrent && window.t2jDeleteTorrent(this)" class="t2j-del-torrent-btn px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all" style="cursor: pointer !important; pointer-events: auto !important;">';
+                html += '      <i class="fa-solid fa-trash-can text-[11px] mr-1"></i> Видалити';
+                html += '    </button>';
+                html += '  </div>';
+                html += '</div>';
+            }
+            if (torrentsListTable) torrentsListTable.innerHTML = html;
+        } catch (err) {
+            if (torrentsListTable) torrentsListTable.innerHTML = '<div class="p-4 text-rose-400 text-xs">Помилка завантаження: ' + escapeHtml(err.message) + '</div>';
+        }
+    }
+    window.t2jLoadTorrents = loadTorrents;
+
+    window.t2jDeleteTorrent = async function (btn) {
+        if (!btn) return;
+        var hash = btn.getAttribute('data-hash') || '';
+        var title = btn.getAttribute('data-title') || 'торент';
+        if (!confirm('Видалити торент "' + title + '" та відповідні .strm файли з медіатеки?')) {
+            return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[11px]"></i>';
+        try {
+            await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents/' + encodeURIComponent(hash) + '?deleteStrm=true'), {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+            loadTorrents();
+            checkStatus();
+        } catch (err) {
+            alert('Помилка видалення: ' + err.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-trash-can text-[11px] mr-1"></i> Видалити';
+        }
+    };
+
+    // Library sync
+    async function syncLibrary(buttonEl, textEl) {
+        if (buttonEl) buttonEl.disabled = true;
+        if (textEl) textEl.innerText = 'Синхронізація...';
+        try {
+            await fetch(getApiUrl('Plugins/Torr2Jelly/Library/Scan'), { method: 'POST', headers: getAuthHeaders() });
+        } catch (e) {
+            console.error(e);
+        }
+        setTimeout(function () {
+            if (buttonEl) buttonEl.disabled = false;
+            if (textEl) textEl.innerText = 'Синхронізація';
+        }, 2000);
+    }
+
+    window.t2jSyncNow = async function () {
+        var page = getPage();
+        var btn = page ? page.querySelector('#t2jSyncNowBtn') : null;
+        var txt = page ? page.querySelector('#t2jSyncText') : null;
+        await syncLibrary(btn, txt);
+    };
+
+    window.t2jScanLibrary = async function () {
+        var page = getPage();
+        var btn = page ? page.querySelector('#scanLibraryBtn') : null;
+        await syncLibrary(btn, null);
+    };
+
+    // Settings
+    async function loadSettings() {
+        var page = getPage();
+        if (!page) return;
+        var cfgEmbeddedCheck = page.querySelector('#cfgEmbeddedCheck');
+        var cfgPortInput = page.querySelector('#cfgPortInput');
+        var cfgCacheSizeInput = page.querySelector('#cfgCacheSizeInput');
+        var cfgStreamUrlInput = page.querySelector('#cfgStreamUrlInput');
+        var cfgProwlarrUrlInput = page.querySelector('#cfgProwlarrUrlInput');
+        var cfgProwlarrKeyInput = page.querySelector('#cfgProwlarrKeyInput');
+        var cfgMediaDirInput = page.querySelector('#cfgMediaDirInput');
+        var cfgOnlyGoldCheck = page.querySelector('#cfgOnlyGoldCheck');
+        var dashMediaDir = page.querySelector('#dashMediaDir');
+
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), { headers: getAuthHeaders() });
+            var cfg = await res.json();
+            if (cfgEmbeddedCheck) cfgEmbeddedCheck.checked = cfg.UseEmbeddedTorrServer;
+            if (cfgPortInput) cfgPortInput.value = cfg.EmbeddedTorrServerPort;
+            if (cfgCacheSizeInput) cfgCacheSizeInput.value = cfg.CacheSizeMb;
+            if (cfgStreamUrlInput) cfgStreamUrlInput.value = cfg.TorrServerStreamUrl || '';
+            if (cfgProwlarrUrlInput) cfgProwlarrUrlInput.value = cfg.ProwlarrUrl || '';
+            if (cfgProwlarrKeyInput) cfgProwlarrKeyInput.value = cfg.ProwlarrApiKey || '';
+            if (cfgMediaDirInput) cfgMediaDirInput.value = cfg.MediaRootPath || '';
+            if (cfgOnlyGoldCheck) cfgOnlyGoldCheck.checked = cfg.OnlyGoldTorrentsForNonAdmins;
+            if (dashMediaDir) dashMediaDir.innerText = cfg.MediaRootPath || '/media';
+        } catch (err) {
+            console.error('Failed to load settings', err);
+        }
+    }
+    window.t2jLoadSettings = loadSettings;
+
+    async function saveSettings() {
+        var page = getPage();
+        if (!page) return;
+        var cfgEmbeddedCheck = page.querySelector('#cfgEmbeddedCheck');
+        var cfgPortInput = page.querySelector('#cfgPortInput');
+        var cfgCacheSizeInput = page.querySelector('#cfgCacheSizeInput');
+        var cfgStreamUrlInput = page.querySelector('#cfgStreamUrlInput');
+        var cfgProwlarrUrlInput = page.querySelector('#cfgProwlarrUrlInput');
+        var cfgProwlarrKeyInput = page.querySelector('#cfgProwlarrKeyInput');
+        var cfgMediaDirInput = page.querySelector('#cfgMediaDirInput');
+        var cfgOnlyGoldCheck = page.querySelector('#cfgOnlyGoldCheck');
+        var saveSettingsBtn = page.querySelector('#saveSettingsBtn');
+        var saveSettingsBtnText = page.querySelector('#saveSettingsBtnText');
+
+        if (saveSettingsBtn) saveSettingsBtn.disabled = true;
+        if (saveSettingsBtnText) saveSettingsBtnText.innerText = 'Збереження...';
+
+        var payload = {
+            UseEmbeddedTorrServer: cfgEmbeddedCheck ? cfgEmbeddedCheck.checked : true,
+            EmbeddedTorrServerPort: parseInt(cfgPortInput ? cfgPortInput.value : '8095', 10) || 8095,
+            CacheSizeMb: parseInt(cfgCacheSizeInput ? cfgCacheSizeInput.value : '256', 10) || 256,
+            TorrServerStreamUrl: cfgStreamUrlInput ? cfgStreamUrlInput.value.trim() : '',
+            ProwlarrUrl: cfgProwlarrUrlInput ? cfgProwlarrUrlInput.value.trim() : '',
+            ProwlarrApiKey: cfgProwlarrKeyInput ? cfgProwlarrKeyInput.value.trim() : '',
+            MediaRootPath: cfgMediaDirInput ? cfgMediaDirInput.value.trim() : '',
+            OnlyGoldTorrentsForNonAdmins: cfgOnlyGoldCheck ? cfgOnlyGoldCheck.checked : false
+        };
+
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                if (saveSettingsBtnText) saveSettingsBtnText.innerText = '✓ Збережено!';
+                setTimeout(function () {
+                    if (saveSettingsBtnText) saveSettingsBtnText.innerText = 'Зберегти налаштування';
+                    if (saveSettingsBtn) saveSettingsBtn.disabled = false;
+                }, 2000);
+                checkStatus();
+            } else {
+                if (saveSettingsBtnText) saveSettingsBtnText.innerText = 'Помилка';
+                if (saveSettingsBtn) saveSettingsBtn.disabled = false;
+            }
+        } catch (e) {
+            if (saveSettingsBtnText) saveSettingsBtnText.innerText = 'Помилка';
+            if (saveSettingsBtn) saveSettingsBtn.disabled = false;
+        }
+    }
+    window.t2jSaveSettings = saveSettings;
+
+    async function restartDaemon() {
+        var page = getPage();
+        if (!page) return;
+        var restartDaemonBtn = page.querySelector('#restartDaemonBtn');
+        if (restartDaemonBtn) {
+            restartDaemonBtn.disabled = true;
+            restartDaemonBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Перезапуск...</span>';
+        }
+
+        try {
+            await fetch(getApiUrl('Plugins/Torr2Jelly/Daemon/Restart'), { method: 'POST', headers: getAuthHeaders() });
+            setTimeout(function () {
+                if (restartDaemonBtn) {
+                    restartDaemonBtn.disabled = false;
+                    restartDaemonBtn.innerHTML = '<i class="fa-solid fa-power-off text-amber-400"></i> <span>Перезапустити торент-рушій</span>';
+                }
+                checkStatus();
+            }, 3000);
+        } catch (e) {
+            if (restartDaemonBtn) {
+                restartDaemonBtn.disabled = false;
+                restartDaemonBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка</span>';
+            }
+        }
+    }
+    window.t2jRestartDaemon = restartDaemon;
+
+    // Filter & Sort handlers
+    window.t2jFilter = function (filterType) {
+        window.t2jState.activeFilter = filterType;
+        var page = getPage();
+        if (page) {
+            var filterAllBtn = page.querySelector('#filterAllBtn');
+            var filterGoldBtn = page.querySelector('#filterGoldBtn');
+            if (filterType === 'all') {
+                if (filterAllBtn) filterAllBtn.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all bg-slate-800 border-slate-600 text-white font-bold';
+                if (filterGoldBtn) filterGoldBtn.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all border-slate-800 hover:bg-slate-800/60 text-amber-400/80 flex items-center space-x-1.5';
+            } else {
+                if (filterGoldBtn) filterGoldBtn.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all bg-amber-500/20 border-amber-500/40 text-amber-300 font-bold flex items-center space-x-1.5';
+                if (filterAllBtn) filterAllBtn.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all border-slate-800 hover:bg-slate-800/60 text-slate-400';
+            }
+        }
+        renderSearchResults();
+    };
+
+    window.t2jSort = function (sortType) {
+        window.t2jState.currentSort = sortType;
+        renderSearchResults();
+    };
+
+    // Polling
+    function startPolling() {
+        stopPolling();
+        window.t2jState.refreshInterval = setInterval(loadTorrents, 5000);
+    }
+
+    function stopPolling() {
+        if (window.t2jState.refreshInterval) {
+            clearInterval(window.t2jState.refreshInterval);
+            window.t2jState.refreshInterval = null;
+        }
+    }
+
+    // Tab switching
+    window.t2jSwitchTab = function (tab) {
+        var page = getPage();
+        if (!page) return;
+
+        window.t2jState.currentTab = tab;
 
         var btns = page.querySelectorAll('.t2j-nav-btn');
         for (var i = 0; i < btns.length; i++) {
@@ -1338,61 +1273,92 @@
         if (tab === 'search') {
             var s = page.querySelector('#t2jTabSearch');
             if (s) s.classList.remove('hidden');
+            stopPolling();
         } else if (tab === 'magnet') {
             var m = page.querySelector('#t2jTabMagnet');
             if (m) m.classList.remove('hidden');
+            stopPolling();
         } else if (tab === 'dashboard') {
             var d = page.querySelector('#t2jTabDashboard');
             if (d) d.classList.remove('hidden');
-            if (window.t2jLoadTorrents) window.t2jLoadTorrents();
+            loadTorrents();
+            startPolling();
         } else if (tab === 'settings') {
             var st = page.querySelector('#t2jTabSettings');
             if (st) st.classList.remove('hidden');
-            if (window.t2jLoadSettings) window.t2jLoadSettings();
+            loadSettings();
+            stopPolling();
         }
     };
 
-    window.t2jBoot = function() {
-        var page = document.getElementById('torr2jellyPage');
-        if (page && !page._t2jInitialized) {
-            initTorr2Jelly(page);
-        }
-    };
+    // Page initialization
+    function initTorr2Jelly(view) {
+        if (!view) view = getPage();
+        if (!view) return;
 
-    // Expose helpers for inline onclick
-    window.t2jSyncNow = function() {
-        var btn = document.getElementById('t2jSyncNowBtn');
-        if (btn) btn.click();
-    };
-    window.t2jFilter = function(f) {
-        if (f === 'all') {
-            var b = document.getElementById('filterAllBtn');
-            if (b) b.click();
-        } else {
-            var b = document.getElementById('filterGoldBtn');
-            if (b) b.click();
+        // Inject styles
+        if (!document.getElementById('torr2jelly-custom-css')) {
+            var link = document.createElement('link');
+            link.id = 'torr2jelly-custom-css';
+            link.rel = 'stylesheet';
+            link.href = (window.ApiClient && typeof window.ApiClient.getUrl === 'function')
+                ? window.ApiClient.getUrl('ConfigurationPage', { name: 'torr2jellycss' })
+                : 'ConfigurationPage?name=torr2jellycss';
+            document.head.appendChild(link);
         }
-    };
-    window.t2jLoadTorrents = function() {
-        var b = document.getElementById('refreshTorrentsBtn');
-        if (b) b.click();
-    };
-    window.t2jScanLibrary = function() {
-        var b = document.getElementById('scanLibraryBtn');
-        if (b) b.click();
-    };
-    window.t2jSaveSettings = function() {
-        var b = document.getElementById('saveSettingsBtn');
-        if (b) b.click();
-    };
-    window.t2jRestartDaemon = function() {
-        var b = document.getElementById('restartDaemonBtn');
-        if (b) b.click();
+        if (!document.getElementById('torr2jelly-fontawesome')) {
+            var fa = document.createElement('link');
+            fa.id = 'torr2jelly-fontawesome';
+            fa.rel = 'stylesheet';
+            fa.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css';
+            document.head.appendChild(fa);
+        }
+
+        if (view._t2jInitialized) {
+            checkStatus();
+            return;
+        }
+        view._t2jInitialized = true;
+
+        var searchForm = view.querySelector('#t2jSearchForm');
+        if (searchForm) {
+            searchForm.onsubmit = function (e) {
+                e.preventDefault();
+                window.t2jDoSearch();
+                return false;
+            };
+        }
+
+        var searchInput = view.querySelector('#t2jSearchInput');
+        var clearSearchBtn = view.querySelector('#t2jClearSearchBtn');
+        if (searchInput && clearSearchBtn) {
+            searchInput.oninput = function () {
+                if (searchInput.value.trim()) {
+                    clearSearchBtn.classList.remove('hidden');
+                } else {
+                    clearSearchBtn.classList.add('hidden');
+                }
+            };
+            clearSearchBtn.onclick = function () {
+                searchInput.value = '';
+                clearSearchBtn.classList.add('hidden');
+                var rw = view.querySelector('#t2jResultsWrapper');
+                if (rw) rw.classList.add('hidden');
+                window.t2jState.searchResults = [];
+            };
+        }
+
+        checkStatus();
+    }
+    window.initTorr2Jelly = initTorr2Jelly;
+    window.t2jBoot = function () {
+        var page = getPage();
+        if (page) initTorr2Jelly(page);
     };
 
     // Lifecycle events
     function tryInit() {
-        var page = document.getElementById('torr2jellyPage');
+        var page = getPage();
         if (page) {
             page.addEventListener('pageshow', function () { initTorr2Jelly(page); });
             page.addEventListener('viewshow', function () { initTorr2Jelly(page); });
@@ -1415,7 +1381,6 @@
         });
     }
 })();
-
 </script>
 
 <img src="data:image/svg+xml;utf8,<svg/>" style="display:none;" onload="if(!window.t2jBoot){try{eval(document.getElementById('t2jMainScript').textContent);}catch(e){console.error(e);}} if(window.t2jBoot)window.t2jBoot();" onerror="if(!window.t2jBoot){try{eval(document.getElementById('t2jMainScript').textContent);}catch(e){console.error(e);}} if(window.t2jBoot)window.t2jBoot();" />

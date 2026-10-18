@@ -365,7 +365,7 @@
               <p class="text-xs text-slate-400 mt-1" id="t2jSearchDesc">Шукає через підключені індексатори Prowlarr. Клік на назву відкриває сторінку роздачі на трекері.</p>
             </div>
 
-            <form id="t2jSearchForm" class="flex flex-col sm:flex-row gap-3">
+            <form id="t2jSearchForm" class="flex flex-col sm:flex-row gap-3" onsubmit="event.preventDefault(); window.t2jDoSearch && window.t2jDoSearch(); return false;">
               <div class="relative flex-1">
                 <i class="fa-solid fa-search absolute left-4 top-3.5 text-sm text-slate-400"></i>
                 <input type="text" id="t2jSearchInput" required
@@ -385,8 +385,7 @@
                 <option value="Anime">Аніме</option>
               </select>
 
-              <button type="submit" id="t2jSubmitSearchBtn"
-                      class="px-8 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-semibold text-sm shadow-lg shadow-orange-500/25 active:scale-95 transition-all flex items-center justify-center space-x-2">
+              <button type="button" id="t2jSubmitSearchBtn" onclick="window.t2jDoSearch && window.t2jDoSearch()" class="px-8 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-semibold text-sm shadow-lg shadow-orange-500/25 active:scale-95 transition-all flex items-center justify-center space-x-2" style="cursor: pointer !important; pointer-events: auto !important; position: relative !important; z-index: 50 !important;">
                 <i class="fa-solid fa-magnifying-glass"></i>
                 <span id="t2jSearchBtnText">Знайти</span>
               </button>
@@ -445,7 +444,7 @@
               <p class="text-xs text-slate-400 mt-1">Вставте magnet-лінк або посилання на .torrent файл, і плагін миттєво створить .strm файли для Jellyfin.</p>
             </div>
 
-            <form id="t2jDirectLinkForm" class="space-y-4">
+            <form id="t2jDirectLinkForm" class="space-y-4" onsubmit="event.preventDefault(); window.t2jDoDirectLink && window.t2jDoDirectLink(); return false;">
               <div>
                 <label class="block text-xs font-medium text-slate-300 mb-1.5">Magnet-посилання або HTTP-посилання на .torrent</label>
                 <input type="text" id="directLinkInput" required
@@ -478,8 +477,7 @@
                   <span class="ml-2 font-medium">Одразу згенерувати .strm та оновити медіатеку Jellyfin</span>
                 </label>
 
-                <button type="submit" id="directSubmitBtn"
-                        class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-semibold text-sm shadow-lg shadow-brand-600/30 active:scale-95 transition-all flex items-center space-x-2">
+                <button type="button" id="directSubmitBtn" onclick="window.t2jDoDirectLink && window.t2jDoDirectLink()" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white text-xs font-bold shadow-md shadow-brand-600/30 active:scale-95 transition-all flex items-center space-x-2" style="cursor: pointer !important; pointer-events: auto !important; position: relative !important; z-index: 50 !important;">
                   <i class="fa-solid fa-plus"></i>
                   <span>Додати в медіатеку</span>
                 </button>
@@ -1231,6 +1229,90 @@
         // Initialize
         checkStatus();
     }
+
+    
+    window.t2jDoSearch = async function() {
+        var view = document.getElementById('torr2jellyPage');
+        if (!view) return;
+        if (!view._t2jInitialized) initTorr2Jelly(view);
+
+        var searchInput = view.querySelector('#t2jSearchInput');
+        var searchCategorySelect = view.querySelector('#t2jSearchCategorySelect');
+        var searchSpinner = view.querySelector('#t2jSearchSpinner');
+        var resultsWrapper = view.querySelector('#t2jResultsWrapper');
+        var resultsList = view.querySelector('#t2jResultsList');
+        var searchBtnText = view.querySelector('#t2jSearchBtnText');
+
+        var query = (searchInput ? searchInput.value : '').trim();
+        if (!query) return;
+
+        if (searchSpinner) searchSpinner.classList.remove('hidden');
+        if (resultsWrapper) resultsWrapper.classList.add('hidden');
+        if (resultsList) resultsList.innerHTML = '';
+        if (searchBtnText) searchBtnText.innerText = 'Шукаємо...';
+
+        try {
+            var cat = searchCategorySelect ? searchCategorySelect.value : '';
+            var url = getApiUrl('Plugins/Torr2Jelly/Search?query=' + encodeURIComponent(query) + '&category=' + encodeURIComponent(cat));
+            var res = await fetch(url, { headers: getAuthHeaders() });
+            searchResults = await res.json();
+            renderSearchResults();
+        } catch (err) {
+            if (resultsList) resultsList.innerHTML = '<div class="p-6 text-center text-rose-400 font-medium">Помилка пошуку: ' + err.message + '</div>';
+            if (resultsWrapper) resultsWrapper.classList.remove('hidden');
+        } finally {
+            if (searchSpinner) searchSpinner.classList.add('hidden');
+            if (searchBtnText) searchBtnText.innerText = 'Знайти';
+        }
+    };
+
+    window.t2jDoDirectLink = async function() {
+        var view = document.getElementById('torr2jellyPage');
+        if (!view) return;
+        if (!view._t2jInitialized) initTorr2Jelly(view);
+
+        var directLinkInput = view.querySelector('#directLinkInput');
+        var directTitleInput = view.querySelector('#directTitleInput');
+        var directCategorySelect = view.querySelector('#directCategorySelect');
+        var directSyncCheck = view.querySelector('#directSyncCheck');
+        var directSubmitBtn = view.querySelector('#directSubmitBtn');
+
+        var link = (directLinkInput ? directLinkInput.value : '').trim();
+        if (!link) return;
+
+        directSubmitBtn.disabled = true;
+        directSubmitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Додаємо...</span>';
+
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    Link: link,
+                    Title: directTitleInput ? directTitleInput.value.trim() : null,
+                    Category: directCategorySelect ? directCategorySelect.value : 'Movies',
+                    SyncNow: directSyncCheck ? directSyncCheck.checked : true
+                })
+            });
+
+            if (res.ok) {
+                directSubmitBtn.innerHTML = '<i class="fa-solid fa-check"></i> <span>Успішно додано!</span>';
+                if (directLinkInput) directLinkInput.value = '';
+                if (directTitleInput) directTitleInput.value = '';
+                setTimeout(function() {
+                    directSubmitBtn.disabled = false;
+                    directSubmitBtn.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Додати в медіатеку</span>';
+                }, 2500);
+                checkStatus();
+            } else {
+                directSubmitBtn.disabled = false;
+                directSubmitBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка сервера</span>';
+            }
+        } catch (err) {
+            directSubmitBtn.disabled = false;
+            directSubmitBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка: ' + err.message + '</span>';
+        }
+    };
 
     window.initTorr2Jelly = initTorr2Jelly;
 

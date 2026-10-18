@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/main/logo.png",
     "versions": [
       {
+        "version": "1.0.5.0",
+        "changelog": "Fix search form submission in Jellyfin SPA: prevent native form reload, add direct window.t2jDoSearch handler on button and Enter key.",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/releases/download/v1.0.5/Torr2Jelly_1.0.5.0.zip",
+        "checksum": "ec7c20a8881a1178585b912961882904",
+        "timestamp": "2026-10-18T20:05:00Z"
+      },
+      {
         "version": "1.0.4.0",
         "changelog": "Inline onclick tab and action handlers with direct global state dispatch to guarantee button clicks work in Jellyfin SPA.",
         "targetAbi": "10.9.0.0",

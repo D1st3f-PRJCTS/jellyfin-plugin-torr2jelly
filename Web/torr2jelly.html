@@ -296,6 +296,11 @@
 
 </style>
 
+<!-- Torr2Jelly Self-Contained Glassmorphic UI -->
+
+
+
+
 <!-- Torr2Jelly Rich Glassmorphic UI matching original app -->
 
 
@@ -671,10 +676,11 @@
   </div>
 </div>
 
+" style="display:none;" onload="window.initTorr2Jelly &amp;&amp; window.initTorr2Jelly()" onerror="window.initTorr2Jelly &amp;&amp; window.initTorr2Jelly()" />
+
 <img src="data:image/svg+xml;utf8,<svg/>" style="display:none;" onload="window.initTorr2Jelly &amp;&amp; window.initTorr2Jelly()" onerror="window.initTorr2Jelly &amp;&amp; window.initTorr2Jelly()" />
 
 <script type="text/javascript">
-
 (function () {
     'use strict';
 
@@ -683,8 +689,6 @@
         if (!view) return;
         if (view._t2jInitialized) return;
         view._t2jInitialized = true;
-
-        
         // State
         let currentTab = 'search';
         let searchResults = [];
@@ -1245,13 +1249,10 @@
         checkStatus();
     }
 
-    }
-
     window.initTorr2Jelly = initTorr2Jelly;
 
-    // Trigger on Jellyfin navigation events
     function tryInit() {
-        const page = document.getElementById('torr2jellyPage');
+        var page = document.getElementById('torr2jellyPage');
         if (page) {
             page.addEventListener('pageshow', function () { initTorr2Jelly(page); });
             page.addEventListener('viewshow', function () { initTorr2Jelly(page); });
@@ -1259,18 +1260,19 @@
         }
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', tryInit);
-    } else {
-        tryInit();
-    }
-
-    document.addEventListener('viewshow', function (e) {
-        if (e.target && (e.target.id === 'torr2jellyPage' || (e.target.querySelector && e.target.querySelector('#torr2jellyPage')))) {
-            const p = e.target.id === 'torr2jellyPage' ? e.target : e.target.querySelector('#torr2jellyPage');
-            initTorr2Jelly(p);
+    if (typeof document !== 'undefined') {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', tryInit);
+        } else {
+            tryInit();
         }
-    });
-})();
 
+        document.addEventListener('viewshow', function (e) {
+            if (e.target && (e.target.id === 'torr2jellyPage' || (e.target.querySelector && e.target.querySelector('#torr2jellyPage')))) {
+                var p = e.target.id === 'torr2jellyPage' ? e.target : e.target.querySelector('#torr2jellyPage');
+                initTorr2Jelly(p);
+            }
+        });
+    }
+})();
 </script>

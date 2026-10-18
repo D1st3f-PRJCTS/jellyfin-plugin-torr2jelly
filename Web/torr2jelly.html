@@ -293,6 +293,136 @@
     border-color: rgba(245, 158, 11, 0.35) !important;
 }
 
+
+/* Enhanced CSS for Torr2Jelly Modern UI & Glassmorphism */
+.torr2jelly-root .bg-gradient-to-r.from-brand-600.to-indigo-600,
+#torr2jellyPage .bg-gradient-to-r.from-brand-600.to-indigo-600 {
+    background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important;
+}
+.torr2jelly-root .bg-gradient-to-tr.from-brand-600.to-indigo-500 {
+    background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%) !important;
+}
+.torr2jelly-root .bg-gradient-to-r.from-amber-500.to-orange-600,
+#torr2jellyPage .bg-gradient-to-r.from-amber-500.to-orange-600 {
+    background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%) !important;
+}
+.torr2jelly-root .bg-gradient-to-r.from-amber-500.to-yellow-600,
+#torr2jellyPage .bg-gradient-to-r.from-amber-500.to-yellow-600 {
+    background: linear-gradient(135deg, #f59e0b 0%, #ca8a04 100%) !important;
+}
+.torr2jelly-root .bg-gradient-to-r.from-amber-500\/20.to-yellow-500\/20 {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(234, 179, 8, 0.2) 100%) !important;
+}
+
+/* Gradient text */
+.torr2jelly-root .bg-clip-text {
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+}
+.torr2jelly-root .text-transparent {
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
+}
+.torr2jelly-root .bg-gradient-to-r.from-white.via-slate-200.to-slate-400 {
+    background-image: linear-gradient(to right, #ffffff, #e2e8f0, #94a3b8) !important;
+}
+
+/* Line clamping for release titles */
+.torr2jelly-root .line-clamp-1 {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 1 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    word-break: break-word !important;
+}
+.torr2jelly-root .line-clamp-2 {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    word-break: break-word !important;
+}
+
+/* Modern styled checkboxes */
+#torr2jellyPage input[type=checkbox] {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    width: 18px !important;
+    height: 18px !important;
+    border: 1.5px solid #475569 !important;
+    border-radius: 5px !important;
+    background: #0b1120 !important;
+    cursor: pointer !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    vertical-align: middle !important;
+    position: relative !important;
+    transition: all 0.2s ease !important;
+    flex-shrink: 0 !important;
+}
+#torr2jellyPage input[type=checkbox]:checked {
+    background: #7c3aed !important;
+    border-color: #7c3aed !important;
+}
+#torr2jellyPage input[type=checkbox]:checked::after {
+    content: '' !important;
+    display: block !important;
+    width: 5px !important;
+    height: 9px !important;
+    border: solid white !important;
+    border-width: 0 2px 2px 0 !important;
+    transform: rotate(45deg) translate(-1px, -1px) !important;
+}
+#torr2jellyPage input[type=checkbox]:focus {
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3) !important;
+}
+
+/* Number inputs styling */
+#torr2jellyPage input[type=number] {
+    background-color: #0b1120 !important;
+    color: #f8fafc !important;
+    border: 1px solid #1e293b !important;
+    border-radius: 10px !important;
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+    outline: none !important;
+}
+#torr2jellyPage input[type=number]:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
+}
+
+/* Result rows hover and transitions */
+#torr2jellyPage .t2j-result-row {
+    background: rgba(15, 23, 42, 0.5) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+    padding: 12px 16px !important;
+    margin-bottom: 8px !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+#torr2jellyPage .t2j-result-row:hover {
+    background: rgba(30, 41, 59, 0.75) !important;
+    border-color: rgba(124, 58, 237, 0.4) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.5) !important;
+}
+#torr2jellyPage .t2j-result-row.is-gold {
+    background: rgba(245, 158, 11, 0.04) !important;
+    border-color: rgba(245, 158, 11, 0.25) !important;
+}
+#torr2jellyPage .t2j-result-row.is-gold:hover {
+    background: rgba(245, 158, 11, 0.09) !important;
+    border-color: rgba(245, 158, 11, 0.45) !important;
+}
+
+/* Dropdown styling for result rows */
+#torr2jellyPage .t2j-row-cat-select {
+    min-width: 110px !important;
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+}
 </style>
 
 <div class="content-primary">
@@ -307,7 +437,7 @@
             <div>
               <div class="flex items-center space-x-2">
                 <h1 class="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">Torr2Jelly</h1>
-                <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30 font-semibold">Plugin v1.0.1</span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30 font-semibold">Plugin v1.0.9</span>
               </div>
               <p class="text-[11px] text-slate-400" id="t2jSubtitleText">Prowlarr ➔ TorrServer ➔ Jellyfin STRM</p>
             </div>
@@ -502,7 +632,7 @@
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span id="dashDaemonEngine">TorrServer Matrix</span>
               </div>
-              <p class="text-[11px] text-slate-500 mt-0.5">Вбудований керований процес</p>
+              <p class="text-[11px] text-slate-500 mt-0.5" id="dashDaemonEngineSub">Зовнішній сервер (VPN)</p>
             </div>
 
             <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
@@ -746,7 +876,9 @@
                 var mode = data.Mode || data.mode || 'External';
                 if (daemonBadge) daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
                 if (daemonBadgeText) daemonBadgeText.innerText = 'TorrServer Online (' + (mode === 'External' ? 'Зовнішній' : daemonVer) + ')';
-                if (dashDaemonEngine) dashDaemonEngine.innerText = mode === 'External' ? 'Зовнішній TorrServer' : ('Вбудований ' + daemonVer);
+                var dashDaemonEngineSub = page.querySelector('#dashDaemonEngineSub');
+                if (dashDaemonEngine) dashDaemonEngine.innerText = mode === 'External' ? 'TorrServer (Зовнішній)' : ('TorrServer ' + daemonVer);
+                if (dashDaemonEngineSub) dashDaemonEngineSub.innerText = mode === 'External' ? (data.StatusMessage || 'Підключено через VPN') : 'Вбудований процес';
                 if (dashCacheSize) dashCacheSize.innerText = mode === 'External' ? (data.EffectiveUrl || 'http://torrserver:8090') : ('Порт ' + daemonPort);
                 if (activeTorrentsBadge) activeTorrentsBadge.innerText = activeCount;
                 if (dashTorrentsCount) dashTorrentsCount.innerText = activeCount;

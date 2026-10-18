@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.Torr2Jelly.Configuration;
@@ -30,6 +31,7 @@ public class StrmEngine
 {
     private readonly ILogger<StrmEngine> _logger;
     private readonly ILibraryManager _libraryManager;
+    private readonly ILibraryMonitor _libraryMonitor;
     private readonly IApplicationPaths _appPaths;
     private readonly TorrServerDaemonManager _daemonManager;
     private readonly HttpClient _httpClient;
@@ -37,16 +39,39 @@ public class StrmEngine
     public StrmEngine(
         ILogger<StrmEngine> logger,
         ILibraryManager libraryManager,
+        ILibraryMonitor libraryMonitor,
         IApplicationPaths appPaths,
         TorrServerDaemonManager daemonManager,
         IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
         _libraryManager = libraryManager;
+        _libraryMonitor = libraryMonitor;
         _appPaths = appPaths;
         _daemonManager = daemonManager;
         _httpClient = httpClientFactory.CreateClient("StrmHttpClient");
         _httpClient.Timeout = TimeSpan.FromSeconds(15);
+    }
+
+    public static string FormatTemplate(string template, Dictionary<string, string> tokens)
+    {
+        if (string.IsNullOrWhiteSpace(template))
+        {
+            return string.Empty;
+        }
+
+        var result = template;
+        foreach (var (key, value) in tokens)
+        {
+            result = result.Replace("{" + key + "}", value, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Clean up empty parentheses or brackets if a token was empty (e.g. "Title ()" -> "Title")
+        result = Regex.Replace(result, @"\(\s*\)", "").Trim();
+        result = Regex.Replace(result, @"\[\s*\]", "").Trim();
+        result = Regex.Replace(result, @"\s{2,}", " ").Trim();
+
+        return result;
     }
 
     public string ResolveMediaRoot(string? targetFolder = null)
@@ -107,14 +132,10 @@ public class StrmEngine
             var rawTitle = !string.IsNullOrWhiteSpace(customTitle) ? customTitle : torrent.Title;
             var (cleanTitle, extractedYear) = TitleCleaner.CleanTitleAndExtractYear(rawTitle);
 
-            // Determine category
+            // Determine initial category
             var chosenCat = config.Categories.FirstOrDefault(c => c.Name.Equals(category, StringComparison.OrdinalIgnoreCase))
                 ?? config.Categories.FirstOrDefault(c => c.IsDefault)
                 ?? new CategoryMapping("Movies", "movies", "movie", new List<int>());
-
-            result.Category = chosenCat.Name;
-            var categoryFolder = ResolveMediaRoot(chosenCat.Folder);
-            Directory.CreateDirectory(categoryFolder);
 
             var files = torrent.FileStats ?? new List<TorrTorrentFile>();
             var videoFiles = files.Where(f => EpisodeMatcher.IsVideoFile(f.Path)).ToList();
@@ -130,20 +151,57 @@ public class StrmEngine
             }
 
             result.VideoFilesCount = videoFiles.Count;
-            var isShow = chosenCat.Type.Equals("show", StringComparison.OrdinalIgnoreCase) || videoFiles.Count > 1;
+
+            // Detect if this is a TV series release
+            var isDetectedShow = EpisodeMatcher.IsShowRelease(rawTitle, videoFiles.Select(f => f.Path)) || videoFiles.Count > 1;
+            var isShow = chosenCat.Type.Equals("show", StringComparison.OrdinalIgnoreCase) || isDetectedShow;
+
+            // Auto-route series to Show category if it was accidentally targeted to Movies
+            if (isShow && chosenCat.Type.Equals("movie", StringComparison.OrdinalIgnoreCase))
+            {
+                var showCat = config.Categories.FirstOrDefault(c => c.Type.Equals("show", StringComparison.OrdinalIgnoreCase))
+                    ?? new CategoryMapping("Shows", "shows", "show", new List<int>());
+
+                _logger.LogInformation("Torrent '{Title}' detected as a TV series. Auto-routing from '{OldCategory}' to '{NewCategory}'", rawTitle, chosenCat.Name, showCat.Name);
+                chosenCat = showCat;
+            }
+
+            result.Category = chosenCat.Name;
+            var categoryFolder = ResolveMediaRoot(chosenCat.Folder);
+            Directory.CreateDirectory(categoryFolder);
 
             if (!isShow)
             {
                 // Single movie
-                var folderName = TitleCleaner.SanitizeFilename(TitleCleaner.FormatFolderTitle(cleanTitle, extractedYear));
+                var folderTemplate = !string.IsNullOrWhiteSpace(config.MovieFolderTemplate) ? config.MovieFolderTemplate : "{Title} ({Year})";
+                var fileTemplate = !string.IsNullOrWhiteSpace(config.MovieFileTemplate) ? config.MovieFileTemplate : "{Title} ({Year}).strm";
+
+                var tokens = new Dictionary<string, string>
+                {
+                    ["Title"] = cleanTitle,
+                    ["Year"] = extractedYear.HasValue ? extractedYear.Value.ToString() : string.Empty,
+                    ["RawTitle"] = rawTitle
+                };
+
+                var folderName = TitleCleaner.SanitizeFilename(FormatTemplate(folderTemplate, tokens));
+                if (string.IsNullOrWhiteSpace(folderName))
+                {
+                    folderName = TitleCleaner.SanitizeFilename(TitleCleaner.FormatFolderTitle(cleanTitle, extractedYear));
+                }
+
                 var movieDir = Path.Combine(categoryFolder, folderName);
                 Directory.CreateDirectory(movieDir);
                 result.FolderPath = movieDir;
 
-                var mainFile = videoFiles.OrderByDescending(f => f.Length).First();
-                var strmName = $"{folderName}.strm";
+                var fileName = FormatTemplate(fileTemplate, tokens);
+                if (!fileName.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
+                {
+                    fileName += ".strm";
+                }
+                var strmName = TitleCleaner.SanitizeFilename(fileName);
                 var strmPath = Path.Combine(movieDir, strmName);
 
+                var mainFile = videoFiles.OrderByDescending(f => f.Length).First();
                 var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream?link={torrent.Hash}&index={mainFile.Id}&play\n";
                 await File.WriteAllTextAsync(strmPath, streamUrl, Encoding.UTF8, cancellationToken);
                 result.CreatedStrmFiles.Add(strmPath);
@@ -159,11 +217,30 @@ public class StrmEngine
                 {
                     await DownloadPosterAsync(movieDir, posterUrl, cancellationToken);
                 }
+
+                // Fast targeted scan notification
+                NotifyPathChanged(movieDir);
             }
             else
             {
                 // Multi-episode series
-                var seriesFolder = TitleCleaner.SanitizeFilename(TitleCleaner.FormatFolderTitle(cleanTitle, extractedYear));
+                var showFolderTemplate = !string.IsNullOrWhiteSpace(config.ShowFolderTemplate) ? config.ShowFolderTemplate : "{Title} ({Year})";
+                var seasonFolderTemplate = !string.IsNullOrWhiteSpace(config.ShowSeasonFolderTemplate) ? config.ShowSeasonFolderTemplate : "Season {Season:00}";
+                var epFileTemplate = !string.IsNullOrWhiteSpace(config.ShowEpisodeFileTemplate) ? config.ShowEpisodeFileTemplate : "{Title} - {EpisodeTag}.strm";
+
+                var showTokens = new Dictionary<string, string>
+                {
+                    ["Title"] = cleanTitle,
+                    ["Year"] = extractedYear.HasValue ? extractedYear.Value.ToString() : string.Empty,
+                    ["RawTitle"] = rawTitle
+                };
+
+                var seriesFolder = TitleCleaner.SanitizeFilename(FormatTemplate(showFolderTemplate, showTokens));
+                if (string.IsNullOrWhiteSpace(seriesFolder))
+                {
+                    seriesFolder = TitleCleaner.SanitizeFilename(TitleCleaner.FormatFolderTitle(cleanTitle, extractedYear));
+                }
+
                 var seriesDir = Path.Combine(categoryFolder, seriesFolder);
                 Directory.CreateDirectory(seriesDir);
                 result.FolderPath = seriesDir;
@@ -172,11 +249,37 @@ public class StrmEngine
                 foreach (var videoFile in videoFiles.OrderBy(f => f.Path))
                 {
                     var epInfo = EpisodeMatcher.ParseEpisodeInfo(videoFile.Path, episodeIndex++);
-                    var seasonDir = Path.Combine(seriesDir, epInfo.FormatSeasonFolder());
+                    var seasonTokens = new Dictionary<string, string>(showTokens)
+                    {
+                        ["Season"] = epInfo.SeasonNumber.ToString(),
+                        ["Season:00"] = epInfo.SeasonNumber.ToString("D2"),
+                        ["SeasonFolder"] = epInfo.FormatSeasonFolder()
+                    };
+
+                    var seasonFolderName = TitleCleaner.SanitizeFilename(FormatTemplate(seasonFolderTemplate, seasonTokens));
+                    if (string.IsNullOrWhiteSpace(seasonFolderName))
+                    {
+                        seasonFolderName = epInfo.FormatSeasonFolder();
+                    }
+
+                    var seasonDir = Path.Combine(seriesDir, seasonFolderName);
                     Directory.CreateDirectory(seasonDir);
 
                     var epTag = epInfo.FormatEpisodeTag();
-                    var strmFileName = TitleCleaner.SanitizeFilename($"{cleanTitle} - {epTag}.strm");
+                    var epTokens = new Dictionary<string, string>(seasonTokens)
+                    {
+                        ["Episode"] = epInfo.EpisodeNumber.ToString(),
+                        ["Episode:00"] = epInfo.EpisodeNumber.ToString("D2"),
+                        ["EpisodeTag"] = epTag
+                    };
+
+                    var epFileName = FormatTemplate(epFileTemplate, epTokens);
+                    if (!epFileName.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
+                    {
+                        epFileName += ".strm";
+                    }
+
+                    var strmFileName = TitleCleaner.SanitizeFilename(epFileName);
                     var strmPath = Path.Combine(seasonDir, strmFileName);
 
                     var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream?link={torrent.Hash}&index={videoFile.Id}&play\n";
@@ -195,10 +298,10 @@ public class StrmEngine
                 {
                     await DownloadPosterAsync(seriesDir, posterUrl, cancellationToken);
                 }
-            }
 
-            // Trigger targeted library scan in Jellyfin
-            TriggerLibraryScan();
+                // Fast targeted scan notification
+                NotifyPathChanged(seriesDir);
+            }
 
             result.Success = true;
             _logger.LogInformation("Successfully generated {Count} .strm files for '{Title}' in {Dir}", result.CreatedStrmFiles.Count, cleanTitle, result.FolderPath);
@@ -219,9 +322,19 @@ public class StrmEngine
         {
             if (Directory.Exists(folderPath))
             {
+                var parent = Path.GetDirectoryName(folderPath);
                 Directory.Delete(folderPath, recursive: true);
                 _logger.LogInformation("Deleted torrent folder: {Path}", folderPath);
-                TriggerLibraryScan();
+
+                if (!string.IsNullOrWhiteSpace(parent) && Directory.Exists(parent))
+                {
+                    NotifyPathChanged(parent);
+                }
+                else
+                {
+                    TriggerLibraryScan();
+                }
+
                 return true;
             }
         }
@@ -231,6 +344,26 @@ public class StrmEngine
         }
 
         return false;
+    }
+
+    public void NotifyPathChanged(string folderPath)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(folderPath))
+            {
+                _libraryMonitor.ReportFileSystemChangeBeginning(folderPath);
+                _libraryMonitor.ReportFileSystemChangeComplete(folderPath, refreshPath: true);
+                _logger.LogInformation("Targeted library change reported to Jellyfin LibraryMonitor for path: {Path}", folderPath);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to report targeted filesystem change for {Path}, falling back to full library scan", folderPath);
+        }
+
+        TriggerLibraryScan();
     }
 
     public void TriggerLibraryScan()

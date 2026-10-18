@@ -68,11 +68,43 @@ public class Torr2JellyApiController : ControllerBase
         return Ok(status);
     }
 
+    [HttpGet("Libraries")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<List<ServerLibraryDto>> GetLibraries()
+    {
+        var virtualFolders = _libraryManager.GetVirtualFolders();
+        var result = virtualFolders.Select(vf =>
+        {
+            var collType = vf.CollectionType?.ToString() ?? string.Empty;
+            var isShow = collType.Equals("tvshows", StringComparison.OrdinalIgnoreCase) ||
+                         collType.Equals("series", StringComparison.OrdinalIgnoreCase);
+            return new ServerLibraryDto
+            {
+                Name = vf.Name,
+                CollectionType = collType,
+                Type = isShow ? "show" : "movie",
+                Locations = vf.Locations.ToList(),
+                PrimaryLocation = vf.Locations.FirstOrDefault() ?? string.Empty
+            };
+        }).ToList();
+
+        return Ok(result);
+    }
+
+    [HttpGet("Indexers")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<IndexerStatusDto>>> GetIndexers(CancellationToken cancellationToken)
+    {
+        var indexers = await _searchService.GetAvailableIndexersAsync(cancellationToken);
+        return Ok(indexers);
+    }
+
     [HttpGet("Search")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult<List<TorrentSearchResult>>> Search(
         [FromQuery] string query,
         [FromQuery] string? category = null,
+        [FromQuery] bool? onlyGold = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -80,7 +112,7 @@ public class Torr2JellyApiController : ControllerBase
             return Ok(new List<TorrentSearchResult>());
         }
 
-        var results = await _searchService.SearchAsync(query, category, isUserAdmin: true, cancellationToken);
+        var results = await _searchService.SearchAsync(query, category, onlyGold, isUserAdmin: true, cancellationToken);
         return Ok(results);
     }
 
@@ -145,6 +177,52 @@ public class Torr2JellyApiController : ControllerBase
         }
     }
 
+    [HttpPost("Torrents/{hash}/Recategorize")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<StrmSyncResult>> RecategorizeTorrent(
+        [FromRoute] string hash,
+        [FromBody] RecategorizeTorrentRequestDto req,
+        CancellationToken cancellationToken)
+    {
+        var torrent = await _torrClient.GetTorrentAsync(hash, cancellationToken);
+        if (torrent == null)
+        {
+            return NotFound(new { error = "Torrent not found in TorrServer" });
+        }
+
+        // Delete existing .strm folders for this hash
+        var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        foreach (var cat in config.Categories)
+        {
+            var catFolder = _strmEngine.ResolveMediaRoot(cat.Folder);
+            if (Directory.Exists(catFolder))
+            {
+                foreach (var subDir in Directory.GetDirectories(catFolder))
+                {
+                    var strms = Directory.GetFiles(subDir, "*.strm", SearchOption.AllDirectories);
+                    if (strms.Any(s =>
+                    {
+                        try { return System.IO.File.ReadAllText(s).Contains(hash, StringComparison.OrdinalIgnoreCase); }
+                        catch { return false; }
+                    }))
+                    {
+                        _strmEngine.DeleteTorrentStrm(subDir);
+                    }
+                }
+            }
+        }
+
+        // Re-sync with new category
+        var syncResult = await _strmEngine.SyncTorrentAsync(
+            torrent: torrent,
+            category: req.Category,
+            customTitle: req.CustomTitle,
+            cancellationToken: cancellationToken);
+
+        return Ok(syncResult);
+    }
+
     [HttpDelete("Torrents/{hash}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult> DeleteTorrent(
@@ -162,7 +240,6 @@ public class Torr2JellyApiController : ControllerBase
                 var catFolder = _strmEngine.ResolveMediaRoot(cat.Folder);
                 if (Directory.Exists(catFolder))
                 {
-                    // Check directories inside category folder for .strm files containing this hash
                     foreach (var subDir in Directory.GetDirectories(catFolder))
                     {
                         var strms = Directory.GetFiles(subDir, "*.strm", SearchOption.AllDirectories);
@@ -254,7 +331,7 @@ public class Torr2JellyApiController : ControllerBase
         return Ok(new { success = true, status = _daemonManager.StatusMessage });
     }
 
-        [HttpGet("search.js")]
+    [HttpGet("search.js")]
     [AllowAnonymous]
     [Produces("application/javascript")]
     public ActionResult GetSearchScript()
@@ -278,5 +355,13 @@ public class Torr2JellyApiController : ControllerBase
     {
         _strmEngine.TriggerLibraryScan();
         return Ok(new { success = true, message = "Library scan triggered." });
+    }
+
+    [HttpPost("Library/ScanTargeted")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult TriggerTargetedScan([FromQuery] string path)
+    {
+        _strmEngine.NotifyPathChanged(path);
+        return Ok(new { success = true, message = $"Targeted scan reported for: {path}" });
     }
 }

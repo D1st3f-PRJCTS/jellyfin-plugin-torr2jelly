@@ -429,6 +429,7 @@
     <div class="torr2jelly-root bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
 
       <!-- Header Navigation Bar -->
+            <!-- Header Navigation Bar -->
       <header class="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           <!-- Logo & Brand -->
@@ -437,7 +438,7 @@
             <div>
               <div class="flex items-center space-x-2">
                 <h1 class="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">Torr2Jelly</h1>
-                <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30 font-semibold">Plugin v1.0.9</span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30 font-semibold">Plugin v1.0.10</span>
               </div>
               <p class="text-[11px] text-slate-400" id="t2jSubtitleText">Prowlarr ➔ TorrServer ➔ Jellyfin STRM</p>
             </div>
@@ -449,22 +450,28 @@
             <nav class="flex items-center space-x-1 bg-slate-950/70 p-1 rounded-xl border border-slate-800/80 shadow-inner">
               <button type="button" class="t2j-nav-btn active px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="search" onclick="window.t2jSwitchTab && window.t2jSwitchTab('search')">
                 <i class="fa-solid fa-magnifying-glass text-[11px]"></i>
-                <span id="tabSearchText">Пошук</span>
+                <span id="tabSearchText">Search</span>
               </button>
               <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="magnet" onclick="window.t2jSwitchTab && window.t2jSwitchTab('magnet')">
                 <i class="fa-solid fa-magnet text-[11px]"></i>
-                <span id="tabMagnetText">Магнет / Лінк</span>
+                <span id="tabMagnetText">Magnet / Link</span>
               </button>
               <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="dashboard" onclick="window.t2jSwitchTab && window.t2jSwitchTab('dashboard')">
                 <i class="fa-solid fa-layer-group text-[11px]"></i>
-                <span id="tabTorrentsText">Стріми</span>
+                <span id="tabTorrentsText">Streams</span>
                 <span id="activeTorrentsBadge" class="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-[10px] font-bold">0</span>
               </button>
               <button type="button" class="t2j-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5" data-tab="settings" onclick="window.t2jSwitchTab && window.t2jSwitchTab('settings')">
                 <i class="fa-solid fa-gear text-[11px]"></i>
-                <span id="tabSettingsText">Налаштування</span>
+                <span id="tabSettingsText">Settings</span>
               </button>
             </nav>
+
+            <!-- Language Switcher -->
+            <button type="button" id="t2jLangSwitchBtn" onclick="window.t2jToggleLanguage && window.t2jToggleLanguage()" title="Switch Language / Змінити мову" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-all">
+              <span id="t2jLangIcon">🌐</span>
+              <span id="t2jLangText">EN</span>
+            </button>
 
             <!-- Daemon Status Badge -->
             <div id="t2jDaemonBadge" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
@@ -475,7 +482,7 @@
             <!-- Sync Button -->
             <button id="t2jSyncNowBtn" onclick="window.t2jSyncNow && window.t2jSyncNow()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-md shadow-brand-600/25 active:scale-95 transition-all">
               <i class="fa-solid fa-rotate text-xs"></i>
-              <span id="t2jSyncText">Синхронізація</span>
+              <span id="t2jSyncText">Fast Refresh</span>
             </button>
           </div>
         </div>
@@ -490,190 +497,193 @@
             <div class="mb-4">
               <h2 class="text-lg font-bold flex items-center space-x-2 text-white">
                 <i class="fa-solid fa-magnifying-glass text-amber-400"></i>
-                <span id="t2jSearchTitle">Пошук фільмів та серіалів на трекерах</span>
+                <span id="t2jSearchTitle">Search Movies and Series on Trackers</span>
               </h2>
-              <p class="text-xs text-slate-400 mt-1" id="t2jSearchDesc">Шукає через підключені індексатори Prowlarr. Клік на назву відкриває сторінку роздачі на трекері.</p>
+              <p class="text-xs text-slate-400 mt-1" id="t2jSearchDesc">Searches via connected Prowlarr indexers. Click on a title to view the torrent details.</p>
             </div>
 
             <form id="t2jSearchForm" class="flex flex-col sm:flex-row gap-3" onsubmit="event.preventDefault(); window.t2jDoSearch && window.t2jDoSearch(); return false;">
               <div class="relative flex-1">
                 <i class="fa-solid fa-search absolute left-4 top-3.5 text-sm text-slate-400"></i>
                 <input type="text" id="t2jSearchInput" required
-                       placeholder="Введіть назву фільму або серіалу (наприклад: Dune, Inception, Дім Дракона)..."
+                       placeholder="Enter movie or series title (e.g. Dune, House of the Dragon, Inception)..."
                        class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl pl-11 pr-10 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all font-medium">
                 <button type="button" id="t2jClearSearchBtn" class="absolute right-3.5 top-3.5 text-slate-400 hover:text-white transition-colors hidden">
                   <i class="fa-solid fa-circle-xmark text-sm"></i>
                 </button>
               </div>
 
-              <!-- Category selector -->
+              <!-- Category selector (populated dynamically from server libraries) -->
               <select id="t2jSearchCategorySelect" class="bg-slate-900 border border-slate-700 hover:border-slate-600 rounded-xl px-4 py-3 text-xs text-slate-200 focus:outline-none focus:border-brand-500 cursor-pointer shadow-sm">
-                <option value="">Усі категорії</option>
-                <option value="Movies" selected>Фільми (Movies)</option>
-                <option value="Shows">Серіали (Shows)</option>
-                <option value="Cartoons">Мультфільми</option>
-                <option value="Anime">Аніме</option>
+                <option value="">All Categories</option>
               </select>
+
+              <!-- Gold Only Quick Filter -->
+              <label class="flex items-center space-x-2 px-3.5 py-2.5 bg-slate-900 border border-slate-700 hover:border-amber-500/50 rounded-xl cursor-pointer text-xs text-slate-300 select-none transition-all">
+                <input type="checkbox" id="t2jSearchGoldOnlyCheck" class="rounded text-amber-500 focus:ring-amber-500 bg-slate-950 border-slate-700 w-4 h-4">
+                <span class="flex items-center space-x-1 font-semibold">
+                  <span class="text-amber-400">⭐</span>
+                  <span id="t2jSearchGoldOnlyLabel">Gold Only</span>
+                </span>
+              </label>
 
               <button type="button" id="t2jSubmitSearchBtn" onclick="window.t2jDoSearch && window.t2jDoSearch()" class="px-8 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-semibold text-sm shadow-lg shadow-orange-500/25 active:scale-95 transition-all flex items-center justify-center space-x-2" style="cursor: pointer !important; pointer-events: auto !important; position: relative !important; z-index: 50 !important;">
                 <i class="fa-solid fa-magnifying-glass"></i>
-                <span id="t2jSearchBtnText">Знайти</span>
+                <span id="t2jSearchBtnText">Search</span>
               </button>
             </form>
 
-            <!-- Filters & Sorting bar -->
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4 pt-4 border-t border-slate-800 text-xs">
-              <div class="flex items-center space-x-3 text-slate-400">
-                <span class="font-medium text-[11px]">Фільтр:</span>
-                <button type="button" id="filterAllBtn" onclick="window.t2jFilter && window.t2jFilter('all')" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-slate-800 border-slate-600 text-white font-bold">Усі роздачі</button>
-                <button type="button" id="filterGoldBtn" onclick="window.t2jFilter && window.t2jFilter('gold')" class="px-2.5 py-1 rounded-lg border text-xs transition-all border-slate-800 hover:bg-slate-800/60 text-amber-400/80 flex items-center space-x-1.5">
-                  <span>⚡ Тільки Золоті (Freeleech)</span>
-                  <span id="goldCountBadge" class="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold">0</span>
-                </button>
+            <div id="t2jSearchSpinner" class="hidden text-center py-12">
+              <i class="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500"></i>
+              <p class="text-xs text-slate-400 mt-2" id="t2jSearchingText">Searching indexers...</p>
+            </div>
+          </div>
+
+          <!-- Results wrapper -->
+          <div id="t2jResultsWrapper" class="glass rounded-2xl p-6 shadow-2xl relative space-y-4 hidden">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+              <div class="flex items-center space-x-3">
+                <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                  <span id="t2jResultsCount">0</span>
+                  <span id="t2jResultsFoundText">releases found</span>
+                </h3>
+                <span class="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center space-x-1 font-medium">
+                  <span>⭐</span>
+                  <span id="goldCountBadge">0</span>
+                  <span id="goldBadgeText">Gold (Freeleech)</span>
+                </span>
               </div>
 
-              <div class="flex items-center space-x-2 text-slate-400">
-                <span class="text-[11px] font-medium">Сортування:</span>
-                <select id="t2jSortSelect" onchange="window.t2jSort && window.t2jSort(this.value)" class="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500 cursor-pointer shadow-sm">
-                  <option value="priority">⚡ Пріоритет (Золоті спочатку)</option>
-                  <option value="seeders">👥 Сідери (більше ↓)</option>
-                  <option value="size_desc">💾 Розмір (більші ↓)</option>
-                  <option value="size_asc">💾 Розмір (менші ↑)</option>
+              <!-- Filter & Sort controls -->
+              <div class="flex items-center space-x-2 text-xs">
+                <span class="text-slate-400" id="filterLabelText">Filter:</span>
+                <button type="button" id="filterAllBtn" onclick="window.t2jFilter && window.t2jFilter('all')" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-slate-800 border-slate-600 text-white font-bold">All</button>
+                <button type="button" id="filterGoldBtn" onclick="window.t2jFilter && window.t2jFilter('gold')" class="px-2.5 py-1 rounded-lg border text-xs transition-all border-slate-800 hover:bg-slate-800/60 text-amber-400/80 flex items-center space-x-1.5">
+                  <span>⭐ Gold</span>
+                </button>
+
+                <span class="text-slate-400 ml-2" id="sortLabelText">Sort:</span>
+                <select id="sortSelect" onchange="window.t2jSort && window.t2jSort(this.value)" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-brand-500">
+                  <option value="priority">Priority (Gold first)</option>
+                  <option value="seeders">Seeders</option>
+                  <option value="size_desc">Size (Large first)</option>
+                  <option value="size_asc">Size (Small first)</option>
                 </select>
               </div>
             </div>
-          </div>
 
-          <!-- Loading Spinner -->
-          <div id="t2jSearchSpinner" class="hidden text-center py-12 text-slate-400 space-y-3">
-            <i class="fa-solid fa-spinner fa-spin text-3xl text-amber-400"></i>
-            <p class="text-sm font-medium">Шукаємо на торент-трекерах через Prowlarr...</p>
-          </div>
-
-          <!-- Search Results Container -->
-          <div id="t2jResultsWrapper" class="hidden space-y-3">
-            <div class="flex items-center justify-between text-xs text-slate-400">
-              <div>Знайдено результатів: <span id="t2jResultsCount" class="font-bold text-amber-400">0</span></div>
-              <span>Натисніть «Додати в бібліотеку», щоб згенерувати .strm для перегляду</span>
-            </div>
-
-            <div class="glass rounded-xl overflow-hidden border border-slate-800 divide-y divide-slate-800/80" id="t2jResultsList">
-              <!-- Result cards injected by JS -->
+            <!-- Injected Cards List -->
+            <div id="t2jResultsList" class="space-y-3">
             </div>
           </div>
         </div>
 
         <!-- ==================== TAB 2: MAGNET / DIRECT LINK ==================== -->
         <div id="t2jTabMagnet" class="t2j-tab-content hidden space-y-6">
-          <div class="glass rounded-2xl p-6 shadow-2xl relative space-y-6">
-            <div class="border-b border-slate-800 pb-4">
+          <div class="glass rounded-2xl p-6 shadow-2xl relative space-y-4">
+            <div class="mb-4">
               <h2 class="text-lg font-bold flex items-center space-x-2 text-white">
-                <i class="fa-solid fa-magnet text-brand-400"></i>
-                <span>Додати роздачу за прямим посиланням або Magnet</span>
+                <i class="fa-solid fa-magnet text-emerald-400"></i>
+                <span id="t2jMagnetTitle">Direct Magnet / Torrent URL</span>
               </h2>
-              <p class="text-xs text-slate-400 mt-1">Вставте magnet-лінк або посилання на .torrent файл, і плагін миттєво створить .strm файли для Jellyfin.</p>
+              <p class="text-xs text-slate-400 mt-1" id="t2jMagnetDesc">Add any magnet link or direct .torrent URL. STRM files will be generated instantaneously.</p>
             </div>
 
-            <form id="t2jDirectLinkForm" class="space-y-4" onsubmit="event.preventDefault(); window.t2jDoDirectLink && window.t2jDoDirectLink(); return false;">
+            <form id="directAddForm" class="space-y-4" onsubmit="event.preventDefault(); window.t2jSubmitDirect && window.t2jSubmitDirect(); return false;">
               <div>
-                <label class="block text-xs font-medium text-slate-300 mb-1.5">Magnet-посилання або HTTP-посилання на .torrent</label>
-                <input type="text" id="directLinkInput" required
-                       placeholder="magnet:?xt=urn:btih:... або https://.../file.torrent"
-                       class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 font-mono">
+                <label class="block text-xs font-medium text-slate-300 mb-1.5" id="lblDirectLink">Magnet link or .torrent URL:</label>
+                <input type="text" id="directLinkInput" required placeholder="magnet:?xt=urn:btih:... or https://example.com/file.torrent"
+                       class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white font-mono placeholder-slate-500 focus:outline-none focus:border-brand-500">
               </div>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-xs font-medium text-slate-300 mb-1.5">Назва медіа (для папки та бібліотеки)</label>
-                  <input type="text" id="directTitleInput"
-                         placeholder="Наприклад: Dune: Part Two (2024)"
+                  <label class="block text-xs font-medium text-slate-300 mb-1.5" id="lblDirectTitle">Custom Title (optional):</label>
+                  <input type="text" id="directTitleInput" placeholder="Movie or Series name"
                          class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500">
                 </div>
 
                 <div>
-                  <label class="block text-xs font-medium text-slate-300 mb-1.5">Категорія бібліотеки</label>
-                  <select id="directCategorySelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
-                    <option value="Movies" selected>Фільми (Movies)</option>
-                    <option value="Shows">Серіали (Shows)</option>
-                    <option value="Cartoons">Мультфільми</option>
-                    <option value="Anime">Аніме</option>
+                  <label class="block text-xs font-medium text-slate-300 mb-1.5" id="lblDirectCat">Server Library / Category:</label>
+                  <select id="directCategorySelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 cursor-pointer">
+                    <!-- Populated dynamically -->
                   </select>
                 </div>
               </div>
 
               <div class="flex items-center justify-between pt-2">
-                <label class="inline-flex items-center cursor-pointer text-xs text-slate-300">
+                <label class="flex items-center space-x-2.5 cursor-pointer">
                   <input type="checkbox" id="directSyncCheck" checked class="rounded text-brand-600 focus:ring-brand-500 bg-slate-900 border-slate-700 w-4 h-4">
-                  <span class="ml-2 font-medium">Одразу згенерувати .strm та оновити медіатеку Jellyfin</span>
+                  <span class="text-xs text-slate-300" id="lblDirectSync">Generate .strm immediately and notify Jellyfin</span>
                 </label>
 
-                <button type="button" id="directSubmitBtn" onclick="window.t2jDoDirectLink && window.t2jDoDirectLink()" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white text-xs font-bold shadow-md shadow-brand-600/30 active:scale-95 transition-all flex items-center space-x-2" style="cursor: pointer !important; pointer-events: auto !important; position: relative !important; z-index: 50 !important;">
+                <button type="submit" id="directSubmitBtn" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs shadow-md shadow-emerald-600/30 active:scale-95 transition-all flex items-center space-x-2">
                   <i class="fa-solid fa-plus"></i>
-                  <span>Додати в медіатеку</span>
+                  <span id="btnDirectSubmitText">Add to Library</span>
                 </button>
               </div>
             </form>
           </div>
         </div>
 
-        <!-- ==================== TAB 3: DASHBOARD & ACTIVE TORRENTS ==================== -->
+        <!-- ==================== TAB 3: STREAMS (DASHBOARD) ==================== -->
         <div id="t2jTabDashboard" class="t2j-tab-content hidden space-y-6">
           <!-- 4 Metrics Overview Cards -->
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-              <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Активні торенти</div>
+              <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold" id="dashCardActiveText">Active Torrents</div>
               <div class="text-3xl font-extrabold text-white mt-1" id="dashTorrentsCount">0</div>
               <i class="fa-solid fa-hard-drive absolute right-4 top-4 text-slate-800 text-3xl"></i>
             </div>
 
             <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-              <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Двигун Стрімінгу</div>
+              <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold" id="dashCardEngineText">Streaming Engine</div>
               <div class="text-xl font-bold text-emerald-400 mt-2 flex items-center space-x-2">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span id="dashDaemonEngine">TorrServer Matrix</span>
               </div>
-              <p class="text-[11px] text-slate-500 mt-0.5" id="dashDaemonEngineSub">Зовнішній сервер (VPN)</p>
+              <p class="text-[11px] text-slate-500 mt-0.5" id="dashDaemonEngineSub">External Server</p>
             </div>
 
             <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-              <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold">RAM Кеш потоку</div>
+              <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold" id="dashCardCacheText">RAM Cache</div>
               <div class="text-2xl font-bold text-cyan-400 mt-1" id="dashCacheSize">256 MB</div>
               <p class="text-[11px] text-slate-500 mt-0.5">Preload: 50% | Seek buffer: 95%</p>
             </div>
 
             <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-              <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Медіа директорія</div>
+              <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold" id="dashCardMediaText">Media Directory</div>
               <div class="text-sm font-mono font-bold text-slate-200 mt-2 truncate" id="dashMediaDir">/media</div>
-              <p class="text-[11px] text-slate-500 mt-0.5">Точкове сканування за 150мс</p>
+              <p class="text-[11px] text-slate-500 mt-0.5" id="dashScanSpeedText">Targeted scans in &lt;1s</p>
             </div>
           </div>
 
           <!-- Active Torrents Table -->
           <div class="glass rounded-2xl p-6 shadow-2xl relative space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-2">
               <div>
                 <h3 class="text-base font-bold text-white flex items-center space-x-2">
                   <i class="fa-solid fa-list-check text-cyan-400"></i>
-                  <span>Роздачі в оперативній пам'яті TorrServer</span>
+                  <span id="dashTableTitle">Torrents in TorrServer Memory</span>
                 </h3>
-                <p class="text-xs text-slate-400 mt-0.5">Транслюються на льоту у плеєри Jellyfin за запитом клієнтів (Smart TV, Web, Mobile).</p>
+                <p class="text-xs text-slate-400 mt-0.5" id="dashTableDesc">Streamed on the fly to Jellyfin players. Change category or delete torrents below.</p>
               </div>
 
               <div class="flex items-center space-x-2">
                 <button type="button" id="refreshTorrentsBtn" onclick="window.t2jLoadTorrents && window.t2jLoadTorrents()" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 flex items-center space-x-1.5 transition-all">
                   <i class="fa-solid fa-arrows-rotate text-xs"></i>
-                  <span>Оновити</span>
+                  <span id="btnRefreshText">Refresh</span>
                 </button>
                 <button type="button" id="scanLibraryBtn" onclick="window.t2jScanLibrary && window.t2jScanLibrary()" class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-md shadow-brand-600/30 flex items-center space-x-1.5 transition-all">
                   <i class="fa-solid fa-folder-tree text-xs"></i>
-                  <span>Сканувати медіатеку</span>
+                  <span id="btnScanLibraryText">Scan Library</span>
                 </button>
               </div>
             </div>
 
             <div id="torrentsEmptyNotice" class="text-center py-12 text-slate-400 space-y-2">
               <i class="fa-solid fa-cloud-arrow-down text-3xl text-slate-600"></i>
-              <p class="text-sm">Немає активних роздач. Скористайтеся вкладкою «Пошук», щоб додати фільми чи серіали.</p>
+              <p class="text-sm" id="emptyTorrentsMsg">No active torrents. Use the «Search» or «Magnet» tab to add movies or series.</p>
             </div>
 
             <div class="divide-y divide-slate-800/80" id="torrentsListTable">
@@ -685,62 +695,88 @@
         <!-- ==================== TAB 4: SETTINGS ==================== -->
         <div id="t2jTabSettings" class="t2j-tab-content hidden space-y-6">
           <div class="glass rounded-2xl p-6 shadow-2xl relative space-y-6">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
               <div>
                 <h2 class="text-lg font-bold flex items-center space-x-2 text-white">
                   <i class="fa-solid fa-sliders text-brand-400"></i>
-                  <span>Налаштування плагіна Torr2Jelly</span>
+                  <span id="cfgHeaderTitle">Torr2Jelly Configuration</span>
                 </h2>
-                <p class="text-xs text-slate-400 mt-1">Конфігурація автономного торент-рушія, параметрів кешування та інтеграції з Prowlarr.</p>
+                <p class="text-xs text-slate-400 mt-1" id="cfgHeaderDesc">Configure torrent streaming engine, search indexers, language, and STRM file structures.</p>
               </div>
 
               <button type="button" id="saveSettingsBtn" onclick="window.t2jSaveSettings && window.t2jSaveSettings()"
-                      class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-brand-600/30 active:scale-95 transition-all flex items-center space-x-2">
+                      class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-brand-600/30 active:scale-95 transition-all flex items-center space-x-2 cursor-pointer">
                 <i class="fa-solid fa-floppy-disk"></i>
-                <span id="saveSettingsBtnText">Зберегти налаштування</span>
+                <span id="saveSettingsBtnText">Save Settings</span>
               </button>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              <!-- General & Language Settings -->
+              <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 space-y-4">
+                <div class="flex items-center space-x-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-sm">🌐</div>
+                  <div>
+                    <h3 class="font-bold text-sm text-white" id="cfgGeneralTitle">Language & Media Root</h3>
+                    <p class="text-[11px] text-slate-400" id="cfgGeneralSub">Default language and media storage folder</p>
+                  </div>
+                </div>
+
+                <div class="space-y-3 text-xs">
+                  <div>
+                    <label class="block text-slate-300 font-medium mb-1" id="lblCfgLanguage">Default UI Language:</label>
+                    <select id="cfgLanguageSelect" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-medium cursor-pointer">
+                      <option value="en" selected>English (Default)</option>
+                      <option value="uk">Українська (Ukrainian)</option>
+                    </select>
+                    <p class="text-[10px] text-slate-500 mt-1" id="lblCfgLanguageHint">English is active by default. You can switch to Ukrainian anytime.</p>
+                  </div>
+
+                  <div>
+                    <label class="block text-slate-300 font-medium mb-1" id="lblCfgMediaRoot">Media Root Directory (Media Dir):</label>
+                    <input type="text" id="cfgMediaDirInput" placeholder="/media" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                    <p class="text-[10px] text-slate-500 mt-1" id="lblCfgMediaRootHint">Root path where movies/shows folders reside. Auto-detected from server libraries if empty.</p>
+                  </div>
+                </div>
+              </div>
 
               <!-- TorrServer Settings -->
               <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 space-y-4">
                 <div class="flex items-center space-x-2.5">
                   <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">⚡</div>
                   <div>
-                    <h3 class="font-bold text-sm text-white">TorrServer (Торент-рушій)</h3>
-                    <p class="text-[11px] text-slate-400">Зовнішній сервер (наприклад через VPN) або вбудований процес</p>
+                    <h3 class="font-bold text-sm text-white" id="cfgTorrServerTitle">TorrServer (Streaming Engine)</h3>
+                    <p class="text-[11px] text-slate-400" id="cfgTorrServerSub">External server (e.g. via VPN) or embedded binary process</p>
                   </div>
                 </div>
 
                 <div class="space-y-3 text-xs">
                   <div>
-                    <label class="block text-slate-300 font-medium mb-1">Зовнішня адреса TorrServer (API & стрімінг):</label>
+                    <label class="block text-slate-300 font-medium mb-1" id="lblCfgExternalUrl">External TorrServer URL (API & Streaming):</label>
                     <input type="text" id="cfgExternalUrlInput" placeholder="http://torrserver:8090" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
-                    <p class="text-[10px] text-slate-500 mt-1">Основний URL для зовнішнього TorrServer (наприклад контейнер через VPN).</p>
                   </div>
 
                   <div>
-                    <label class="block text-slate-300 font-medium mb-1">Адреса потоку для .strm (TorrServer Stream URL):</label>
+                    <label class="block text-slate-300 font-medium mb-1" id="lblCfgStreamUrl">TorrServer Stream URL (for .strm files):</label>
                     <input type="text" id="cfgStreamUrlInput" placeholder="http://torrserver:8090" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
-                    <p class="text-[10px] text-slate-500 mt-1">URL, що записується у .strm файли для плеєра Jellyfin.</p>
                   </div>
 
                   <div class="pt-2 border-t border-slate-800/60">
                     <label class="flex items-center space-x-3 cursor-pointer">
                       <input type="checkbox" id="cfgEmbeddedCheck" class="rounded text-brand-600 focus:ring-brand-500 bg-slate-950 border-slate-700 w-4 h-4">
-                      <span class="font-semibold text-white">Використовувати вбудований TorrServer (запуск окремого бінарника)</span>
+                      <span class="font-semibold text-white" id="lblCfgEmbedded">Use Embedded TorrServer Process</span>
                     </label>
                   </div>
 
                   <div class="grid grid-cols-2 gap-3">
                     <div>
-                      <label class="block text-slate-300 font-medium mb-1">Порт вбудованого сервера:</label>
+                      <label class="block text-slate-300 font-medium mb-1" id="lblCfgPort">Port:</label>
                       <input type="number" id="cfgPortInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
                     </div>
 
                     <div>
-                      <label class="block text-slate-300 font-medium mb-1">Розмір RAM кешу (МБ):</label>
+                      <label class="block text-slate-300 font-medium mb-1" id="lblCfgCacheSize">RAM Cache (MB):</label>
                       <input type="number" id="cfgCacheSizeInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
                     </div>
                   </div>
@@ -748,19 +784,19 @@
                   <div class="pt-2">
                     <button type="button" id="restartDaemonBtn" onclick="window.t2jRestartDaemon && window.t2jRestartDaemon()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-all">
                       <i class="fa-solid fa-power-off text-amber-400"></i>
-                      <span>Перевірити / Перезапустити торент-рушій</span>
+                      <span id="btnRestartTorrServerText">Test / Restart TorrServer</span>
                     </button>
                   </div>
                 </div>
               </div>
 
-              <!-- Prowlarr Indexer Settings -->
+              <!-- Prowlarr & Trackers Customization -->
               <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 space-y-4">
                 <div class="flex items-center space-x-2.5">
                   <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm">P</div>
                   <div>
-                    <h3 class="font-bold text-sm text-white">Prowlarr (Пошук трекерів)</h3>
-                    <p class="text-[11px] text-slate-400">Агрегатор торент-індексаторів</p>
+                    <h3 class="font-bold text-sm text-white" id="cfgProwlarrTitle">Prowlarr & Trackers Customization</h3>
+                    <p class="text-[11px] text-slate-400" id="cfgProwlarrSub">Enable/disable individual trackers and gold-only filters</p>
                   </div>
                 </div>
 
@@ -775,23 +811,101 @@
                     <input type="password" id="cfgProwlarrKeyInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
                   </div>
 
-                  <div>
-                    <label class="block text-slate-300 font-medium mb-1">Шлях до кореневої папки медіа (Media Dir):</label>
-                    <input type="text" id="cfgMediaDirInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
-                  </div>
+                  <div class="pt-2 border-t border-slate-800/60 space-y-2">
+                    <label class="flex items-start space-x-3 cursor-pointer">
+                      <input type="checkbox" id="cfgSearchOnlyGoldByDefaultCheck" class="mt-0.5 rounded text-amber-500 focus:ring-amber-500 bg-slate-950 border-slate-700 w-4 h-4">
+                      <div>
+                        <span class="font-semibold text-white flex items-center space-x-1.5">
+                          <span class="text-amber-400">⭐</span>
+                          <span id="lblCfgSearchGoldDefault">Search only Gold (Freeleech) torrents by default</span>
+                        </span>
+                        <p class="text-[11px] text-slate-400 mt-0.5" id="lblCfgSearchGoldDefaultSub">When enabled, search queries automatically filter for Gold/Freeleech releases.</p>
+                      </div>
+                    </label>
 
-                  <div class="pt-2">
                     <label class="flex items-start space-x-3 cursor-pointer">
                       <input type="checkbox" id="cfgOnlyGoldCheck" class="mt-0.5 rounded text-amber-500 focus:ring-amber-500 bg-slate-950 border-slate-700 w-4 h-4">
                       <div>
                         <span class="font-semibold text-white flex items-center space-x-1.5">
                           <span class="text-amber-400">⚡</span>
-                          <span>Лише Золоті роздачі (Freeleech) для звичайних користувачів</span>
+                          <span id="lblCfgOnlyGoldNonAdmin">Only Gold releases for regular non-admin users</span>
                         </span>
-                        <p class="text-[11px] text-slate-400 mt-0.5">Якщо увімкнено, не-адміністратори бачитимуть лише безлімітні торенти.</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5" id="lblCfgOnlyGoldNonAdminSub">Restricts non-admin users from generating torrents with high upload requirements.</p>
                       </div>
                     </label>
                   </div>
+
+                  <!-- Active Trackers List -->
+                  <div class="pt-2 border-t border-slate-800/60">
+                    <label class="block text-slate-300 font-semibold mb-2" id="lblCfgTrackersList">Individual Trackers / Indexers:</label>
+                    <div id="cfgTrackersList" class="space-y-2">
+                      <div class="text-slate-500 text-[11px] italic" id="lblLoadingTrackers">Loading trackers from Prowlarr...</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- STRM File & Folder Structure -->
+              <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 space-y-4">
+                <div class="flex items-center space-x-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold text-sm">📁</div>
+                  <div>
+                    <h3 class="font-bold text-sm text-white" id="cfgStrmStructureTitle">STRM File & Folder Structure</h3>
+                    <p class="text-[11px] text-slate-400" id="cfgStrmStructureSub">Customize file and directory naming templates</p>
+                  </div>
+                </div>
+
+                <div class="space-y-3 text-xs">
+                  <div>
+                    <label class="block text-slate-300 font-medium mb-1" id="lblCfgMovieFolder">Movie Folder Template:</label>
+                    <input type="text" id="cfgMovieFolderTemplateInput" placeholder="{Title} ({Year})" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                  </div>
+
+                  <div>
+                    <label class="block text-slate-300 font-medium mb-1" id="lblCfgMovieFile">Movie File Template (.strm):</label>
+                    <input type="text" id="cfgMovieFileTemplateInput" placeholder="{Title} ({Year}).strm" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                  </div>
+
+                  <div>
+                    <label class="block text-slate-300 font-medium mb-1" id="lblCfgShowFolder">Series Folder Template:</label>
+                    <input type="text" id="cfgShowFolderTemplateInput" placeholder="{Title} ({Year})" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="block text-slate-300 font-medium mb-1" id="lblCfgSeasonFolder">Season Folder:</label>
+                      <input type="text" id="cfgShowSeasonFolderTemplateInput" placeholder="Season {Season:00}" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                    </div>
+                    <div>
+                      <label class="block text-slate-300 font-medium mb-1" id="lblCfgEpisodeFile">Episode File (.strm):</label>
+                      <input type="text" id="cfgShowEpisodeFileTemplateInput" placeholder="{Title} - {EpisodeTag}.strm" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                    </div>
+                  </div>
+
+                  <div class="pt-2 border-t border-slate-800/60">
+                    <div class="text-[11px] text-slate-400 mb-1" id="lblTemplateTokensTitle">Available Tokens:</div>
+                    <div class="flex flex-wrap gap-1 text-[10px] font-mono">
+                      <span class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 border border-slate-700">{Title}</span>
+                      <span class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 border border-slate-700">{Year}</span>
+                      <span class="px-1.5 py-0.5 rounded bg-slate-800 text-emerald-300 border border-slate-700">{Season:00}</span>
+                      <span class="px-1.5 py-0.5 rounded bg-slate-800 text-emerald-300 border border-slate-700">{EpisodeTag}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Server Libraries Card -->
+              <div class="md:col-span-2 bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 space-y-4">
+                <div class="flex items-center space-x-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-sm">📚</div>
+                  <div>
+                    <h3 class="font-bold text-sm text-white" id="cfgServerLibsTitle">Detected Jellyfin Server Libraries</h3>
+                    <p class="text-[11px] text-slate-400" id="cfgServerLibsSub">Libraries queried from your Jellyfin server. Used for category routing and targeted scanning.</p>
+                  </div>
+                </div>
+
+                <div id="cfgServerLibrariesList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                  <div class="text-slate-500 text-xs italic" id="lblLoadingLibs">Loading libraries from server...</div>
                 </div>
               </div>
 
@@ -815,8 +929,304 @@
         activeFilter: 'all',
         currentSort: 'priority',
         torrents: [],
+        libraries: [],
+        indexers: [],
+        config: null,
         refreshInterval: null
     };
+
+    // Bilingual I18N Dictionary
+    var I18N = {
+        en: {
+            search: 'Search',
+            magnet: 'Magnet / Link',
+            streams: 'Streams',
+            settings: 'Settings',
+            fastRefresh: 'Fast Refresh',
+            searchTitle: 'Search Movies and Series on Trackers',
+            searchDesc: 'Searches via connected Prowlarr indexers. Click on a title to view the torrent details.',
+            searchPlaceholder: 'Enter movie or series title (e.g. Dune, House of the Dragon, Inception)...',
+            allCategories: 'All Categories',
+            goldOnly: 'Gold Only',
+            btnSearch: 'Search',
+            searchingIndexers: 'Searching indexers...',
+            releasesFound: 'releases found',
+            goldFreeleech: 'Gold (Freeleech)',
+            filter: 'Filter:',
+            filterAll: 'All',
+            filterGold: '⭐ Gold',
+            sort: 'Sort:',
+            sortPriority: 'Priority (Gold first)',
+            sortSeeders: 'Seeders',
+            sortSizeDesc: 'Size (Large first)',
+            sortSizeAsc: 'Size (Small first)',
+            addToLibrary: 'Add to Library',
+            adding: 'Adding...',
+            addedToLib: '✓ Added to Library',
+            seeds: 'seeds',
+            peers: 'peers',
+            emptySearchMsg: 'Nothing found for the given search criteria.',
+            magnetTitle: 'Direct Magnet / Torrent URL',
+            magnetDesc: 'Add any magnet link or direct .torrent URL. STRM files will be generated instantaneously.',
+            lblDirectLink: 'Magnet link or .torrent URL:',
+            lblDirectTitle: 'Custom Title (optional):',
+            lblDirectCat: 'Server Library / Category:',
+            lblDirectSync: 'Generate .strm immediately and notify Jellyfin',
+            btnDirectSubmit: 'Add to Library',
+            dashActiveTorrents: 'Active Torrents',
+            dashStreamingEngine: 'Streaming Engine',
+            dashRamCache: 'RAM Cache',
+            dashMediaDir: 'Media Directory',
+            dashScanSpeed: 'Targeted scans in <1s',
+            dashTableTitle: 'Torrents in TorrServer Memory',
+            dashTableDesc: 'Streamed on the fly to Jellyfin players. Change category or delete torrents below.',
+            btnRefresh: 'Refresh',
+            btnScanLibrary: 'Scan Library',
+            emptyTorrentsMsg: 'No active torrents. Use the «Search» or «Magnet» tab to add movies or series.',
+            btnDelete: 'Delete',
+            btnRecategorize: 'Move',
+            recategorizing: 'Moving...',
+            cfgTitle: 'Torr2Jelly Configuration',
+            cfgDesc: 'Configure torrent streaming engine, search indexers, language, and STRM file structures.',
+            btnSaveSettings: 'Save Settings',
+            savingSettings: 'Saving...',
+            savedSettings: '✓ Saved!',
+            cfgGeneralTitle: 'Language & Media Root',
+            cfgGeneralSub: 'Default language and media storage folder',
+            lblCfgLanguage: 'Default UI Language:',
+            lblCfgLanguageHint: 'English is active by default. You can switch to Ukrainian anytime.',
+            lblCfgMediaRoot: 'Media Root Directory (Media Dir):',
+            lblCfgMediaRootHint: 'Root path where movies/shows folders reside. Auto-detected from server libraries if empty.',
+            cfgTorrServerTitle: 'TorrServer (Streaming Engine)',
+            cfgTorrServerSub: 'External server (e.g. via VPN) or embedded binary process',
+            lblCfgExternalUrl: 'External TorrServer URL (API & Streaming):',
+            lblCfgStreamUrl: 'TorrServer Stream URL (for .strm files):',
+            lblCfgEmbedded: 'Use Embedded TorrServer Process',
+            lblCfgPort: 'Port:',
+            lblCfgCacheSize: 'RAM Cache (MB):',
+            btnRestartTorrServer: 'Test / Restart TorrServer',
+            restarting: 'Restarting...',
+            cfgProwlarrTitle: 'Prowlarr & Trackers Customization',
+            cfgProwlarrSub: 'Enable/disable individual trackers and gold-only filters',
+            lblCfgSearchGoldDefault: 'Search only Gold (Freeleech) torrents by default',
+            lblCfgSearchGoldDefaultSub: 'When enabled, search queries automatically filter for Gold/Freeleech releases.',
+            lblCfgOnlyGoldNonAdmin: 'Only Gold releases for regular non-admin users',
+            lblCfgOnlyGoldNonAdminSub: 'Restricts non-admin users from generating torrents with high upload requirements.',
+            lblCfgTrackersList: 'Individual Trackers / Indexers:',
+            lblLoadingTrackers: 'Loading trackers from Prowlarr...',
+            cfgStrmStructureTitle: 'STRM File & Folder Structure',
+            cfgStrmStructureSub: 'Customize file and directory naming templates',
+            lblCfgMovieFolder: 'Movie Folder Template:',
+            lblCfgMovieFile: 'Movie File Template (.strm):',
+            lblCfgShowFolder: 'Series Folder Template:',
+            lblCfgSeasonFolder: 'Season Folder:',
+            lblCfgEpisodeFile: 'Episode File (.strm):',
+            lblTemplateTokensTitle: 'Available Tokens:',
+            cfgServerLibsTitle: 'Detected Jellyfin Server Libraries',
+            cfgServerLibsSub: 'Libraries queried from your Jellyfin server. Used for category routing and targeted scanning.',
+            lblLoadingLibs: 'Loading libraries from server...'
+        },
+        uk: {
+            search: 'Пошук',
+            magnet: 'Магнет / Лінк',
+            streams: 'Стріми',
+            settings: 'Налаштування',
+            fastRefresh: 'Швидке оновлення',
+            searchTitle: 'Пошук фільмів та серіалів на трекерах',
+            searchDesc: 'Шукає через підключені індексатори Prowlarr. Клік на назву відкриває сторінку роздачі на трекері.',
+            searchPlaceholder: 'Введіть назву фільму або серіалу (наприклад: Dune, Дім Дракона, Початок)...',
+            allCategories: 'Усі категорії',
+            goldOnly: 'Тільки золоті',
+            btnSearch: 'Знайти',
+            searchingIndexers: 'Шукаємо на трекерах...',
+            releasesFound: 'роздач знайдено',
+            goldFreeleech: 'ЗОЛОТА (Freeleech)',
+            filter: 'Фільтр:',
+            filterAll: 'Всі',
+            filterGold: '⭐ Золоті',
+            sort: 'Сортування:',
+            sortPriority: 'Пріоритет (Золоті перші)',
+            sortSeeders: 'За роздаючими',
+            sortSizeDesc: 'Розмір (спадання)',
+            sortSizeAsc: 'Розмір (зростання)',
+            addToLibrary: 'Додати в бібліотеку',
+            adding: 'Додаємо...',
+            addedToLib: '✓ Додано в бібліотеку',
+            seeds: 'сидів',
+            peers: 'пірів',
+            emptySearchMsg: 'Нічого не знайдено за заданими критеріями.',
+            magnetTitle: 'Прямий магнет / Торент посилання',
+            magnetDesc: 'Додайте будь-який magnet link або прямий URL на .torrent. STRM файли з'являться миттєво.',
+            lblDirectLink: 'Магнет посилання або .torrent URL:',
+            lblDirectTitle: 'Власна назва (необов'язково):',
+            lblDirectCat: 'Бібліотека сервера / Категорія:',
+            lblDirectSync: 'Згенерувати .strm негайно та сповістити Jellyfin',
+            btnDirectSubmit: 'Додати в бібліотеку',
+            dashActiveTorrents: 'Активні торенти',
+            dashStreamingEngine: 'Двигун стрімінгу',
+            dashRamCache: 'RAM Кеш потоку',
+            dashMediaDir: 'Медіа директорія',
+            dashScanSpeed: 'Точкове сканування за <1с',
+            dashTableTitle: 'Роздачі в пам'яті TorrServer',
+            dashTableDesc: 'Транслюються на льоту у плеєри Jellyfin. Змінюйте категорію або видаляйте нижче.',
+            btnRefresh: 'Оновити',
+            btnScanLibrary: 'Сканувати медіатеку',
+            emptyTorrentsMsg: 'Немає активних роздач. Скористайтеся вкладкою «Пошук», щоб додати фільми чи серіали.',
+            btnDelete: 'Видалити',
+            btnRecategorize: 'Перемістити',
+            recategorizing: 'Переміщення...',
+            cfgTitle: 'Налаштування плагіна Torr2Jelly',
+            cfgDesc: 'Конфігурація торент-рушія, трекерів, мови інтерфейсу та структури STRM файлів.',
+            btnSaveSettings: 'Зберегти налаштування',
+            savingSettings: 'Збереження...',
+            savedSettings: '✓ Збережено!',
+            cfgGeneralTitle: 'Мова та коренева папка медіа',
+            cfgGeneralSub: 'Мова за замовчуванням та розташування сховища',
+            lblCfgLanguage: 'Мова інтерфейсу за замовчуванням:',
+            lblCfgLanguageHint: 'Англійська активна за замовчуванням. Ви можете будь-коли перемкнути на українську.',
+            lblCfgMediaRoot: 'Шлях до кореневої папки медіа (Media Dir):',
+            lblCfgMediaRootHint: 'Папка, де розміщені фільми та серіали. Авто-визначається з бібліотек сервера, якщо порожньо.',
+            cfgTorrServerTitle: 'TorrServer (Торент-рушій)',
+            cfgTorrServerSub: 'Зовнішній сервер (наприклад через VPN) або вбудований процес',
+            lblCfgExternalUrl: 'Зовнішня адреса TorrServer (API & стрімінг):',
+            lblCfgStreamUrl: 'Адреса потоку для .strm (Stream URL):',
+            lblCfgEmbedded: 'Використовувати вбудований TorrServer',
+            lblCfgPort: 'Порт:',
+            lblCfgCacheSize: 'Розмір RAM кешу (МБ):',
+            btnRestartTorrServer: 'Перевірити / Перезапустити торент-рушій',
+            restarting: 'Перезапуск...',
+            cfgProwlarrTitle: 'Prowlarr та кастомізація трекерів',
+            cfgProwlarrSub: 'Увімкнення/вимкнення трекерів та фільтри золотих роздач',
+            lblCfgSearchGoldDefault: 'Шукати лише Золоті (Freeleech) торенти за замовчуванням',
+            lblCfgSearchGoldDefaultSub: 'Якщо увімкнено, пошукові запити автоматично фільтрують безлімітні роздачі.',
+            lblCfgOnlyGoldNonAdmin: 'Лише Золоті роздачі для звичайних користувачів',
+            lblCfgOnlyGoldNonAdminSub: 'Обмежує користувачів без прав адміна від завантаження торентів із високими вимогами.',
+            lblCfgTrackersList: 'Окремі трекери / Індексатори:',
+            lblLoadingTrackers: 'Завантаження списку трекерів з Prowlarr...',
+            cfgStrmStructureTitle: 'Структура файлів і папок STRM',
+            cfgStrmStructureSub: 'Налаштування шаблонів назв файлів і каталогів',
+            lblCfgMovieFolder: 'Шаблон папки фільму:',
+            lblCfgMovieFile: 'Шаблон файлу фільму (.strm):',
+            lblCfgShowFolder: 'Шаблон папки серіалу:',
+            lblCfgSeasonFolder: 'Папка сезону:',
+            lblCfgEpisodeFile: 'Файл серії (.strm):',
+            lblTemplateTokensTitle: 'Доступні теги шаблону:',
+            cfgServerLibsTitle: 'Виявлені бібліотеки сервера Jellyfin',
+            cfgServerLibsSub: 'Бібліотеки, отримані з вашого сервера. Використовуються для маршрутизації та точкового сканування.',
+            lblLoadingLibs: 'Завантаження бібліотек сервера...'
+        }
+    };
+
+    function getLang() {
+        return localStorage.getItem('torr2jelly_lang') || (window.t2jState.config && window.t2jState.config.DefaultLanguage) || 'en';
+    }
+    window.t2jGetLang = getLang;
+
+    function setLang(lang) {
+        localStorage.setItem('torr2jelly_lang', lang);
+        applyTranslations(lang);
+    }
+    window.t2jSetLang = setLang;
+
+    function toggleLanguage() {
+        var next = getLang() === 'uk' ? 'en' : 'uk';
+        setLang(next);
+    }
+    window.t2jToggleLanguage = toggleLanguage;
+
+    function applyTranslations(lang) {
+        var page = getPage();
+        if (!page) return;
+        var t = I18N[lang] || I18N.en;
+
+        var langText = page.querySelector('#t2jLangText');
+        if (langText) langText.innerText = lang.toUpperCase();
+
+        var map = {
+            'tabSearchText': t.search,
+            'tabMagnetText': t.magnet,
+            'tabTorrentsText': t.streams,
+            'tabSettingsText': t.settings,
+            't2jSyncText': t.fastRefresh,
+            't2jSearchTitle': t.searchTitle,
+            't2jSearchDesc': t.searchDesc,
+            't2jSearchGoldOnlyLabel': t.goldOnly,
+            't2jSearchBtnText': t.btnSearch,
+            't2jSearchingText': t.searchingIndexers,
+            't2jResultsFoundText': t.releasesFound,
+            'goldBadgeText': t.goldFreeleech,
+            'filterLabelText': t.filter,
+            'filterAllBtn': t.filterAll,
+            'sortLabelText': t.sort,
+            't2jMagnetTitle': t.magnetTitle,
+            't2jMagnetDesc': t.magnetDesc,
+            'lblDirectLink': t.lblDirectLink,
+            'lblDirectTitle': t.lblDirectTitle,
+            'lblDirectCat': t.lblDirectCat,
+            'lblDirectSync': t.lblDirectSync,
+            'btnDirectSubmitText': t.btnDirectSubmit,
+            'dashCardActiveText': t.dashActiveTorrents,
+            'dashCardEngineText': t.dashStreamingEngine,
+            'dashCardCacheText': t.dashRamCache,
+            'dashCardMediaText': t.dashMediaDir,
+            'dashScanSpeedText': t.dashScanSpeed,
+            'dashTableTitle': t.dashTableTitle,
+            'dashTableDesc': t.dashTableDesc,
+            'btnRefreshText': t.btnRefresh,
+            'btnScanLibraryText': t.btnScanLibrary,
+            'emptyTorrentsMsg': t.emptyTorrentsMsg,
+            'cfgHeaderTitle': t.cfgTitle,
+            'cfgHeaderDesc': t.cfgDesc,
+            'saveSettingsBtnText': t.btnSaveSettings,
+            'cfgGeneralTitle': t.cfgGeneralTitle,
+            'cfgGeneralSub': t.cfgGeneralSub,
+            'lblCfgLanguage': t.lblCfgLanguage,
+            'lblCfgLanguageHint': t.lblCfgLanguageHint,
+            'lblCfgMediaRoot': t.lblCfgMediaRoot,
+            'lblCfgMediaRootHint': t.lblCfgMediaRootHint,
+            'cfgTorrServerTitle': t.cfgTorrServerTitle,
+            'cfgTorrServerSub': t.cfgTorrServerSub,
+            'lblCfgExternalUrl': t.lblCfgExternalUrl,
+            'lblCfgStreamUrl': t.lblCfgStreamUrl,
+            'lblCfgEmbedded': t.lblCfgEmbedded,
+            'lblCfgPort': t.lblCfgPort,
+            'lblCfgCacheSize': t.lblCfgCacheSize,
+            'btnRestartTorrServerText': t.btnRestartTorrServer,
+            'cfgProwlarrTitle': t.cfgProwlarrTitle,
+            'cfgProwlarrSub': t.cfgProwlarrSub,
+            'lblCfgSearchGoldDefault': t.lblCfgSearchGoldDefault,
+            'lblCfgSearchGoldDefaultSub': t.lblCfgSearchGoldDefaultSub,
+            'lblCfgOnlyGoldNonAdmin': t.lblCfgOnlyGoldNonAdmin,
+            'lblCfgOnlyGoldNonAdminSub': t.lblCfgOnlyGoldNonAdminSub,
+            'lblCfgTrackersList': t.lblCfgTrackersList,
+            'cfgStrmStructureTitle': t.cfgStrmStructureTitle,
+            'cfgStrmStructureSub': t.cfgStrmStructureSub,
+            'lblCfgMovieFolder': t.lblCfgMovieFolder,
+            'lblCfgMovieFile': t.lblCfgMovieFile,
+            'lblCfgShowFolder': t.lblCfgShowFolder,
+            'lblCfgSeasonFolder': t.lblCfgSeasonFolder,
+            'lblCfgEpisodeFile': t.lblCfgEpisodeFile,
+            'lblTemplateTokensTitle': t.lblTemplateTokensTitle,
+            'cfgServerLibsTitle': t.cfgServerLibsTitle,
+            'cfgServerLibsSub': t.cfgServerLibsSub
+        };
+
+        for (var id in map) {
+            var el = page.querySelector('#' + id);
+            if (el) el.innerText = map[id];
+        }
+
+        var searchInput = page.querySelector('#t2jSearchInput');
+        if (searchInput) searchInput.placeholder = t.searchPlaceholder;
+
+        // Re-render search results and streams if active
+        if (window.t2jState.currentTab === 'search' && window.t2jState.searchResults.length > 0) {
+            renderSearchResults();
+        } else if (window.t2jState.currentTab === 'dashboard') {
+            loadTorrents();
+        }
+    }
+    window.t2jApplyTranslations = applyTranslations;
 
     function getApiUrl(path) {
         if (window.ApiClient && typeof window.ApiClient.getUrl === 'function') {
@@ -854,6 +1264,131 @@
         return document.getElementById('torr2jellyPage');
     }
 
+    // Load server libraries from Jellyfin API
+    async function loadLibraries() {
+        var page = getPage();
+        if (!page) return;
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Libraries'), { headers: getAuthHeaders() });
+            if (res.ok) {
+                var libs = await res.json();
+                window.t2jState.libraries = Array.isArray(libs) ? libs : [];
+                updateCategorySelects();
+                renderServerLibrariesCard();
+            }
+        } catch (e) {
+            console.warn('Failed to load server libraries', e);
+        }
+    }
+    window.t2jLoadLibraries = loadLibraries;
+
+    function updateCategorySelects() {
+        var page = getPage();
+        if (!page) return;
+        var t = I18N[getLang()] || I18N.en;
+
+        var searchCategorySelect = page.querySelector('#t2jSearchCategorySelect');
+        var directCategorySelect = page.querySelector('#directCategorySelect');
+
+        var libs = window.t2jState.libraries;
+        if (!libs || libs.length === 0) {
+            libs = [
+                { Name: 'Movies', Type: 'movie' },
+                { Name: 'Shows', Type: 'show' }
+            ];
+        }
+
+        if (searchCategorySelect) {
+            var curVal = searchCategorySelect.value;
+            var searchHtml = '<option value="">' + escapeHtml(t.allCategories) + '</option>';
+            libs.forEach(function (lib) {
+                var isSel = curVal ? curVal === lib.Name : (lib.Type === 'movie');
+                searchHtml += '<option value="' + escapeHtml(lib.Name) + '" ' + (isSel ? 'selected' : '') + '>' + escapeHtml(lib.Name) + ' (' + (lib.Type === 'show' ? 'Series' : 'Movies') + ')</option>';
+            });
+            searchCategorySelect.innerHTML = searchHtml;
+        }
+
+        if (directCategorySelect) {
+            var curDirectVal = directCategorySelect.value;
+            var directHtml = '';
+            libs.forEach(function (lib, idx) {
+                var isSel = curDirectVal ? curDirectVal === lib.Name : (idx === 0);
+                directHtml += '<option value="' + escapeHtml(lib.Name) + '" ' + (isSel ? 'selected' : '') + '>' + escapeHtml(lib.Name) + ' (' + (lib.Type === 'show' ? 'Series' : 'Movies') + ')</option>';
+            });
+            directCategorySelect.innerHTML = directHtml;
+        }
+    }
+
+    function renderServerLibrariesCard() {
+        var page = getPage();
+        if (!page) return;
+        var container = page.querySelector('#cfgServerLibrariesList');
+        if (!container) return;
+
+        var libs = window.t2jState.libraries || [];
+        if (libs.length === 0) {
+            container.innerHTML = '<div class="text-slate-500 text-xs italic">No libraries returned by server.</div>';
+            return;
+        }
+
+        var html = '';
+        libs.forEach(function (lib) {
+            var isShow = lib.Type === 'show';
+            html += '<div class="bg-slate-950 border border-slate-800 rounded-xl p-3 flex items-center justify-between">';
+            html += '  <div>';
+            html += '    <div class="font-bold text-white flex items-center space-x-2">';
+            html += '      <span>' + (isShow ? '📺' : '🎬') + '</span>';
+            html += '      <span>' + escapeHtml(lib.Name) + '</span>';
+            html += '      <span class="text-[10px] px-1.5 py-0.2 rounded ' + (isShow ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30') + '">' + (isShow ? 'Series' : 'Movies') + '</span>';
+            html += '    </div>';
+            html += '    <div class="text-[10px] text-slate-400 font-mono mt-1 truncate max-w-[240px]">' + escapeHtml(lib.PrimaryLocation || lib.Locations[0] || 'Default') + '</div>';
+            html += '  </div>';
+            html += '  <span class="text-emerald-400 text-xs font-bold">✓ Active</span>';
+            html += '</div>';
+        });
+        container.innerHTML = html;
+    }
+
+    // Load Indexers from Prowlarr
+    async function loadIndexers() {
+        var page = getPage();
+        if (!page) return;
+        var container = page.querySelector('#cfgTrackersList');
+        if (!container) return;
+
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Indexers'), { headers: getAuthHeaders() });
+            if (res.ok) {
+                var indexers = await res.json();
+                window.t2jState.indexers = Array.isArray(indexers) ? indexers : [];
+
+                if (window.t2jState.indexers.length === 0) {
+                    container.innerHTML = '<div class="text-slate-500 text-xs italic">No indexers configured in Prowlarr.</div>';
+                    return;
+                }
+
+                var html = '';
+                window.t2jState.indexers.forEach(function (idx) {
+                    var isChecked = !idx.DisabledInPlugin;
+                    html += '<div class="flex items-center justify-between p-2 rounded-lg bg-slate-950/80 border border-slate-800/80">';
+                    html += '  <div class="flex items-center space-x-2.5">';
+                    html += '    <span class="w-2 h-2 rounded-full ' + (idx.EnabledInProwlarr ? 'bg-emerald-400' : 'bg-slate-600') + '"></span>';
+                    html += '    <span class="font-medium text-white text-xs">' + escapeHtml(idx.Name) + '</span>';
+                    html += '  </div>';
+                    html += '  <label class="flex items-center space-x-2 cursor-pointer">';
+                    html += '    <input type="checkbox" data-tracker="' + escapeHtml(idx.Name) + '" class="t2j-tracker-checkbox rounded text-brand-600 focus:ring-brand-500 bg-slate-900 border-slate-700 w-4 h-4" ' + (isChecked ? 'checked' : '') + '>';
+                    html += '    <span class="text-[11px] text-slate-300">Enabled</span>';
+                    html += '  </label>';
+                    html += '</div>';
+                });
+                container.innerHTML = html;
+            }
+        } catch (e) {
+            console.warn('Failed to load indexers', e);
+        }
+    }
+    window.t2jLoadIndexers = loadIndexers;
+
     // Status check
     async function checkStatus() {
         var page = getPage();
@@ -875,11 +1410,11 @@
 
                 var mode = data.Mode || data.mode || 'External';
                 if (daemonBadge) daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
-                if (daemonBadgeText) daemonBadgeText.innerText = 'TorrServer Online (' + (mode === 'External' ? 'Зовнішній' : daemonVer) + ')';
+                if (daemonBadgeText) daemonBadgeText.innerText = 'TorrServer Online (' + (mode === 'External' ? 'External' : daemonVer) + ')';
                 var dashDaemonEngineSub = page.querySelector('#dashDaemonEngineSub');
-                if (dashDaemonEngine) dashDaemonEngine.innerText = mode === 'External' ? 'TorrServer (Зовнішній)' : ('TorrServer ' + daemonVer);
-                if (dashDaemonEngineSub) dashDaemonEngineSub.innerText = mode === 'External' ? (data.StatusMessage || 'Підключено через VPN') : 'Вбудований процес';
-                if (dashCacheSize) dashCacheSize.innerText = mode === 'External' ? (data.EffectiveUrl || 'http://torrserver:8090') : ('Порт ' + daemonPort);
+                if (dashDaemonEngine) dashDaemonEngine.innerText = mode === 'External' ? 'TorrServer (External)' : ('TorrServer ' + daemonVer);
+                if (dashDaemonEngineSub) dashDaemonEngineSub.innerText = mode === 'External' ? (data.StatusMessage || 'Connected via VPN') : 'Embedded Process';
+                if (dashCacheSize) dashCacheSize.innerText = mode === 'External' ? (data.EffectiveUrl || 'http://torrserver:8090') : ('Port ' + daemonPort);
                 if (activeTorrentsBadge) activeTorrentsBadge.innerText = activeCount;
                 if (dashTorrentsCount) dashTorrentsCount.innerText = activeCount;
             } else {
@@ -897,6 +1432,7 @@
     function renderSearchResults() {
         var page = getPage();
         if (!page) return;
+        var t = I18N[getLang()] || I18N.en;
 
         var goldCountBadge = page.querySelector('#goldCountBadge');
         var resultsCount = page.querySelector('#t2jResultsCount');
@@ -926,12 +1462,16 @@
         if (resultsList) resultsList.innerHTML = '';
 
         if (items.length === 0) {
-            if (resultsList) resultsList.innerHTML = '<div class="p-8 text-center text-slate-400">Нічого не знайдено за заданими критеріями фільтрації.</div>';
+            if (resultsList) resultsList.innerHTML = '<div class="p-8 text-center text-slate-400">' + escapeHtml(t.emptySearchMsg) + '</div>';
             if (resultsWrapper) resultsWrapper.classList.remove('hidden');
             return;
         }
 
-        var defaultCategory = searchCategorySelect ? searchCategorySelect.value : 'Movies';
+        var defaultCategory = searchCategorySelect ? searchCategorySelect.value : '';
+        var serverLibs = window.t2jState.libraries || [];
+        var showLib = serverLibs.find(function (l) { return l.Type === 'show'; });
+        var movieLib = serverLibs.find(function (l) { return l.Type === 'movie'; });
+
         var html = '';
 
         for (var i = 0; i < items.length; i++) {
@@ -944,14 +1484,12 @@
             var peers = item.Peers || item.peers || 0;
             var indexer = item.Indexer || item.indexer || 'Tracker';
 
-            var goldBadge = isGold
-                ? '<span class="text-xs px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border border-amber-500/40 font-bold flex items-center space-x-1 shadow-sm shadow-amber-500/20"><span>⚡ ЗОЛОТА (Freeleech)</span></span>'
-                : (isFreeleech ? '<span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-400/20 text-slate-300 border border-slate-400/40 font-bold">50% Freeleech</span>' : '');
+            // Auto-detect TV series release from keywords
+            var isShowRelease = /(?:s\d{1,2}|season|сезон|\d{1,2}x\d{1,2}|серій|серії|серії|ep\d{1,3})/i.test(title);
 
-            var moviesSel = defaultCategory === 'Movies' ? 'selected' : '';
-            var showsSel = defaultCategory === 'Shows' ? 'selected' : '';
-            var cartoonsSel = defaultCategory === 'Cartoons' ? 'selected' : '';
-            var animeSel = defaultCategory === 'Anime' ? 'selected' : '';
+            var goldBadge = isGold
+                ? '<span class="text-xs px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border border-amber-500/40 font-bold flex items-center space-x-1 shadow-sm shadow-amber-500/20"><span>⚡ ' + escapeHtml(t.goldFreeleech) + '</span></span>'
+                : (isFreeleech ? '<span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-400/20 text-slate-300 border border-slate-400/40 font-bold">50% Freeleech</span>' : '');
 
             var btnClass = isGold
                 ? 'bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-bold'
@@ -965,12 +1503,15 @@
             html += '      <span class="text-xs text-slate-400 font-medium">' + escapeHtml(size) + '</span>';
             html += '      <span class="text-xs text-emerald-400 font-semibold flex items-center space-x-1">';
             html += '        <i class="fa-solid fa-arrow-up text-[10px]"></i>';
-            html += '        <span>' + seeders + ' сидів</span>';
+            html += '        <span>' + seeders + ' ' + escapeHtml(t.seeds) + '</span>';
             html += '      </span>';
             html += '      <span class="text-xs text-slate-500 flex items-center space-x-1">';
             html += '        <i class="fa-solid fa-arrow-down text-[10px]"></i>';
-            html += '        <span>' + peers + ' пірів</span>';
+            html += '        <span>' + peers + ' ' + escapeHtml(t.peers) + '</span>';
             html += '      </span>';
+            if (isShowRelease) {
+                html += '      <span class="text-xs px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-semibold">📺 Series</span>';
+            }
             html += '    </div>';
             html += '    <div>';
             html += '      <div class="text-sm font-bold text-white hover:text-amber-400 transition-colors line-clamp-1" title="' + escapeHtml(title) + '">';
@@ -978,16 +1519,32 @@
             html += '      </div>';
             html += '    </div>';
             html += '  </div>';
+
+            // Category selector for this item
             html += '  <div class="flex items-center gap-2 shrink-0">';
-            html += '    <select id="t2jCatSelect_' + i + '" class="t2j-row-cat-select bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-500">';
-            html += '      <option value="Movies" ' + moviesSel + '>Фільми</option>';
-            html += '      <option value="Shows" ' + showsSel + '>Серіали</option>';
-            html += '      <option value="Cartoons" ' + cartoonsSel + '>Мультфільми</option>';
-            html += '      <option value="Anime" ' + animeSel + '>Аніме</option>';
+            html += '    <select id="t2jCatSelect_' + i + '" class="t2j-row-cat-select bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-500 cursor-pointer">';
+
+            if (serverLibs.length > 0) {
+                serverLibs.forEach(function (lib) {
+                    var selected = false;
+                    if (isShowRelease && showLib && lib.Name === showLib.Name) {
+                        selected = true;
+                    } else if (!isShowRelease && movieLib && lib.Name === movieLib.Name) {
+                        selected = true;
+                    } else if (!isShowRelease && defaultCategory && lib.Name === defaultCategory) {
+                        selected = true;
+                    }
+                    html += '<option value="' + escapeHtml(lib.Name) + '" ' + (selected ? 'selected' : '') + '>' + escapeHtml(lib.Name) + ' (' + (lib.Type === 'show' ? 'Series' : 'Movies') + ')</option>';
+                });
+            } else {
+                html += '<option value="Movies" ' + (!isShowRelease ? 'selected' : '') + '>Movies</option>';
+                html += '<option value="Shows" ' + (isShowRelease ? 'selected' : '') + '>Shows</option>';
+            }
+
             html += '    </select>';
             html += '    <button type="button" data-index="' + i + '" onclick="window.t2jAddResult && window.t2jAddResult(this)" class="t2j-add-row-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center justify-center space-x-1.5 ' + btnClass + '" style="cursor: pointer !important; pointer-events: auto !important;">';
             html += '      <i class="fa-solid fa-play text-[10px]"></i>';
-            html += '      <span>Додати в бібліотеку</span>';
+            html += '      <span>' + escapeHtml(t.addToLibrary) + '</span>';
             html += '    </button>';
             html += '  </div>';
             html += '</div>';
@@ -1006,6 +1563,7 @@
 
         var searchInput = page.querySelector('#t2jSearchInput');
         var searchCategorySelect = page.querySelector('#t2jSearchCategorySelect');
+        var searchGoldOnlyCheck = page.querySelector('#t2jSearchGoldOnlyCheck');
         var searchSpinner = page.querySelector('#t2jSearchSpinner');
         var resultsWrapper = page.querySelector('#t2jResultsWrapper');
         var resultsList = page.querySelector('#t2jResultsList');
@@ -1014,14 +1572,21 @@
         var query = (searchInput ? searchInput.value : '').trim();
         if (!query) return;
 
+        var t = I18N[getLang()] || I18N.en;
+
         if (searchSpinner) searchSpinner.classList.remove('hidden');
         if (resultsWrapper) resultsWrapper.classList.add('hidden');
         if (resultsList) resultsList.innerHTML = '';
-        if (searchBtnText) searchBtnText.innerText = 'Шукаємо...';
+        if (searchBtnText) searchBtnText.innerText = t.searchingIndexers;
 
         try {
-            var cat = searchCategorySelect ? searchCategorySelect.value : 'Movies';
-            var url = getApiUrl('Plugins/Torr2Jelly/Search?query=' + encodeURIComponent(query) + '&category=' + encodeURIComponent(cat));
+            var cat = searchCategorySelect ? searchCategorySelect.value : '';
+            var isGoldOnly = searchGoldOnlyCheck ? searchGoldOnlyCheck.checked : false;
+
+            var url = getApiUrl('Plugins/Torr2Jelly/Search?query=' + encodeURIComponent(query));
+            if (cat) url += '&category=' + encodeURIComponent(cat);
+            if (isGoldOnly) url += '&onlyGold=true';
+
             var res = await fetch(url, { headers: getAuthHeaders() });
             if (!res.ok) {
                 throw new Error('HTTP ' + res.status + ': ' + res.statusText);
@@ -1030,29 +1595,34 @@
             window.t2jState.searchResults = Array.isArray(data) ? data : [];
             renderSearchResults();
         } catch (err) {
-            if (resultsList) resultsList.innerHTML = '<div class="p-6 text-center text-rose-400 font-medium">Помилка пошуку: ' + escapeHtml(err.message) + '</div>';
+            if (resultsList) {
+                resultsList.innerHTML = '<div class="p-8 text-center text-rose-400">Search error: ' + escapeHtml(err.message) + '</div>';
+            }
             if (resultsWrapper) resultsWrapper.classList.remove('hidden');
         } finally {
             if (searchSpinner) searchSpinner.classList.add('hidden');
-            if (searchBtnText) searchBtnText.innerText = 'Знайти';
+            if (searchBtnText) searchBtnText.innerText = t.btnSearch;
         }
     };
 
-    // Add search result to library
     window.t2jAddResult = async function (btn) {
         if (!btn) return;
-        var index = parseInt(btn.getAttribute('data-index'), 10);
-        var items = window.t2jState.filteredResults || window.t2jState.searchResults;
-        var item = items ? items[index] : null;
+        var idx = parseInt(btn.getAttribute('data-index') || '0', 10);
+        var item = window.t2jState.filteredResults[idx];
         if (!item) return;
 
-        var catSelect = document.getElementById('t2jCatSelect_' + index);
+        var catSelect = document.getElementById('t2jCatSelect_' + idx);
         var category = catSelect ? catSelect.value : 'Movies';
-        var link = item.MagnetUrl || item.magnetUrl || item.DownloadUrl || item.downloadUrl || '';
+
         var title = item.Title || item.title || '';
+        var link = item.DownloadUrl || item.MagnetUrl || item.downloadUrl || item.magnetUrl || '';
+        if (!link) {
+            alert('Torrent download link is empty.');
+            return;
+        }
 
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> <span>Додаємо...</span>';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[10px]"></i> <span>' + escapeHtml(I18N[getLang()].adding) + '</span>';
 
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), {
@@ -1067,21 +1637,24 @@
             });
 
             if (res.ok) {
-                btn.className = 'px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center space-x-1.5';
-                btn.innerHTML = '<i class="fa-solid fa-check text-xs"></i> <span>Додано в медіатеку</span>';
+                btn.className = 't2j-add-row-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md transition-all flex items-center justify-center space-x-1.5 bg-emerald-600 text-white cursor-default';
+                btn.innerHTML = '<i class="fa-solid fa-check text-[10px]"></i> <span>' + escapeHtml(I18N[getLang()].addedToLib) + '</span>';
                 checkStatus();
             } else {
+                var err = await res.json().catch(function () { return {}; });
+                alert('Error adding torrent: ' + (err.error || 'Server error'));
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-xs"></i> <span>Помилка сервера</span>';
+                btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-[10px]"></i> <span>Error</span>';
             }
-        } catch (err) {
+        } catch (e) {
+            alert('Request failed: ' + e.message);
             btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-xs"></i> <span>Помилка: ' + escapeHtml(err.message) + '</span>';
+            btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-[10px]"></i> <span>Error</span>';
         }
     };
 
-    // Direct link / Magnet add
-    window.t2jDoDirectLink = async function () {
+    // Direct link submit
+    window.t2jSubmitDirect = async function () {
         var page = getPage();
         if (!page) return;
 
@@ -1096,7 +1669,7 @@
 
         if (directSubmitBtn) {
             directSubmitBtn.disabled = true;
-            directSubmitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Додаємо...</span>';
+            directSubmitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>' + escapeHtml(I18N[getLang()].adding) + '</span>';
         }
 
         try {
@@ -1112,31 +1685,25 @@
             });
 
             if (res.ok) {
-                if (directSubmitBtn) directSubmitBtn.innerHTML = '<i class="fa-solid fa-check"></i> <span>Успішно додано!</span>';
                 if (directLinkInput) directLinkInput.value = '';
                 if (directTitleInput) directTitleInput.value = '';
-                setTimeout(function () {
-                    if (directSubmitBtn) {
-                        directSubmitBtn.disabled = false;
-                        directSubmitBtn.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Додати в медіатеку</span>';
-                    }
-                }, 2500);
+                alert('✓ Torrent added successfully!');
                 checkStatus();
             } else {
-                if (directSubmitBtn) {
-                    directSubmitBtn.disabled = false;
-                    directSubmitBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка сервера</span>';
-                }
+                var err = await res.json().catch(function () { return {}; });
+                alert('Error: ' + (err.error || 'Failed to add torrent'));
             }
-        } catch (err) {
+        } catch (e) {
+            alert('Request failed: ' + e.message);
+        } finally {
             if (directSubmitBtn) {
                 directSubmitBtn.disabled = false;
-                directSubmitBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка: ' + escapeHtml(err.message) + '</span>';
+                directSubmitBtn.innerHTML = '<i class="fa-solid fa-plus"></i> <span>' + escapeHtml(I18N[getLang()].btnDirectSubmit) + '</span>';
             }
         }
     };
 
-    // Load torrents dashboard
+    // Dashboard torrents list
     async function loadTorrents() {
         var page = getPage();
         if (!page) return;
@@ -1144,6 +1711,7 @@
         var activeTorrentsBadge = page.querySelector('#activeTorrentsBadge');
         var torrentsListTable = page.querySelector('#torrentsListTable');
         var torrentsEmptyNotice = page.querySelector('#torrentsEmptyNotice');
+        var t = I18N[getLang()] || I18N.en;
 
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), { headers: getAuthHeaders() });
@@ -1161,44 +1729,93 @@
 
             if (torrentsEmptyNotice) torrentsEmptyNotice.classList.add('hidden');
 
+            var serverLibs = window.t2jState.libraries || [];
+
             var html = '';
             for (var i = 0; i < window.t2jState.torrents.length; i++) {
-                var t = window.t2jState.torrents[i];
-                var title = t.title || t.Title || t.hash || t.Hash || 'Unknown';
-                var hash = t.hash || t.Hash || '';
-                var size = formatBytes(t.torrent_size || t.TorrentSize || 0);
-                var loaded = formatBytes(t.loaded_size || t.LoadedSize || 0);
-                var statusStr = t.stat_string || t.StatString || 'Активний';
+                var item = window.t2jState.torrents[i];
+                var title = item.title || item.Title || item.hash || item.Hash || 'Unknown';
+                var hash = item.hash || item.Hash || '';
+                var size = formatBytes(item.torrent_size || item.TorrentSize || 0);
+                var loaded = formatBytes(item.loaded_size || item.LoadedSize || 0);
+                var statusStr = item.stat_string || item.StatString || 'Active';
 
-                html += '<div class="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/60">';
+                html += '<div class="py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800/60">';
                 html += '  <div class="flex-1 min-w-0">';
                 html += '    <h4 class="text-sm font-bold text-white truncate" title="' + escapeHtml(title) + '">' + escapeHtml(title) + '</h4>';
-                html += '    <div class="flex items-center space-x-3 text-xs text-slate-400 mt-1">';
+                html += '    <div class="flex items-center space-x-3 text-xs text-slate-400 mt-1 flex-wrap">';
                 html += '      <span class="text-emerald-400 font-semibold">' + escapeHtml(statusStr) + '</span>';
-                html += '      <span>Розмір: ' + escapeHtml(size) + '</span>';
-                html += '      <span>Кеш: ' + escapeHtml(loaded) + '</span>';
+                html += '      <span>Size: ' + escapeHtml(size) + '</span>';
+                html += '      <span>Cache: ' + escapeHtml(loaded) + '</span>';
                 html += '      <span class="font-mono text-[10px] text-slate-600 truncate max-w-[120px]">' + escapeHtml(hash) + '</span>';
                 html += '    </div>';
                 html += '  </div>';
-                html += '  <div class="flex items-center space-x-2">';
-                html += '    <button type="button" data-hash="' + escapeHtml(hash) + '" data-title="' + escapeHtml(title) + '" onclick="window.t2jDeleteTorrent && window.t2jDeleteTorrent(this)" class="t2j-del-torrent-btn px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all" style="cursor: pointer !important; pointer-events: auto !important;">';
-                html += '      <i class="fa-solid fa-trash-can text-[11px] mr-1"></i> Видалити';
+
+                // Category switcher and delete
+                html += '  <div class="flex items-center space-x-2 shrink-0">';
+                html += '    <select id="t2jRecatSelect_' + escapeHtml(hash) + '" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500 cursor-pointer">';
+                if (serverLibs.length > 0) {
+                    serverLibs.forEach(function (lib) {
+                        html += '<option value="' + escapeHtml(lib.Name) + '">' + escapeHtml(lib.Name) + '</option>';
+                    });
+                } else {
+                    html += '<option value="Movies">Movies</option>';
+                    html += '<option value="Shows">Shows</option>';
+                }
+                html += '    </select>';
+                html += '    <button type="button" data-hash="' + escapeHtml(hash) + '" onclick="window.t2jRecategorize && window.t2jRecategorize(this)" class="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all cursor-pointer">';
+                html += '      <i class="fa-solid fa-arrow-right-arrow-left text-[11px] mr-1"></i> ' + escapeHtml(t.btnRecategorize);
+                html += '    </button>';
+                html += '    <button type="button" data-hash="' + escapeHtml(hash) + '" data-title="' + escapeHtml(title) + '" onclick="window.t2jDeleteTorrent && window.t2jDeleteTorrent(this)" class="t2j-del-torrent-btn px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all cursor-pointer">';
+                html += '      <i class="fa-solid fa-trash-can text-[11px] mr-1"></i> ' + escapeHtml(t.btnDelete);
                 html += '    </button>';
                 html += '  </div>';
                 html += '</div>';
             }
             if (torrentsListTable) torrentsListTable.innerHTML = html;
         } catch (err) {
-            if (torrentsListTable) torrentsListTable.innerHTML = '<div class="p-4 text-rose-400 text-xs">Помилка завантаження: ' + escapeHtml(err.message) + '</div>';
+            if (torrentsListTable) torrentsListTable.innerHTML = '<div class="p-4 text-rose-400 text-xs">Error loading torrents: ' + escapeHtml(err.message) + '</div>';
         }
     }
     window.t2jLoadTorrents = loadTorrents;
 
+    window.t2jRecategorize = async function (btn) {
+        if (!btn) return;
+        var hash = btn.getAttribute('data-hash') || '';
+        var selectEl = document.getElementById('t2jRecatSelect_' + hash);
+        var newCat = selectEl ? selectEl.value : '';
+        if (!newCat) return;
+
+        btn.disabled = true;
+        var oldHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[11px]"></i>';
+
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents/' + encodeURIComponent(hash) + '/Recategorize'), {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ Category: newCat })
+            });
+            if (res.ok) {
+                btn.innerHTML = '<span class="text-emerald-400">✓ Done</span>';
+                setTimeout(loadTorrents, 1200);
+            } else {
+                alert('Failed to recategorize');
+                btn.disabled = false;
+                btn.innerHTML = oldHtml;
+            }
+        } catch (e) {
+            alert('Request error: ' + e.message);
+            btn.disabled = false;
+            btn.innerHTML = oldHtml;
+        }
+    };
+
     window.t2jDeleteTorrent = async function (btn) {
         if (!btn) return;
         var hash = btn.getAttribute('data-hash') || '';
-        var title = btn.getAttribute('data-title') || 'торент';
-        if (!confirm('Видалити торент "' + title + '" та відповідні .strm файли з медіатеки?')) {
+        var title = btn.getAttribute('data-title') || 'torrent';
+        if (!confirm('Delete torrent "' + title + '" and its STRM files from library?')) {
             return;
         }
         btn.disabled = true;
@@ -1211,16 +1828,16 @@
             loadTorrents();
             checkStatus();
         } catch (err) {
-            alert('Помилка видалення: ' + err.message);
+            alert('Delete failed: ' + err.message);
             btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-trash-can text-[11px] mr-1"></i> Видалити';
+            btn.innerHTML = '<i class="fa-solid fa-trash-can text-[11px] mr-1"></i> Delete';
         }
     };
 
     // Library sync
     async function syncLibrary(buttonEl, textEl) {
         if (buttonEl) buttonEl.disabled = true;
-        if (textEl) textEl.innerText = 'Синхронізація...';
+        if (textEl) textEl.innerText = 'Refreshing...';
         try {
             await fetch(getApiUrl('Plugins/Torr2Jelly/Library/Scan'), { method: 'POST', headers: getAuthHeaders() });
         } catch (e) {
@@ -1228,8 +1845,8 @@
         }
         setTimeout(function () {
             if (buttonEl) buttonEl.disabled = false;
-            if (textEl) textEl.innerText = 'Синхронізація';
-        }, 2000);
+            if (textEl) textEl.innerText = I18N[getLang()].fastRefresh;
+        }, 1500);
     }
 
     window.t2jSyncNow = async function () {
@@ -1249,6 +1866,7 @@
     async function loadSettings() {
         var page = getPage();
         if (!page) return;
+        var cfgLanguageSelect = page.querySelector('#cfgLanguageSelect');
         var cfgExternalUrlInput = page.querySelector('#cfgExternalUrlInput');
         var cfgEmbeddedCheck = page.querySelector('#cfgEmbeddedCheck');
         var cfgPortInput = page.querySelector('#cfgPortInput');
@@ -1257,22 +1875,50 @@
         var cfgProwlarrUrlInput = page.querySelector('#cfgProwlarrUrlInput');
         var cfgProwlarrKeyInput = page.querySelector('#cfgProwlarrKeyInput');
         var cfgMediaDirInput = page.querySelector('#cfgMediaDirInput');
+        var cfgSearchOnlyGoldByDefaultCheck = page.querySelector('#cfgSearchOnlyGoldByDefaultCheck');
         var cfgOnlyGoldCheck = page.querySelector('#cfgOnlyGoldCheck');
+        var cfgMovieFolderTemplateInput = page.querySelector('#cfgMovieFolderTemplateInput');
+        var cfgMovieFileTemplateInput = page.querySelector('#cfgMovieFileTemplateInput');
+        var cfgShowFolderTemplateInput = page.querySelector('#cfgShowFolderTemplateInput');
+        var cfgShowSeasonFolderTemplateInput = page.querySelector('#cfgShowSeasonFolderTemplateInput');
+        var cfgShowEpisodeFileTemplateInput = page.querySelector('#cfgShowEpisodeFileTemplateInput');
         var dashMediaDir = page.querySelector('#dashMediaDir');
+
+        // Load indexers and libraries in parallel
+        loadIndexers();
+        loadLibraries();
 
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), { headers: getAuthHeaders() });
             var cfg = await res.json();
+            window.t2jState.config = cfg;
+
+            if (cfgLanguageSelect) cfgLanguageSelect.value = cfg.DefaultLanguage || 'en';
             if (cfgExternalUrlInput) cfgExternalUrlInput.value = cfg.ExternalTorrServerUrl || 'http://torrserver:8090';
             if (cfgEmbeddedCheck) cfgEmbeddedCheck.checked = !!cfg.UseEmbeddedTorrServer;
-            if (cfgPortInput) cfgPortInput.value = cfg.EmbeddedTorrServerPort;
-            if (cfgCacheSizeInput) cfgCacheSizeInput.value = cfg.CacheSizeMb;
+            if (cfgPortInput) cfgPortInput.value = cfg.EmbeddedTorrServerPort || 8095;
+            if (cfgCacheSizeInput) cfgCacheSizeInput.value = cfg.CacheSizeMb || 256;
             if (cfgStreamUrlInput) cfgStreamUrlInput.value = cfg.TorrServerStreamUrl || '';
             if (cfgProwlarrUrlInput) cfgProwlarrUrlInput.value = cfg.ProwlarrUrl || '';
             if (cfgProwlarrKeyInput) cfgProwlarrKeyInput.value = cfg.ProwlarrApiKey || '';
             if (cfgMediaDirInput) cfgMediaDirInput.value = cfg.MediaRootPath || '';
-            if (cfgOnlyGoldCheck) cfgOnlyGoldCheck.checked = cfg.OnlyGoldTorrentsForNonAdmins;
+            if (cfgSearchOnlyGoldByDefaultCheck) cfgSearchOnlyGoldByDefaultCheck.checked = !!cfg.SearchOnlyGoldByDefault;
+            if (cfgOnlyGoldCheck) cfgOnlyGoldCheck.checked = !!cfg.OnlyGoldTorrentsForNonAdmins;
+
+            if (cfgMovieFolderTemplateInput) cfgMovieFolderTemplateInput.value = cfg.MovieFolderTemplate || '{Title} ({Year})';
+            if (cfgMovieFileTemplateInput) cfgMovieFileTemplateInput.value = cfg.MovieFileTemplate || '{Title} ({Year}).strm';
+            if (cfgShowFolderTemplateInput) cfgShowFolderTemplateInput.value = cfg.ShowFolderTemplate || '{Title} ({Year})';
+            if (cfgShowSeasonFolderTemplateInput) cfgShowSeasonFolderTemplateInput.value = cfg.ShowSeasonFolderTemplate || 'Season {Season:00}';
+            if (cfgShowEpisodeFileTemplateInput) cfgShowEpisodeFileTemplateInput.value = cfg.ShowEpisodeFileTemplate || '{Title} - {EpisodeTag}.strm';
+
             if (dashMediaDir) dashMediaDir.innerText = cfg.MediaRootPath || '/media';
+
+            // Also synchronize search gold check
+            var searchGoldOnlyCheck = page.querySelector('#t2jSearchGoldOnlyCheck');
+            if (searchGoldOnlyCheck && searchGoldOnlyCheck._init !== true) {
+                searchGoldOnlyCheck._init = true;
+                searchGoldOnlyCheck.checked = !!cfg.SearchOnlyGoldByDefault;
+            }
         } catch (err) {
             console.error('Failed to load settings', err);
         }
@@ -1282,21 +1928,45 @@
     async function saveSettings() {
         var page = getPage();
         if (!page) return;
+
+        var cfgLanguageSelect = page.querySelector('#cfgLanguageSelect');
         var cfgEmbeddedCheck = page.querySelector('#cfgEmbeddedCheck');
+        var cfgExternalUrlInput = page.querySelector('#cfgExternalUrlInput');
         var cfgPortInput = page.querySelector('#cfgPortInput');
         var cfgCacheSizeInput = page.querySelector('#cfgCacheSizeInput');
         var cfgStreamUrlInput = page.querySelector('#cfgStreamUrlInput');
         var cfgProwlarrUrlInput = page.querySelector('#cfgProwlarrUrlInput');
         var cfgProwlarrKeyInput = page.querySelector('#cfgProwlarrKeyInput');
         var cfgMediaDirInput = page.querySelector('#cfgMediaDirInput');
+        var cfgSearchOnlyGoldByDefaultCheck = page.querySelector('#cfgSearchOnlyGoldByDefaultCheck');
         var cfgOnlyGoldCheck = page.querySelector('#cfgOnlyGoldCheck');
+        var cfgMovieFolderTemplateInput = page.querySelector('#cfgMovieFolderTemplateInput');
+        var cfgMovieFileTemplateInput = page.querySelector('#cfgMovieFileTemplateInput');
+        var cfgShowFolderTemplateInput = page.querySelector('#cfgShowFolderTemplateInput');
+        var cfgShowSeasonFolderTemplateInput = page.querySelector('#cfgShowSeasonFolderTemplateInput');
+        var cfgShowEpisodeFileTemplateInput = page.querySelector('#cfgShowEpisodeFileTemplateInput');
         var saveSettingsBtn = page.querySelector('#saveSettingsBtn');
         var saveSettingsBtnText = page.querySelector('#saveSettingsBtnText');
 
+        var t = I18N[getLang()] || I18N.en;
+
         if (saveSettingsBtn) saveSettingsBtn.disabled = true;
-        if (saveSettingsBtnText) saveSettingsBtnText.innerText = 'Збереження...';
+        if (saveSettingsBtnText) saveSettingsBtnText.innerText = t.savingSettings;
+
+        // Collect disabled trackers from checkboxes
+        var disabledTrackers = [];
+        var trackerBoxes = page.querySelectorAll('.t2j-tracker-checkbox');
+        trackerBoxes.forEach(function (cb) {
+            if (!cb.checked) {
+                var trackerName = cb.getAttribute('data-tracker');
+                if (trackerName) disabledTrackers.push(trackerName);
+            }
+        });
+
+        var selectedLang = cfgLanguageSelect ? cfgLanguageSelect.value : 'en';
 
         var payload = {
+            DefaultLanguage: selectedLang,
             UseEmbeddedTorrServer: cfgEmbeddedCheck ? cfgEmbeddedCheck.checked : false,
             ExternalTorrServerUrl: cfgExternalUrlInput ? cfgExternalUrlInput.value.trim() : 'http://torrserver:8090',
             EmbeddedTorrServerPort: parseInt(cfgPortInput ? cfgPortInput.value : '8095', 10) || 8095,
@@ -1305,7 +1975,14 @@
             ProwlarrUrl: cfgProwlarrUrlInput ? cfgProwlarrUrlInput.value.trim() : '',
             ProwlarrApiKey: cfgProwlarrKeyInput ? cfgProwlarrKeyInput.value.trim() : '',
             MediaRootPath: cfgMediaDirInput ? cfgMediaDirInput.value.trim() : '',
-            OnlyGoldTorrentsForNonAdmins: cfgOnlyGoldCheck ? cfgOnlyGoldCheck.checked : false
+            SearchOnlyGoldByDefault: cfgSearchOnlyGoldByDefaultCheck ? cfgSearchOnlyGoldByDefaultCheck.checked : false,
+            OnlyGoldTorrentsForNonAdmins: cfgOnlyGoldCheck ? cfgOnlyGoldCheck.checked : false,
+            DisabledTrackers: disabledTrackers,
+            MovieFolderTemplate: cfgMovieFolderTemplateInput ? cfgMovieFolderTemplateInput.value.trim() : '{Title} ({Year})',
+            MovieFileTemplate: cfgMovieFileTemplateInput ? cfgMovieFileTemplateInput.value.trim() : '{Title} ({Year}).strm',
+            ShowFolderTemplate: cfgShowFolderTemplateInput ? cfgShowFolderTemplateInput.value.trim() : '{Title} ({Year})',
+            ShowSeasonFolderTemplate: cfgShowSeasonFolderTemplateInput ? cfgShowSeasonFolderTemplateInput.value.trim() : 'Season {Season:00}',
+            ShowEpisodeFileTemplate: cfgShowEpisodeFileTemplateInput ? cfgShowEpisodeFileTemplateInput.value.trim() : '{Title} - {EpisodeTag}.strm'
         };
 
         try {
@@ -1316,19 +1993,24 @@
             });
 
             if (res.ok) {
-                if (saveSettingsBtnText) saveSettingsBtnText.innerText = '✓ Збережено!';
+                // Apply language switch immediately
+                setLang(selectedLang);
+
+                if (saveSettingsBtnText) saveSettingsBtnText.innerText = I18N[selectedLang].savedSettings;
                 setTimeout(function () {
-                    if (saveSettingsBtnText) saveSettingsBtnText.innerText = 'Зберегти налаштування';
+                    if (saveSettingsBtnText) saveSettingsBtnText.innerText = I18N[selectedLang].btnSaveSettings;
                     if (saveSettingsBtn) saveSettingsBtn.disabled = false;
                 }, 2000);
                 checkStatus();
             } else {
-                if (saveSettingsBtnText) saveSettingsBtnText.innerText = 'Помилка';
+                alert('Failed to save settings');
                 if (saveSettingsBtn) saveSettingsBtn.disabled = false;
+                if (saveSettingsBtnText) saveSettingsBtnText.innerText = t.btnSaveSettings;
             }
         } catch (e) {
-            if (saveSettingsBtnText) saveSettingsBtnText.innerText = 'Помилка';
+            alert('Network error while saving settings: ' + e.message);
             if (saveSettingsBtn) saveSettingsBtn.disabled = false;
+            if (saveSettingsBtnText) saveSettingsBtnText.innerText = t.btnSaveSettings;
         }
     }
     window.t2jSaveSettings = saveSettings;
@@ -1337,9 +2019,11 @@
         var page = getPage();
         if (!page) return;
         var restartDaemonBtn = page.querySelector('#restartDaemonBtn');
+        var t = I18N[getLang()] || I18N.en;
+
         if (restartDaemonBtn) {
             restartDaemonBtn.disabled = true;
-            restartDaemonBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Перезапуск...</span>';
+            restartDaemonBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>' + escapeHtml(t.restarting) + '</span>';
         }
 
         try {
@@ -1347,14 +2031,14 @@
             setTimeout(function () {
                 if (restartDaemonBtn) {
                     restartDaemonBtn.disabled = false;
-                    restartDaemonBtn.innerHTML = '<i class="fa-solid fa-power-off text-amber-400"></i> <span>Перезапустити торент-рушій</span>';
+                    restartDaemonBtn.innerHTML = '<i class="fa-solid fa-power-off text-amber-400"></i> <span>' + escapeHtml(t.btnRestartTorrServer) + '</span>';
                 }
                 checkStatus();
             }, 3000);
         } catch (e) {
             if (restartDaemonBtn) {
                 restartDaemonBtn.disabled = false;
-                restartDaemonBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка</span>';
+                restartDaemonBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Error</span>';
             }
         }
     }
@@ -1383,7 +2067,6 @@
         renderSearchResults();
     };
 
-    // Polling
     function startPolling() {
         stopPolling();
         window.t2jState.refreshInterval = setInterval(loadTorrents, 5000);
@@ -1443,16 +2126,7 @@
         if (!view) view = getPage();
         if (!view) return;
 
-        // Inject styles
-        if (!document.getElementById('torr2jelly-custom-css')) {
-            var link = document.createElement('link');
-            link.id = 'torr2jelly-custom-css';
-            link.rel = 'stylesheet';
-            link.href = (window.ApiClient && typeof window.ApiClient.getUrl === 'function')
-                ? window.ApiClient.getUrl('ConfigurationPage', { name: 'torr2jellycss' })
-                : 'ConfigurationPage?name=torr2jellycss';
-            document.head.appendChild(link);
-        }
+        // Inject fontawesome
         if (!document.getElementById('torr2jelly-fontawesome')) {
             var fa = document.createElement('link');
             fa.id = 'torr2jelly-fontawesome';
@@ -1495,7 +2169,12 @@
             };
         }
 
+        // Apply saved language (default 'en')
+        applyTranslations(getLang());
+
+        // Initial loads
         checkStatus();
+        loadLibraries();
     }
     window.initTorr2Jelly = initTorr2Jelly;
     window.t2jBoot = function () {

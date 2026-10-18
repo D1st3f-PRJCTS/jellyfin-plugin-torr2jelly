@@ -22,6 +22,18 @@ public class ProwlarrCategoryItem
     public string Name { get; set; } = string.Empty;
 }
 
+public class ProwlarrIndexerDto
+{
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("enable")]
+    public bool Enable { get; set; }
+}
+
 public class ProwlarrRawItem
 {
     [JsonPropertyName("guid")]
@@ -108,6 +120,31 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
         {
             _logger.LogWarning(ex, "Prowlarr connection test failed");
             return false;
+        }
+    }
+
+    public async Task<List<ProwlarrIndexerDto>> GetIndexersAsync(CancellationToken cancellationToken = default)
+    {
+        var (baseUrl, apiKey) = GetConfig();
+        if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new List<ProwlarrIndexerDto>();
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/api/v1/indexer");
+            req.Headers.Add("X-Api-Key", apiKey);
+            using var res = await _httpClient.SendAsync(req, cancellationToken);
+            res.EnsureSuccessStatusCode();
+
+            var indexers = await res.Content.ReadFromJsonAsync<List<ProwlarrIndexerDto>>(cancellationToken: cancellationToken);
+            return indexers ?? new List<ProwlarrIndexerDto>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to fetch indexers from Prowlarr");
+            return new List<ProwlarrIndexerDto>();
         }
     }
 

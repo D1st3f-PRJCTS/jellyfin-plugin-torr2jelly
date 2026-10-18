@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Jellyfin.Plugin.Torr2Jelly.Api.Dtos;
 
 public class AddTorrentRequestDto
@@ -8,6 +10,21 @@ public class AddTorrentRequestDto
     public string? PosterUrl { get; set; }
     public int? TmdbId { get; set; }
     public bool SyncNow { get; set; } = true;
+}
+
+public class RecategorizeTorrentRequestDto
+{
+    public string Category { get; set; } = string.Empty;
+    public string? CustomTitle { get; set; }
+}
+
+public class ServerLibraryDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string CollectionType { get; set; } = string.Empty;
+    public string Type { get; set; } = "movie"; // "movie" or "show"
+    public List<string> Locations { get; set; } = new();
+    public string PrimaryLocation { get; set; } = string.Empty;
 }
 
 public class PluginStatusDto

@@ -28,13 +28,22 @@ public class PluginConfiguration : BasePluginConfiguration
     public string TorznabApiKey { get; set; } = string.Empty;
 
     // Permissions & Filters
+    public bool SearchOnlyGoldByDefault { get; set; } = false;
     public bool OnlyGoldTorrentsForNonAdmins { get; set; } = false;
-    public string DefaultLanguage { get; set; } = "uk"; // "uk" or "en"
+    public List<string> DisabledTrackers { get; set; } = new();
+    public string DefaultLanguage { get; set; } = "en"; // "en" (default) or "uk"
 
     // Library & Storage
     public string MediaRootPath { get; set; } = "/media";
     public bool AutoSyncTorrents { get; set; } = true;
     public int AutoSyncIntervalMinutes { get; set; } = 15;
+
+    // STRM File & Folder Structure Templates
+    public string MovieFolderTemplate { get; set; } = "{Title} ({Year})";
+    public string MovieFileTemplate { get; set; } = "{Title} ({Year}).strm";
+    public string ShowFolderTemplate { get; set; } = "{Title} ({Year})";
+    public string ShowSeasonFolderTemplate { get; set; } = "Season {Season:00}";
+    public string ShowEpisodeFileTemplate { get; set; } = "{Title} - {EpisodeTag}.strm";
 
     // Categories
     public List<CategoryMapping> Categories { get; set; } = new()

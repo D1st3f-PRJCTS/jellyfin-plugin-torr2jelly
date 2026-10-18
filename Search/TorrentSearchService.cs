@@ -9,6 +9,14 @@ using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.Torr2Jelly.Search;
 
+public class IndexerStatusDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public bool EnabledInProwlarr { get; set; }
+    public bool DisabledInPlugin { get; set; }
+}
+
 public class TorrentSearchService
 {
     private readonly ILogger<TorrentSearchService> _logger;
@@ -25,9 +33,34 @@ public class TorrentSearchService
         _torznab = torznab;
     }
 
+    public async Task<List<IndexerStatusDto>> GetAvailableIndexersAsync(CancellationToken cancellationToken = default)
+    {
+        var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        var disabled = new HashSet<string>(config.DisabledTrackers ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+
+        var list = new List<IndexerStatusDto>();
+        if (config.EnableProwlarr)
+        {
+            var prowlarrIndexers = await _prowlarr.GetIndexersAsync(cancellationToken);
+            foreach (var idx in prowlarrIndexers)
+            {
+                list.Add(new IndexerStatusDto
+                {
+                    Id = idx.Id,
+                    Name = idx.Name,
+                    EnabledInProwlarr = idx.Enable,
+                    DisabledInPlugin = disabled.Contains(idx.Name)
+                });
+            }
+        }
+
+        return list;
+    }
+
     public async Task<List<TorrentSearchResult>> SearchAsync(
         string query,
         string? category = null,
+        bool? onlyGold = null,
         bool isUserAdmin = true,
         CancellationToken cancellationToken = default)
     {
@@ -56,6 +89,20 @@ public class TorrentSearchService
         {
             var torznabResults = await _torznab.SearchAsync(query, categoryIds, cancellationToken);
             results.AddRange(torznabResults);
+        }
+
+        // Filter out disabled trackers
+        if (config.DisabledTrackers != null && config.DisabledTrackers.Count > 0)
+        {
+            var disabled = new HashSet<string>(config.DisabledTrackers, StringComparer.OrdinalIgnoreCase);
+            results = results.Where(r => !disabled.Contains(r.Indexer)).ToList();
+        }
+
+        // Apply Gold filter: explicit parameter wins, otherwise default from config
+        var filterGold = onlyGold ?? config.SearchOnlyGoldByDefault;
+        if (filterGold)
+        {
+            results = results.Where(r => r.IsGold || r.IsFreeleech).ToList();
         }
 
         // Apply Gold/Freeleech filter for regular users if configured

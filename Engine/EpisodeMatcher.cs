@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Jellyfin.Plugin.Torr2Jelly.Engine;
@@ -54,6 +56,9 @@ public static partial class EpisodeMatcher
     [GeneratedRegex(@"(?i)\b(?:Special|Specials|OVA|SP)\b", RegexOptions.Compiled)]
     private static partial Regex SpecialsRegex();
 
+    [GeneratedRegex(@"(?i)\b(?:s\d{1,2}|season|\u0441\u0435\u0437\u043e\u043d|\d{1,2}x\d{1,2}|e\d{1,3}|ep\d{1,3}|\u0441\u0435\u0440\u0456\u0457|\u0441\u0435\u0440\u0438\u0438|\u0441\u0435\u0440\u0456\u044f|\u0441\u0435\u0440\u0438\u044f|\u0432\u0441\u0456\s+\u0441\u0435\u0440\u0456\u0457)\b", RegexOptions.Compiled)]
+    private static partial Regex ShowTitleKeywordsRegex();
+
     public static bool IsVideoFile(string filename)
     {
         var ext = Path.GetExtension(filename);
@@ -65,6 +70,35 @@ public static partial class EpisodeMatcher
         foreach (var vExt in VideoExtensions)
         {
             if (ext.Equals(vExt, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool IsShowRelease(string title, IEnumerable<string>? filePaths = null)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return false;
+        }
+
+        if (ShowTitleKeywordsRegex().IsMatch(title))
+        {
+            return true;
+        }
+
+        if (filePaths != null)
+        {
+            var videoFiles = filePaths.Where(IsVideoFile).ToList();
+            if (videoFiles.Count > 1)
+            {
+                return true;
+            }
+
+            if (videoFiles.Any(f => ParseEpisodeInfo(f).IsMatched))
             {
                 return true;
             }

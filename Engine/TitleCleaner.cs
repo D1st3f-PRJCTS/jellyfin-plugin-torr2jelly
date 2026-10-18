@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Jellyfin.Plugin.Torr2Jelly.Engine;
@@ -32,6 +34,73 @@ public static partial class TitleCleaner
 
     [GeneratedRegex(@"(?i)\|\s*Sub\b.*$", RegexOptions.Compiled)]
     private static partial Regex SubtitleSuffixRegex();
+
+    private static readonly Dictionary<string, string> TranslitMap = new(StringComparer.Ordinal)
+    {
+        ["А"] = "A", ["Б"] = "B", ["В"] = "V", ["Г"] = "H", ["Ґ"] = "G",
+        ["Д"] = "D", ["Е"] = "E", ["Є"] = "Ye", ["Ж"] = "Zh", ["З"] = "Z",
+        ["И"] = "Y", ["І"] = "I", ["Ї"] = "Yi", ["Й"] = "Y", ["К"] = "K",
+        ["Л"] = "L", ["М"] = "M", ["Н"] = "N", ["О"] = "O", ["П"] = "P",
+        ["Р"] = "R", ["С"] = "S", ["Т"] = "T", ["У"] = "U", ["Ф"] = "F",
+        ["Х"] = "Kh", ["Ц"] = "Ts", ["Ч"] = "Ch", ["Ш"] = "Sh", ["Щ"] = "Shch",
+        ["Ю"] = "Yu", ["Я"] = "Ya", ["ь"] = "", ["Ь"] = "", ["'"] = "", ["’"] = "",
+        ["а"] = "a", ["б"] = "b", ["в"] = "v", ["г"] = "h", ["ґ"] = "g",
+        ["д"] = "d", ["е"] = "e", ["є"] = "ye", ["ж"] = "zh", ["з"] = "z",
+        ["и"] = "y", ["і"] = "i", ["ї"] = "yi", ["й"] = "y", ["к"] = "k",
+        ["л"] = "l", ["м"] = "m", ["н"] = "n", ["о"] = "o", ["п"] = "p",
+        ["р"] = "r", ["с"] = "s", ["т"] = "t", ["у"] = "u", ["ф"] = "f",
+        ["х"] = "kh", ["ц"] = "ts", ["ч"] = "ch", ["ш"] = "sh", ["щ"] = "shch",
+        ["ю"] = "yu", ["я"] = "ya"
+    };
+
+    public static string TransliterateUkrainianToLatin(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var sb = new StringBuilder(text.Length);
+        foreach (var ch in text)
+        {
+            var s = ch.ToString();
+            if (TranslitMap.TryGetValue(s, out var replacement))
+            {
+                sb.Append(replacement);
+            }
+            else
+            {
+                sb.Append(ch);
+            }
+        }
+
+        return MultipleSpacesRegex().Replace(sb.ToString(), " ").Trim();
+    }
+
+    public static string GetEnglishOrLatinTitle(string cleanTitle, string? originalTitle)
+    {
+        // 1. If original English title exists, prefer it
+        if (!string.IsNullOrWhiteSpace(originalTitle) && originalTitle.Any(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')))
+        {
+            return originalTitle.Trim();
+        }
+
+        // 2. If cleanTitle is already Latin/English, return it
+        var hasCyrillic = cleanTitle.Any(c => c >= 0x0400 && c <= 0x04FF);
+        if (!hasCyrillic && !string.IsNullOrWhiteSpace(cleanTitle))
+        {
+            return cleanTitle.Trim();
+        }
+
+        // 3. If cleanTitle is Cyrillic, transliterate to Latin
+        var translit = TransliterateUkrainianToLatin(cleanTitle);
+        if (!string.IsNullOrWhiteSpace(translit))
+        {
+            return translit;
+        }
+
+        return cleanTitle;
+    }
 
     public static (string CleanTitle, string? OriginalTitle, int? Year) CleanTitleAndExtractYear(string rawTitle)
     {

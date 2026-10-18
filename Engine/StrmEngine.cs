@@ -197,15 +197,18 @@ public class StrmEngine
                 var folderTemplate = !string.IsNullOrWhiteSpace(config.MovieFolderTemplate) ? config.MovieFolderTemplate : "{Title} ({Year})";
                 var fileTemplate = !string.IsNullOrWhiteSpace(config.MovieFileTemplate) ? config.MovieFileTemplate : "{Title} ({Year}).strm";
 
-                // Avoid duplicating year in folder name if cleanTitle already contains extractedYear
-                var yearToken = extractedYear.HasValue && !cleanTitle.Contains(extractedYear.Value.ToString(), StringComparison.Ordinal)
+                // Ensure file and folder names on disk are always in English/Latin
+                var fileTitle = TitleCleaner.GetEnglishOrLatinTitle(cleanTitle, originalTitle);
+
+                // Avoid duplicating year in folder name if fileTitle already contains extractedYear
+                var yearToken = extractedYear.HasValue && !fileTitle.Contains(extractedYear.Value.ToString(), StringComparison.Ordinal)
                     ? extractedYear.Value.ToString()
                     : string.Empty;
 
                 var tokens = new Dictionary<string, string>
                 {
-                    ["Title"] = cleanTitle,
-                    ["OriginalTitle"] = originalTitle ?? cleanTitle,
+                    ["Title"] = fileTitle,
+                    ["OriginalTitle"] = originalTitle ?? fileTitle,
                     ["Year"] = yearToken,
                     ["RawTitle"] = rawTitle
                 };
@@ -216,7 +219,7 @@ public class StrmEngine
                     folderName = TitleCleaner.SanitizeFilename(FormatTemplate(folderTemplate, tokens));
                     if (string.IsNullOrWhiteSpace(folderName))
                     {
-                        folderName = TitleCleaner.SanitizeFilename(TitleCleaner.FormatFolderTitle(cleanTitle, extractedYear));
+                        folderName = TitleCleaner.SanitizeFilename(TitleCleaner.FormatFolderTitle(fileTitle, extractedYear));
                     }
                 }
                 else
@@ -226,7 +229,7 @@ public class StrmEngine
 
                 if (string.IsNullOrWhiteSpace(folderName))
                 {
-                    folderName = TitleCleaner.SanitizeFilename(rawTitle);
+                    folderName = TitleCleaner.SanitizeFilename(fileTitle);
                 }
 
                 var movieDir = Path.Combine(categoryFolder, folderName);
@@ -279,14 +282,15 @@ public class StrmEngine
                             var (itemCleanTitle, itemOrigTitle, itemYear) = TitleCleaner.CleanTitleAndExtractYear(fileBase);
                             if (!string.IsNullOrWhiteSpace(itemCleanTitle) && itemCleanTitle.Length > 2)
                             {
-                                var itemYearToken = itemYear.HasValue && !itemCleanTitle.Contains(itemYear.Value.ToString(), StringComparison.Ordinal)
+                                var itemFileTitle = TitleCleaner.GetEnglishOrLatinTitle(itemCleanTitle, itemOrigTitle);
+                                var itemYearToken = itemYear.HasValue && !itemFileTitle.Contains(itemYear.Value.ToString(), StringComparison.Ordinal)
                                     ? itemYear.Value.ToString()
                                     : string.Empty;
 
                                 var itemTokens = new Dictionary<string, string>
                                 {
-                                    ["Title"] = itemCleanTitle,
-                                    ["OriginalTitle"] = itemOrigTitle ?? itemCleanTitle,
+                                    ["Title"] = itemFileTitle,
+                                    ["OriginalTitle"] = itemOrigTitle ?? itemFileTitle,
                                     ["Year"] = itemYearToken,
                                     ["RawTitle"] = fileBase
                                 };
@@ -342,15 +346,18 @@ public class StrmEngine
                 var seasonFolderTemplate = !string.IsNullOrWhiteSpace(config.ShowSeasonFolderTemplate) ? config.ShowSeasonFolderTemplate : "Season {Season:00}";
                 var epFileTemplate = !string.IsNullOrWhiteSpace(config.ShowEpisodeFileTemplate) ? config.ShowEpisodeFileTemplate : "{Title} - {EpisodeTag}.strm";
 
-                // Avoid duplicating year in show folder name if cleanTitle already contains extractedYear
-                var showYearToken = extractedYear.HasValue && !cleanTitle.Contains(extractedYear.Value.ToString(), StringComparison.Ordinal)
+                // Ensure file and folder names on disk are always in English/Latin
+                var showFileTitle = TitleCleaner.GetEnglishOrLatinTitle(cleanTitle, originalTitle);
+
+                // Avoid duplicating year in show folder name if showFileTitle already contains extractedYear
+                var showYearToken = extractedYear.HasValue && !showFileTitle.Contains(extractedYear.Value.ToString(), StringComparison.Ordinal)
                     ? extractedYear.Value.ToString()
                     : string.Empty;
 
                 var showTokens = new Dictionary<string, string>
                 {
-                    ["Title"] = cleanTitle,
-                    ["OriginalTitle"] = originalTitle ?? cleanTitle,
+                    ["Title"] = showFileTitle,
+                    ["OriginalTitle"] = originalTitle ?? showFileTitle,
                     ["Year"] = showYearToken,
                     ["RawTitle"] = rawTitle
                 };
@@ -361,7 +368,7 @@ public class StrmEngine
                     seriesFolder = TitleCleaner.SanitizeFilename(FormatTemplate(showFolderTemplate, showTokens));
                     if (string.IsNullOrWhiteSpace(seriesFolder))
                     {
-                        seriesFolder = TitleCleaner.SanitizeFilename(TitleCleaner.FormatFolderTitle(cleanTitle, extractedYear));
+                        seriesFolder = TitleCleaner.SanitizeFilename(TitleCleaner.FormatFolderTitle(showFileTitle, extractedYear));
                     }
                 }
                 else
@@ -371,7 +378,7 @@ public class StrmEngine
 
                 if (string.IsNullOrWhiteSpace(seriesFolder))
                 {
-                    seriesFolder = TitleCleaner.SanitizeFilename(rawTitle);
+                    seriesFolder = TitleCleaner.SanitizeFilename(showFileTitle);
                 }
 
                 var seriesDir = Path.Combine(categoryFolder, seriesFolder);
@@ -593,13 +600,18 @@ public class StrmEngine
 
     private static string BuildMovieNfoXml(string title, string? originalTitle, int? year, int? tmdbId, string? imdbId)
     {
+        var hasId = (tmdbId.HasValue && tmdbId.Value > 0) || !string.IsNullOrWhiteSpace(imdbId);
         var sb = new StringBuilder();
         sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>");
         sb.AppendLine("<movie>");
-        sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
-        if (!string.IsNullOrWhiteSpace(originalTitle) && !originalTitle.Equals(title, StringComparison.OrdinalIgnoreCase))
+        // If external IDs exist, omit title/originaltitle so Jellyfin fetches metadata in library's preferred language
+        if (!hasId)
         {
-            sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(originalTitle)}</originaltitle>");
+            sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
+            if (!string.IsNullOrWhiteSpace(originalTitle) && !originalTitle.Equals(title, StringComparison.OrdinalIgnoreCase))
+            {
+                sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(originalTitle)}</originaltitle>");
+            }
         }
         if (year.HasValue)
         {
@@ -637,13 +649,18 @@ public class StrmEngine
     {
         try
         {
+            var hasId = (tmdbId.HasValue && tmdbId.Value > 0) || !string.IsNullOrWhiteSpace(imdbId);
             var sb = new StringBuilder();
             sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>");
             sb.AppendLine("<tvshow>");
-            sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
-            if (!string.IsNullOrWhiteSpace(originalTitle) && !originalTitle.Equals(title, StringComparison.OrdinalIgnoreCase))
+            // If external IDs exist, omit title/originaltitle so Jellyfin fetches metadata in library's preferred language
+            if (!hasId)
             {
-                sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(originalTitle)}</originaltitle>");
+                sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
+                if (!string.IsNullOrWhiteSpace(originalTitle) && !originalTitle.Equals(title, StringComparison.OrdinalIgnoreCase))
+                {
+                    sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(originalTitle)}</originaltitle>");
+                }
             }
             if (year.HasValue)
             {

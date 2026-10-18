@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/main/logo.png",
     "versions": [
       {
+        "version": "1.0.12.0",
+        "changelog": "Filesystem and metadata language alignment: file and folder names on disk are strictly Latin/English (preserving original English titles or transliterating Ukrainian to Latin), while Jellyfin metadata (movie/show title, overview, tags) honors the library's PreferredMetadataLanguage (e.g. Ukrainian) by omitting title tags from NFOs when TMDb/IMDb IDs are available.",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/releases/download/v1.0.12/Torr2Jelly_1.0.12.0.zip",
+        "checksum": "0785d425314eddc2dfb0791d3f2cfada",
+        "timestamp": "2026-10-18T23:55:00Z"
+      },
+      {
         "version": "1.0.11.0",
         "changelog": "Fix Jellyfin metadata identification: map TMDb/IMDb IDs from Prowlarr/Torznab search, generate universal Kodi/Jellyfin NFOs (movie.nfo, tvshow.nfo) with standard uniqueid tags, intelligent dual-title and season noise cleaning in TitleCleaner, and display poster previews with TMDb/IMDb badges in search UI.",
         "targetAbi": "10.9.0.0",

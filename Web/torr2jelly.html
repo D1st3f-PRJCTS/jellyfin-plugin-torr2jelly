@@ -1,8 +1,306 @@
-<!-- Torr2Jelly Rich Glassmorphic UI matching original app -->
-<link rel="stylesheet" href="ConfigurationPage?name=torr2jellycss">
+<!-- Torr2Jelly Self-Contained Glassmorphic UI -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
-<div id="torr2jellyPage" data-role="page" class="page type-interior pluginConfigurationPage fullWidthContent" data-controller="__plugin/torr2jellyjs">
+<style>
+/* Torr2Jelly Modern Tailwind & Glassmorphism Replica */
+
+.torr2jelly-root {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #f8fafc;
+    background-color: #020617;
+    margin: -1.5em;
+    padding: 0;
+    min-height: 100vh;
+}
+
+.torr2jelly-root * {
+    box-sizing: border-box;
+}
+
+/* Glass effect matching torr2jelly */
+.torr2jelly-root .glass {
+    background: rgba(30, 41, 59, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.torr2jelly-root .t2j-nav-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    outline: none;
+}
+
+.torr2jelly-root .t2j-nav-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.torr2jelly-root .t2j-nav-btn.active {
+    background: #7c3aed !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+}
+
+/* Utilities matching Tailwind classes */
+.torr2jelly-root .max-w-7xl { max-width: 80rem; }
+.torr2jelly-root .mx-auto { margin-left: auto; margin-right: auto; }
+.torr2jelly-root .flex { display: flex; }
+.torr2jelly-root .flex-col { flex-direction: column; }
+.torr2jelly-root .items-center { align-items: center; }
+.torr2jelly-root .justify-between { justify-content: space-between; }
+.torr2jelly-root .justify-center { justify-content: center; }
+.torr2jelly-root .space-x-1 > * + * { margin-left: 0.25rem; }
+.torr2jelly-root .space-x-1\.5 > * + * { margin-left: 0.375rem; }
+.torr2jelly-root .space-x-2 > * + * { margin-left: 0.5rem; }
+.torr2jelly-root .space-x-3 > * + * { margin-left: 0.75rem; }
+.torr2jelly-root .space-y-1\.5 > * + * { margin-top: 0.375rem; }
+.torr2jelly-root .space-y-2 > * + * { margin-top: 0.5rem; }
+.torr2jelly-root .space-y-3 > * + * { margin-top: 0.75rem; }
+.torr2jelly-root .space-y-4 > * + * { margin-top: 1rem; }
+.torr2jelly-root .space-y-6 > * + * { margin-top: 1.5rem; }
+.torr2jelly-root .gap-2 { gap: 0.5rem; }
+.torr2jelly-root .gap-3 { gap: 0.75rem; }
+.torr2jelly-root .gap-4 { gap: 1rem; }
+.torr2jelly-root .gap-6 { gap: 1.5rem; }
+
+.torr2jelly-root .grid { display: grid; }
+.torr2jelly-root .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+@media (min-width: 640px) {
+    .torr2jelly-root .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .torr2jelly-root .sm\:flex-row { flex-direction: row; }
+    .torr2jelly-root .sm\:items-center { align-items: center; }
+}
+@media (min-width: 768px) {
+    .torr2jelly-root .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+    .torr2jelly-root .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.torr2jelly-root .relative { position: relative; }
+.torr2jelly-root .sticky { position: sticky; }
+.torr2jelly-root .top-0 { top: 0; }
+.torr2jelly-root .z-40 { z-index: 40; }
+.torr2jelly-root .h-16 { height: 4rem; }
+.torr2jelly-root .w-full { width: 100%; }
+.torr2jelly-root .flex-1 { flex: 1 1 0%; }
+.torr2jelly-root .min-w-0 { min-width: 0px; }
+.torr2jelly-root .overflow-hidden { overflow: hidden; }
+.torr2jelly-root .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.torr2jelly-root .rounded-lg { border-radius: 0.5rem; }
+.torr2jelly-root .rounded-xl { border-radius: 0.75rem; }
+.torr2jelly-root .rounded-2xl { border-radius: 1rem; }
+.torr2jelly-root .rounded-full { border-radius: 9999px; }
+
+.torr2jelly-root .border { border-width: 1px; }
+.torr2jelly-root .border-b { border-bottom-width: 1px; }
+.torr2jelly-root .border-t { border-top-width: 1px; }
+.torr2jelly-root .border-slate-800 { border-color: #1e293b; }
+.torr2jelly-root .border-slate-700 { border-color: #334155; }
+
+.torr2jelly-root .bg-slate-950 { background-color: #020617; }
+.torr2jelly-root .bg-slate-900 { background-color: #0f172a; }
+.torr2jelly-root .bg-slate-800 { background-color: #1e293b; }
+.torr2jelly-root .bg-brand-600 { background-color: #7c3aed; }
+
+.torr2jelly-root .text-white { color: #ffffff; }
+.torr2jelly-root .text-slate-100 { color: #f1f5f9; }
+.torr2jelly-root .text-slate-200 { color: #e2e8f0; }
+.torr2jelly-root .text-slate-300 { color: #cbd5e1; }
+.torr2jelly-root .text-slate-400 { color: #94a3b8; }
+.torr2jelly-root .text-slate-500 { color: #64748b; }
+.torr2jelly-root .text-amber-300 { color: #fcd34d; }
+.torr2jelly-root .text-amber-400 { color: #fbbf24; }
+.torr2jelly-root .text-emerald-400 { color: #34d399; }
+.torr2jelly-root .text-cyan-300 { color: #67e8f9; }
+.torr2jelly-root .text-cyan-400 { color: #22d3ee; }
+
+.torr2jelly-root .font-bold { font-weight: 700; }
+.torr2jelly-root .font-semibold { font-weight: 600; }
+.torr2jelly-root .font-medium { font-weight: 500; }
+.torr2jelly-root .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+.torr2jelly-root .text-xs { font-size: 0.75rem; line-height: 1rem; }
+.torr2jelly-root .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.torr2jelly-root .text-base { font-size: 1rem; line-height: 1.5rem; }
+.torr2jelly-root .text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.torr2jelly-root .text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+.torr2jelly-root .text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.torr2jelly-root .text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
+
+.torr2jelly-root .px-2\.5 { padding-left: 0.625rem; padding-right: 0.625rem; }
+.torr2jelly-root .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.torr2jelly-root .px-4 { padding-left: 1rem; padding-right: 1rem; }
+.torr2jelly-root .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.torr2jelly-root .px-8 { padding-left: 2rem; padding-right: 2rem; }
+.torr2jelly-root .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.torr2jelly-root .py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.torr2jelly-root .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.torr2jelly-root .py-2\.5 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+.torr2jelly-root .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.torr2jelly-root .p-4 { padding: 1rem; }
+.torr2jelly-root .p-5 { padding: 1.25rem; }
+.torr2jelly-root .p-6 { padding: 1.5rem; }
+.torr2jelly-root .py-8 { padding-top: 2rem; padding-bottom: 2rem; }
+.torr2jelly-root .py-12 { padding-top: 3rem; padding-bottom: 3rem; }
+
+.torr2jelly-root .hidden { display: none !important; }
+
+/* Result Row Hover */
+.torr2jelly-root .t2j-result-row {
+    padding: 1rem 1.25rem;
+    transition: background-color 0.15s ease;
+}
+.torr2jelly-root .t2j-result-row:hover {
+    background: rgba(30, 41, 59, 0.5);
+}
+.torr2jelly-root .t2j-result-row.is-gold {
+    background: rgba(245, 158, 11, 0.04);
+}
+.torr2jelly-root .t2j-result-row.is-gold:hover {
+    background: rgba(245, 158, 11, 0.08);
+}
+
+
+/* Critical Overrides for Jellyfin Web SPA */
+#torr2jellyPage, .torr2jelly-root {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    background: #060913 !important;
+    color: #f8fafc !important;
+    min-height: 100vh;
+}
+
+#torr2jellyPage * {
+    box-sizing: border-box;
+}
+
+#torr2jellyPage .hidden {
+    display: none !important;
+}
+
+/* Ensure buttons never render as white browser boxes */
+#torr2jellyPage button {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    font-family: inherit !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    cursor: pointer !important;
+}
+
+#torr2jellyPage .t2j-nav-btn {
+    background: transparent !important;
+    border: none !important;
+    color: #94a3b8 !important;
+    cursor: pointer !important;
+    padding: 8px 16px !important;
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+#torr2jellyPage .t2j-nav-btn:hover {
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+#torr2jellyPage .t2j-nav-btn.active {
+    background: linear-gradient(135deg, #6366f1, #7c3aed) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
+}
+
+/* Inputs & Selects */
+#torr2jellyPage input[type="text"],
+#torr2jellyPage input[type="password"],
+#torr2jellyPage select {
+    background-color: #0b1120 !important;
+    color: #f8fafc !important;
+    border: 1px solid #1e293b !important;
+    border-radius: 10px !important;
+    padding: 10px 14px !important;
+    font-size: 13px !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+#torr2jellyPage input:focus,
+#torr2jellyPage select:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
+}
+
+/* Primary buttons */
+#torr2jellyPage button#t2jSyncNowBtn,
+#torr2jellyPage button#directSubmitBtn,
+#torr2jellyPage button#saveSettingsBtn,
+#torr2jellyPage button[type="submit"] {
+    background: linear-gradient(135deg, #6366f1, #7c3aed) !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 10px !important;
+    padding: 8px 16px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3) !important;
+}
+
+#torr2jellyPage button#t2jSyncNowBtn:hover,
+#torr2jellyPage button#directSubmitBtn:hover,
+#torr2jellyPage button#saveSettingsBtn:hover,
+#torr2jellyPage button[type="submit"]:hover {
+    opacity: 0.92;
+    transform: translateY(-1px);
+}
+
+/* Glass cards */
+#torr2jellyPage .glass {
+    background: rgba(15, 23, 42, 0.75) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 16px !important;
+}
+
+/* Results */
+#torr2jellyPage .t2j-result-row {
+    background: rgba(15, 23, 42, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 12px !important;
+    padding: 14px 18px !important;
+    margin-bottom: 10px !important;
+    transition: all 0.15s ease !important;
+}
+
+#torr2jellyPage .t2j-result-row:hover {
+    background: rgba(30, 41, 59, 0.75) !important;
+    border-color: rgba(99, 102, 241, 0.3) !important;
+    transform: translateY(-1px);
+}
+
+#torr2jellyPage .t2j-result-row.is-gold {
+    background: rgba(245, 158, 11, 0.06) !important;
+    border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+</style>
+
+<!-- Torr2Jelly Rich Glassmorphic UI matching original app -->
+
+
+
+<div id="torr2jellyPage" data-role="page" class="page type-interior pluginConfigurationPage fullWidthContent" >
   <div class="content-primary">
     <div class="torr2jelly-root bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
 
@@ -372,3 +670,607 @@
     </div>
   </div>
 </div>
+
+<img src="data:image/svg+xml;utf8,<svg/>" style="display:none;" onload="window.initTorr2Jelly &amp;&amp; window.initTorr2Jelly()" onerror="window.initTorr2Jelly &amp;&amp; window.initTorr2Jelly()" />
+
+<script type="text/javascript">
+
+(function () {
+    'use strict';
+
+    function initTorr2Jelly(view) {
+        if (!view) view = document.getElementById('torr2jellyPage');
+        if (!view) return;
+        if (view._t2jInitialized) return;
+        view._t2jInitialized = true;
+
+        
+        // State
+        let currentTab = 'search';
+        let searchResults = [];
+        let activeFilter = 'all'; // 'all' or 'gold'
+        let currentSort = 'priority';
+        let torrents = [];
+        let refreshInterval = null;
+
+        // Elements
+        const daemonBadge = view.querySelector('#t2jDaemonBadge');
+        const daemonBadgeText = view.querySelector('#t2jDaemonBadgeText');
+        const activeTorrentsBadge = view.querySelector('#activeTorrentsBadge');
+        const syncNowBtn = view.querySelector('#t2jSyncNowBtn');
+        const syncText = view.querySelector('#t2jSyncText');
+
+        const searchForm = view.querySelector('#t2jSearchForm');
+        const searchInput = view.querySelector('#t2jSearchInput');
+        const clearSearchBtn = view.querySelector('#t2jClearSearchBtn');
+        const searchCategorySelect = view.querySelector('#t2jSearchCategorySelect');
+        const searchBtnText = view.querySelector('#t2jSearchBtnText');
+        const searchSpinner = view.querySelector('#t2jSearchSpinner');
+        const resultsWrapper = view.querySelector('#t2jResultsWrapper');
+        const resultsList = view.querySelector('#t2jResultsList');
+        const resultsCount = view.querySelector('#t2jResultsCount');
+        const goldCountBadge = view.querySelector('#goldCountBadge');
+        const filterAllBtn = view.querySelector('#filterAllBtn');
+        const filterGoldBtn = view.querySelector('#filterGoldBtn');
+        const sortSelect = view.querySelector('#t2jSortSelect');
+
+        const directLinkForm = view.querySelector('#t2jDirectLinkForm');
+        const directLinkInput = view.querySelector('#directLinkInput');
+        const directTitleInput = view.querySelector('#directTitleInput');
+        const directCategorySelect = view.querySelector('#directCategorySelect');
+        const directSyncCheck = view.querySelector('#directSyncCheck');
+        const directSubmitBtn = view.querySelector('#directSubmitBtn');
+
+        const dashTorrentsCount = view.querySelector('#dashTorrentsCount');
+        const dashDaemonEngine = view.querySelector('#dashDaemonEngine');
+        const dashCacheSize = view.querySelector('#dashCacheSize');
+        const dashMediaDir = view.querySelector('#dashMediaDir');
+        const torrentsListTable = view.querySelector('#torrentsListTable');
+        const torrentsEmptyNotice = view.querySelector('#torrentsEmptyNotice');
+        const refreshTorrentsBtn = view.querySelector('#refreshTorrentsBtn');
+        const scanLibraryBtn = view.querySelector('#scanLibraryBtn');
+
+        const cfgEmbeddedCheck = view.querySelector('#cfgEmbeddedCheck');
+        const cfgPortInput = view.querySelector('#cfgPortInput');
+        const cfgCacheSizeInput = view.querySelector('#cfgCacheSizeInput');
+        const cfgStreamUrlInput = view.querySelector('#cfgStreamUrlInput');
+        const cfgProwlarrUrlInput = view.querySelector('#cfgProwlarrUrlInput');
+        const cfgProwlarrKeyInput = view.querySelector('#cfgProwlarrKeyInput');
+        const cfgMediaDirInput = view.querySelector('#cfgMediaDirInput');
+        const cfgOnlyGoldCheck = view.querySelector('#cfgOnlyGoldCheck');
+        const saveSettingsBtn = view.querySelector('#saveSettingsBtn');
+        const saveSettingsBtnText = view.querySelector('#saveSettingsBtnText');
+        const restartDaemonBtn = view.querySelector('#restartDaemonBtn');
+
+        if (!document.getElementById('torr2jelly-custom-css')) {
+            const link = document.createElement('link');
+            link.id = 'torr2jelly-custom-css';
+            link.rel = 'stylesheet';
+            link.href = (window.ApiClient && typeof window.ApiClient.getUrl === 'function') 
+                ? window.ApiClient.getUrl('ConfigurationPage', { name: 'torr2jellycss' }) 
+                : 'ConfigurationPage?name=torr2jellycss';
+            document.head.appendChild(link);
+        }
+        if (!document.getElementById('torr2jelly-fontawesome')) {
+            const fa = document.createElement('link');
+            fa.id = 'torr2jelly-fontawesome';
+            fa.rel = 'stylesheet';
+            fa.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css';
+            document.head.appendChild(fa);
+        }
+
+        function getApiUrl(path) {
+            if (window.ApiClient && typeof window.ApiClient.getUrl === 'function') {
+                return window.ApiClient.getUrl(path);
+            }
+            return path;
+        }
+
+        function getAuthHeaders() {
+            const headers = { 'Content-Type': 'application/json' };
+            if (window.ApiClient && typeof window.ApiClient.accessToken === 'function') {
+                headers['X-Emby-Token'] = window.ApiClient.accessToken();
+            }
+            return headers;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Tab Navigation
+        view.querySelectorAll('.t2j-nav-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.getAttribute('data-tab');
+                switchTab(tab);
+            });
+        });
+
+        function switchTab(tab) {
+            currentTab = tab;
+            view.querySelectorAll('.t2j-nav-btn').forEach(b => {
+                if (b.getAttribute('data-tab') === tab) {
+                    b.classList.add('active');
+                } else {
+                    b.classList.remove('active');
+                }
+            });
+
+            view.querySelectorAll('.t2j-tab-content').forEach(c => c.classList.add('hidden'));
+
+            if (tab === 'search') view.querySelector('#t2jTabSearch').classList.remove('hidden');
+            if (tab === 'magnet') view.querySelector('#t2jTabMagnet').classList.remove('hidden');
+            if (tab === 'dashboard') {
+                view.querySelector('#t2jTabDashboard').classList.remove('hidden');
+                loadTorrents();
+                startPolling();
+            } else {
+                stopPolling();
+            }
+            if (tab === 'settings') {
+                view.querySelector('#t2jTabSettings').classList.remove('hidden');
+                loadSettings();
+            }
+        }
+
+        // Check Daemon Status
+        async function checkStatus() {
+            try {
+                const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Status'), { headers: getAuthHeaders() });
+                if (res.ok) {
+                    const data = await res.json();
+                    daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+                    daemonBadgeText.innerText = `TorrServer Online (${data.DaemonVersion || 'MatriX'})`;
+                    dashDaemonEngine.innerText = `TorrServer ${data.DaemonVersion || 'MatriX'}`;
+                    dashCacheSize.innerText = `${data.DaemonPort ? 'Порт ' + data.DaemonPort : '256 MB'}`;
+                    activeTorrentsBadge.innerText = data.ActiveTorrentsCount || 0;
+                    dashTorrentsCount.innerText = data.ActiveTorrentsCount || 0;
+                } else {
+                    daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30';
+                    daemonBadgeText.innerText = 'TorrServer Offline';
+                }
+            } catch {
+                daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30';
+                daemonBadgeText.innerText = 'TorrServer Offline';
+            }
+        }
+
+        // Search Action
+        searchForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = searchInput.value.trim();
+            if (!query) return;
+
+            searchSpinner.classList.remove('hidden');
+            resultsWrapper.classList.add('hidden');
+            resultsList.innerHTML = '';
+            searchBtnText.innerText = 'Шукаємо...';
+
+            try {
+                const cat = searchCategorySelect.value;
+                const url = getApiUrl(`Plugins/Torr2Jelly/Search?query=${encodeURIComponent(query)}&category=${encodeURIComponent(cat)}`);
+                const res = await fetch(url, { headers: getAuthHeaders() });
+                searchResults = await res.json();
+
+                renderSearchResults();
+            } catch (err) {
+                resultsList.innerHTML = `<div class="p-6 text-center text-rose-400 font-medium">Помилка пошуку: ${err.message}</div>`;
+                resultsWrapper.classList.remove('hidden');
+            } finally {
+                searchSpinner.classList.add('hidden');
+                searchBtnText.innerText = 'Знайти';
+            }
+        });
+
+        searchInput.addEventListener('input', () => {
+            if (searchInput.value.trim()) {
+                clearSearchBtn.classList.remove('hidden');
+            } else {
+                clearSearchBtn.classList.add('hidden');
+            }
+        });
+
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearchBtn.classList.add('hidden');
+            resultsWrapper.classList.add('hidden');
+            searchResults = [];
+        });
+
+        // Filter & Sort
+        filterAllBtn.addEventListener('click', () => {
+            activeFilter = 'all';
+            filterAllBtn.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all bg-slate-800 border-slate-600 text-white font-bold';
+            filterGoldBtn.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all border-slate-800 hover:bg-slate-800/60 text-amber-400/80 flex items-center space-x-1.5';
+            renderSearchResults();
+        });
+
+        filterGoldBtn.addEventListener('click', () => {
+            activeFilter = 'gold';
+            filterGoldBtn.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all bg-amber-500/20 border-amber-500/40 text-amber-300 font-bold flex items-center space-x-1.5';
+            filterAllBtn.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all border-slate-800 hover:bg-slate-800/60 text-slate-400';
+            renderSearchResults();
+        });
+
+        sortSelect.addEventListener('change', () => {
+            currentSort = sortSelect.value;
+            renderSearchResults();
+        });
+
+        function renderSearchResults() {
+            if (!searchResults) searchResults = [];
+
+            let filtered = searchResults.slice();
+            const goldTotal = filtered.filter(r => r.IsGold || r.isGold).length;
+            goldCountBadge.innerText = goldTotal;
+
+            if (activeFilter === 'gold') {
+                filtered = filtered.filter(r => r.IsGold || r.isGold);
+            }
+
+            // Sort
+            if (currentSort === 'seeders') {
+                filtered.sort((a, b) => (b.Seeders || b.seeders || 0) - (a.Seeders || a.seeders || 0));
+            } else if (currentSort === 'size_desc') {
+                filtered.sort((a, b) => (b.Size || b.size || 0) - (a.Size || a.size || 0));
+            } else if (currentSort === 'size_asc') {
+                filtered.sort((a, b) => (a.Size || a.size || 0) - (b.Size || b.size || 0));
+            }
+
+            resultsCount.innerText = filtered.length;
+            resultsList.innerHTML = '';
+
+            if (filtered.length === 0) {
+                resultsList.innerHTML = '<div class="p-8 text-center text-slate-400">Нічого не знайдено за заданими критеріями фільтрації.</div>';
+                resultsWrapper.classList.remove('hidden');
+                return;
+            }
+
+            filtered.forEach(item => {
+                const isGold = item.IsGold || item.isGold;
+                const isFreeleech = item.IsFreeleech || item.isFreeleech;
+                const title = item.Title || item.title || '';
+                const size = item.SizeFormatted || formatBytes(item.Size || item.size || 0);
+                const seeders = item.Seeders || item.seeders || 0;
+                const peers = item.Peers || item.peers || 0;
+                const indexer = item.Indexer || item.indexer || 'Tracker';
+                const link = item.MagnetUrl || item.magnetUrl || item.DownloadUrl || item.downloadUrl || '';
+
+                const row = document.createElement('div');
+                row.className = `t2j-result-row flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isGold ? 'is-gold' : ''}`;
+
+                const goldBadge = isGold
+                    ? `<span class="text-xs px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border border-amber-500/40 font-bold flex items-center space-x-1 shadow-sm shadow-amber-500/20">
+                         <span>⚡ ЗОЛОТА (Freeleech)</span>
+                       </span>`
+                    : (isFreeleech ? `<span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-400/20 text-slate-300 border border-slate-400/40 font-bold">50% Freeleech</span>` : '');
+
+                row.innerHTML = `
+                  <div class="flex-1 min-w-0 space-y-1.5">
+                    <div class="flex items-center space-x-2 flex-wrap gap-y-1">
+                      ${goldBadge}
+                      <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-semibold">${escapeHtml(indexer)}</span>
+                      <span class="text-xs text-slate-400 font-medium">${size}</span>
+                      <span class="text-xs text-emerald-400 font-semibold flex items-center space-x-1">
+                        <i class="fa-solid fa-arrow-up text-[10px]"></i>
+                        <span>${seeders} сидів</span>
+                      </span>
+                      <span class="text-xs text-slate-500 flex items-center space-x-1">
+                        <i class="fa-solid fa-arrow-down text-[10px]"></i>
+                        <span>${peers} пірів</span>
+                      </span>
+                    </div>
+
+                    <div>
+                      <div class="text-sm font-bold text-white hover:text-amber-400 transition-colors line-clamp-1" title="${escapeHtml(title)}">
+                        ${escapeHtml(title)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-2 shrink-0">
+                    <select class="t2j-row-cat-select bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-500">
+                      <option value="Movies" ${searchCategorySelect.value === 'Movies' ? 'selected' : ''}>Фільми</option>
+                      <option value="Shows" ${searchCategorySelect.value === 'Shows' ? 'selected' : ''}>Серіали</option>
+                      <option value="Cartoons" ${searchCategorySelect.value === 'Cartoons' ? 'selected' : ''}>Мультфільми</option>
+                      <option value="Anime" ${searchCategorySelect.value === 'Anime' ? 'selected' : ''}>Аніме</option>
+                    </select>
+
+                    <button type="button" class="t2j-add-row-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center justify-center space-x-1.5 ${isGold ? 'bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-bold' : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-600/30'}">
+                      <i class="fa-solid fa-play text-[10px]"></i>
+                      <span>Додати в бібліотеку</span>
+                    </button>
+                  </div>
+                `;
+
+                const addBtn = row.querySelector('.t2j-add-row-btn');
+                const catSelect = row.querySelector('.t2j-row-cat-select');
+
+                addBtn.addEventListener('click', async () => {
+                    addBtn.disabled = true;
+                    addBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> <span>Додаємо...</span>';
+
+                    try {
+                        const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), {
+                            method: 'POST',
+                            headers: getAuthHeaders(),
+                            body: JSON.stringify({
+                                Link: link,
+                                Title: title,
+                                Category: catSelect.value,
+                                SyncNow: true
+                            })
+                        });
+
+                        if (res.ok) {
+                            addBtn.className = 'px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 text-white flex items-center space-x-1.5';
+                            addBtn.innerHTML = '<i class="fa-solid fa-check text-xs"></i> <span>Додано в медіатеку!</span>';
+                            checkStatus();
+                        } else {
+                            addBtn.disabled = false;
+                            addBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-xs"></i> <span>Помилка</span>';
+                        }
+                    } catch {
+                        addBtn.disabled = false;
+                        addBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-xs"></i> <span>Помилка</span>';
+                    }
+                });
+
+                resultsList.appendChild(row);
+            });
+
+            resultsWrapper.classList.remove('hidden');
+        }
+
+        // Direct Link submit
+        directLinkForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const link = directLinkInput.value.trim();
+            if (!link) return;
+
+            directSubmitBtn.disabled = true;
+            directSubmitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Додаємо...</span>';
+
+            try {
+                const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        Link: link,
+                        Title: directTitleInput.value.trim() || null,
+                        Category: directCategorySelect.value,
+                        SyncNow: directSyncCheck.checked
+                    })
+                });
+
+                if (res.ok) {
+                    directSubmitBtn.innerHTML = '<i class="fa-solid fa-check"></i> <span>Успішно додано!</span>';
+                    directLinkInput.value = '';
+                    directTitleInput.value = '';
+                    setTimeout(() => {
+                        directSubmitBtn.disabled = false;
+                        directSubmitBtn.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Додати в медіатеку</span>';
+                    }, 2500);
+                    checkStatus();
+                } else {
+                    directSubmitBtn.disabled = false;
+                    directSubmitBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка</span>';
+                }
+            } catch {
+                directSubmitBtn.disabled = false;
+                directSubmitBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка</span>';
+            }
+        });
+
+        // Load Torrents
+        async function loadTorrents() {
+            try {
+                const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), { headers: getAuthHeaders() });
+                torrents = await res.json();
+
+                dashTorrentsCount.innerText = torrents.length;
+                activeTorrentsBadge.innerText = torrents.length;
+                torrentsListTable.innerHTML = '';
+
+                if (!torrents || torrents.length === 0) {
+                    torrentsEmptyNotice.classList.remove('hidden');
+                    return;
+                }
+
+                torrentsEmptyNotice.classList.add('hidden');
+
+                torrents.forEach(t => {
+                    const title = t.title || t.Title || t.hash || t.Hash;
+                    const hash = t.hash || t.Hash;
+                    const size = formatBytes(t.torrent_size || t.TorrentSize || 0);
+                    const loaded = formatBytes(t.loaded_size || t.LoadedSize || 0);
+                    const statusStr = t.stat_string || t.StatString || 'Активний';
+
+                    const row = document.createElement('div');
+                    row.className = 'py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3';
+                    row.innerHTML = `
+                      <div class="flex-1 min-w-0">
+                        <h4 class="text-sm font-bold text-white truncate" title="${escapeHtml(title)}">${escapeHtml(title)}</h4>
+                        <div class="flex items-center space-x-3 text-xs text-slate-400 mt-1">
+                          <span class="text-emerald-400 font-semibold">${escapeHtml(statusStr)}</span>
+                          <span>Розмір: ${size}</span>
+                          <span>Кеш: ${loaded}</span>
+                          <span class="font-mono text-[10px] text-slate-600 truncate max-w-[120px]">${hash}</span>
+                        </div>
+                      </div>
+
+                      <div class="flex items-center space-x-2">
+                        <button type="button" class="t2j-del-torrent-btn px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all">
+                          <i class="fa-solid fa-trash-can text-[11px] mr-1"></i> Видалити
+                        </button>
+                      </div>
+                    `;
+
+                    row.querySelector('.t2j-del-torrent-btn').addEventListener('click', async () => {
+                        if (confirm(`Видалити торент "${title}" та відповідні .strm файли з медіатеки?`)) {
+                            await fetch(getApiUrl(`Plugins/Torr2Jelly/Torrents/${hash}?deleteStrm=true`), {
+                                method: 'DELETE',
+                                headers: getAuthHeaders()
+                            });
+                            loadTorrents();
+                            checkStatus();
+                        }
+                    });
+
+                    torrentsListTable.appendChild(row);
+                });
+            } catch (err) {
+                torrentsListTable.innerHTML = `<div class="p-4 text-rose-400 text-xs">Помилка завантаження: ${err.message}</div>`;
+            }
+        }
+
+        refreshTorrentsBtn.addEventListener('click', loadTorrents);
+        scanLibraryBtn.addEventListener('click', async () => {
+            scanLibraryBtn.disabled = true;
+            scanLibraryBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> <span>Скануємо...</span>';
+            await fetch(getApiUrl('Plugins/Torr2Jelly/Library/Scan'), { method: 'POST', headers: getAuthHeaders() });
+            setTimeout(() => {
+                scanLibraryBtn.disabled = false;
+                scanLibraryBtn.innerHTML = '<i class="fa-solid fa-folder-tree text-xs"></i> <span>Сканувати медіатеку</span>';
+            }, 2000);
+        });
+
+        syncNowBtn.addEventListener('click', async () => {
+            syncNowBtn.disabled = true;
+            syncText.innerText = 'Синхронізація...';
+            await fetch(getApiUrl('Plugins/Torr2Jelly/Library/Scan'), { method: 'POST', headers: getAuthHeaders() });
+            setTimeout(() => {
+                syncNowBtn.disabled = false;
+                syncText.innerText = 'Синхронізація';
+            }, 2000);
+        });
+
+        function startPolling() {
+            stopPolling();
+            refreshInterval = setInterval(loadTorrents, 5000);
+        }
+
+        function stopPolling() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+        }
+
+        // Settings load & save
+        async function loadSettings() {
+            try {
+                const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), { headers: getAuthHeaders() });
+                const cfg = await res.json();
+                cfgEmbeddedCheck.checked = cfg.UseEmbeddedTorrServer;
+                cfgPortInput.value = cfg.EmbeddedTorrServerPort;
+                cfgCacheSizeInput.value = cfg.CacheSizeMb;
+                cfgStreamUrlInput.value = cfg.TorrServerStreamUrl || '';
+                cfgProwlarrUrlInput.value = cfg.ProwlarrUrl || '';
+                cfgProwlarrKeyInput.value = cfg.ProwlarrApiKey || '';
+                cfgMediaDirInput.value = cfg.MediaRootPath || '';
+                cfgOnlyGoldCheck.checked = cfg.OnlyGoldTorrentsForNonAdmins;
+                dashMediaDir.innerText = cfg.MediaRootPath || '/media';
+            } catch (err) {
+                console.error('Failed to load settings', err);
+            }
+        }
+
+        saveSettingsBtn.addEventListener('click', async () => {
+            saveSettingsBtn.disabled = true;
+            saveSettingsBtnText.innerText = 'Збереження...';
+
+            const payload = {
+                UseEmbeddedTorrServer: cfgEmbeddedCheck.checked,
+                EmbeddedTorrServerPort: parseInt(cfgPortInput.value, 10) || 8095,
+                CacheSizeMb: parseInt(cfgCacheSizeInput.value, 10) || 256,
+                TorrServerStreamUrl: cfgStreamUrlInput.value.trim(),
+                ProwlarrUrl: cfgProwlarrUrlInput.value.trim(),
+                ProwlarrApiKey: cfgProwlarrKeyInput.value.trim(),
+                MediaRootPath: cfgMediaDirInput.value.trim(),
+                OnlyGoldTorrentsForNonAdmins: cfgOnlyGoldCheck.checked
+            };
+
+            try {
+                const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    saveSettingsBtnText.innerText = '✓ Збережено!';
+                    setTimeout(() => {
+                        saveSettingsBtnText.innerText = 'Зберегти налаштування';
+                        saveSettingsBtn.disabled = false;
+                    }, 2000);
+                    checkStatus();
+                } else {
+                    saveSettingsBtnText.innerText = 'Помилка';
+                    saveSettingsBtn.disabled = false;
+                }
+            } catch {
+                saveSettingsBtnText.innerText = 'Помилка';
+                saveSettingsBtn.disabled = false;
+            }
+        });
+
+        restartDaemonBtn.addEventListener('click', async () => {
+            restartDaemonBtn.disabled = true;
+            restartDaemonBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Перезапуск...</span>';
+
+            try {
+                await fetch(getApiUrl('Plugins/Torr2Jelly/Daemon/Restart'), { method: 'POST', headers: getAuthHeaders() });
+                setTimeout(() => {
+                    restartDaemonBtn.disabled = false;
+                    restartDaemonBtn.innerHTML = '<i class="fa-solid fa-power-off text-amber-400"></i> <span>Перезапустити торент-рушій</span>';
+                    checkStatus();
+                }, 3000);
+            } catch {
+                restartDaemonBtn.disabled = false;
+                restartDaemonBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span>Помилка</span>';
+            }
+        });
+
+        // Initialize
+        checkStatus();
+    }
+
+    }
+
+    window.initTorr2Jelly = initTorr2Jelly;
+
+    // Trigger on Jellyfin navigation events
+    function tryInit() {
+        const page = document.getElementById('torr2jellyPage');
+        if (page) {
+            page.addEventListener('pageshow', function () { initTorr2Jelly(page); });
+            page.addEventListener('viewshow', function () { initTorr2Jelly(page); });
+            initTorr2Jelly(page);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', tryInit);
+    } else {
+        tryInit();
+    }
+
+    document.addEventListener('viewshow', function (e) {
+        if (e.target && (e.target.id === 'torr2jellyPage' || (e.target.querySelector && e.target.querySelector('#torr2jellyPage')))) {
+            const p = e.target.id === 'torr2jellyPage' ? e.target : e.target.querySelector('#torr2jellyPage');
+            initTorr2Jelly(p);
+        }
+    });
+})();
+
+</script>

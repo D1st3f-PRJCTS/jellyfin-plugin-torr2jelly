@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/main/logo.png",
     "versions": [
       {
+        "version": "1.0.2.0",
+        "changelog": "Fix Jellyfin SPA rendering: embed complete CSS styling and JS controllers directly in HTML without external link/controller dependencies. Fixes unstyled layout and tab switching.",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/releases/download/v1.0.2/Torr2Jelly_1.0.2.0.zip",
+        "checksum": "9ac128bf2e6c9e1b6e966a17e27890a5",
+        "timestamp": "2026-10-18T19:46:00Z"
+      },
+      {
         "version": "1.0.1.0",
         "changelog": "Rich Glassmorphism UI redesign matching torr2jelly web app, Gold/Freeleech filters, direct TorrServer stream URLs, and automated defaults.",
         "targetAbi": "10.9.0.0",

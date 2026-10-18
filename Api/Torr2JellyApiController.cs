@@ -344,6 +344,7 @@ public class Torr2JellyApiController : ControllerBase
     {
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
         config.DeduplicateCategories();
+        config.NormalizeTrackerRules();
         return Ok(config);
     }
 
@@ -359,6 +360,7 @@ public class Torr2JellyApiController : ControllerBase
         }
 
         newConfig.DeduplicateCategories();
+        newConfig.NormalizeTrackerRules();
         Plugin.Instance.UpdateConfiguration(newConfig);
         await _daemonManager.ConfigureDaemonSettingsAsync(cancellationToken);
 

@@ -26,6 +26,8 @@
             releasesFound: isUk ? 'роздач знайдено' : 'releases found',
             categoryLabel: isUk ? 'Категорія / Бібліотека:' : 'Category / Library:',
             goldBadge: isUk ? '⭐ Золотий' : '⭐ Gold',
+            filterAll: isUk ? 'Всі' : 'All',
+            filterGold: isUk ? '🏷️ З бонусами' : '🏷️ With Tags',
             addBtn: isUk ? '+ Додати & Дивитися' : '+ Add & Watch',
             adding: isUk ? 'Додаємо...' : 'Adding...',
             added: isUk ? '✓ Додано в медіатеку' : '✓ Added to library',
@@ -96,6 +98,33 @@
             border-radius: 20px;
             font-weight: 600;
             border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .t2j-filter-chips {
+            display: inline-flex;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            padding: 2px;
+            gap: 2px;
+        }
+        .t2j-chip {
+            background: transparent;
+            color: #94a3b8;
+            border: none;
+            padding: 3px 9px;
+            border-radius: 6px;
+            font-size: 0.72em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .t2j-chip:hover {
+            color: #f1f5f9;
+        }
+        .t2j-chip.active {
+            background: #334155;
+            color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
         }
         .t2j-cards-grid {
             display: grid;
@@ -490,17 +519,16 @@
             }
         }
 
-        // Sort results: Gold first, then Seeders descending
-        results.sort(function (a, b) {
-            var aGold = a.IsGold || (a.Tags && a.Tags.some(function (t) { return /freeleech|gold/i.test(t); }));
-            var bGold = b.IsGold || (b.Tags && b.Tags.some(function (t) { return /freeleech|gold/i.test(t); }));
-            if (aGold && !bGold) return -1;
-            if (!aGold && bGold) return 1;
-            return (b.Seeders || 0) - (a.Seeders || 0);
+        window._t2jLastQuery = query;
+        window._t2jLastResults = results || [];
+        if (!window._t2jCurrentFilter) window._t2jCurrentFilter = 'all';
+
+        var taggedResults = results.filter(function (r) {
+            return r.IsGold || (r.Tags && r.Tags.length > 0);
         });
 
-        // Limit to top 9 best releases
-        var displayResults = results.slice(0, 9);
+        var activeList = (window._t2jCurrentFilter === 'gold') ? taggedResults : results;
+        var displayResults = activeList.slice(0, 16);
 
         var headerHtml = `
             <div class="t2j-search-header">
@@ -511,7 +539,13 @@
                         <div class="t2j-search-subtitle">${i18n.subtitle}</div>
                     </div>
                 </div>
-                <div class="t2j-search-badge">${results.length} ${i18n.releasesFound}</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="t2j-filter-chips">
+                        <button type="button" class="t2j-chip ${window._t2jCurrentFilter === 'all' ? 'active' : ''}" onclick="window._t2jSetFilter && window._t2jSetFilter('all')">${i18n.filterAll} (${results.length})</button>
+                        <button type="button" class="t2j-chip ${window._t2jCurrentFilter === 'gold' ? 'active' : ''}" onclick="window._t2jSetFilter && window._t2jSetFilter('gold')">${i18n.filterGold} (${taggedResults.length})</button>
+                    </div>
+                    <div class="t2j-search-badge">${displayResults.length} / ${activeList.length}</div>
+                </div>
             </div>
         `;
 
@@ -689,6 +723,13 @@
             };
         });
     }
+
+    window._t2jSetFilter = function (filterMode) {
+        window._t2jCurrentFilter = filterMode;
+        if (window._t2jLastQuery && window._t2jLastResults) {
+            renderSearchResults(window._t2jLastQuery, window._t2jLastResults);
+        }
+    };
 
     // Observer and query sync
     function checkSearchPage() {

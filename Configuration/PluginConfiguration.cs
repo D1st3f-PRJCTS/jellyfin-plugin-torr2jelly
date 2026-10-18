@@ -98,6 +98,24 @@ public class PluginConfiguration : BasePluginConfiguration
         Categories = unique;
     }
 
+    public void NormalizeTrackerRules()
+    {
+        if (TrackerRules == null)
+        {
+            TrackerRules = new List<TrackerRule>();
+            return;
+        }
+
+        var allKnown = new List<string> { "freeleech", "halfleech", "bronze", "internal", "exclusive", "doubleupload", "regular" };
+        foreach (var rule in TrackerRules)
+        {
+            if (rule.AllowedTags == null || rule.AllowedTags.Count == 0)
+            {
+                rule.AllowedTags = new List<string>(allKnown);
+            }
+        }
+    }
+
     public PluginConfiguration()
     {
     }

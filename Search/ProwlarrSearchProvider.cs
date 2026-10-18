@@ -308,10 +308,8 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
                 results.Add(searchResult);
             }
 
-            // Priority sorting: Tagged/Gold -> Regular, then by seeders desc
             return results
-                .OrderByDescending(r => (r.Tags != null && r.Tags.Count > 0) ? (r.IsGold ? 3 : 2) : 0)
-                .ThenByDescending(r => r.Seeders)
+                .OrderByDescending(r => r.Seeders)
                 .ToList();
         }
         catch (Exception ex)

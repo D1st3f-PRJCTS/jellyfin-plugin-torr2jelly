@@ -985,6 +985,25 @@
                   </div>
                 </div>
 
+                <!-- Global Tag Filter Checkboxes -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-3.5 bg-slate-950/70 border border-slate-800/80 rounded-xl">
+                  <label class="flex items-start space-x-3 cursor-pointer select-none">
+                    <input type="checkbox" id="cfgSearchOnlyGoldByDefaultCheck" class="rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700 w-4 h-4 mt-0.5 cursor-pointer">
+                    <div>
+                      <span class="font-semibold text-white block text-xs" id="lblCfgSearchGoldDefault">Search only releases with tags by default</span>
+                      <span class="text-[11px] text-slate-400 block" id="lblCfgSearchGoldDefaultSub">When enabled, search queries automatically filter for releases with tracker tags or bonuses.</span>
+                    </div>
+                  </label>
+
+                  <label class="flex items-start space-x-3 cursor-pointer select-none">
+                    <input type="checkbox" id="cfgOnlyGoldCheck" class="rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700 w-4 h-4 mt-0.5 cursor-pointer">
+                    <div>
+                      <span class="font-semibold text-white block text-xs" id="lblCfgOnlyGoldNonAdmin">Only tagged releases for regular non-admin users</span>
+                      <span class="text-[11px] text-slate-400 block" id="lblCfgOnlyGoldNonAdminSub">Restricts non-admin users from generating torrents without tags/bonuses.</span>
+                    </div>
+                  </label>
+                </div>
+
                 <div id="cfgTrackersList" class="space-y-3">
                   <div class="text-slate-500 text-[11px] italic" id="lblLoadingTrackers">Loading trackers from Prowlarr...</div>
                 </div>
@@ -1621,7 +1640,7 @@
         indexers.forEach(function (idx) {
             var rule = rules.find(function (r) { return r.Tracker && r.Tracker.toLowerCase() === idx.Name.toLowerCase(); });
             var isEnabled = rule ? (rule.Enabled !== false) : !idx.DisabledInPlugin;
-            var allowedTags = (rule && Array.isArray(rule.AllowedTags))
+            var allowedTags = (rule && Array.isArray(rule.AllowedTags) && rule.AllowedTags.length > 0)
                 ? rule.AllowedTags
                 : ['freeleech', 'halfleech', 'bronze', 'internal', 'exclusive', 'doubleupload', 'regular'];
 
@@ -2322,6 +2341,11 @@
             renderCategoriesManager(cfg.Categories);
             renderIndexersUI(cfg.TrackerRules);
 
+            var cfgSearchOnlyGoldByDefaultCheck = page.querySelector('#cfgSearchOnlyGoldByDefaultCheck');
+            var cfgOnlyGoldCheck = page.querySelector('#cfgOnlyGoldCheck');
+            if (cfgSearchOnlyGoldByDefaultCheck) cfgSearchOnlyGoldByDefaultCheck.checked = !!cfg.SearchOnlyGoldByDefault;
+            if (cfgOnlyGoldCheck) cfgOnlyGoldCheck.checked = !!cfg.OnlyGoldTorrentsForNonAdmins;
+
             var searchGoldOnlyCheck = page.querySelector('#t2jSearchGoldOnlyCheck');
             if (searchGoldOnlyCheck && searchGoldOnlyCheck._init !== true) {
                 searchGoldOnlyCheck._init = true;
@@ -2387,6 +2411,9 @@
             }
         });
 
+        var cfgSearchOnlyGoldByDefaultCheck = page.querySelector('#cfgSearchOnlyGoldByDefaultCheck');
+        var cfgOnlyGoldCheck = page.querySelector('#cfgOnlyGoldCheck');
+
         // Collect user-edited categories from UI
         var categories = collectCategoriesFromUI();
 
@@ -2400,6 +2427,8 @@
             ProwlarrUrl: cfgProwlarrUrlInput ? cfgProwlarrUrlInput.value.trim() : '',
             ProwlarrApiKey: cfgProwlarrKeyInput ? cfgProwlarrKeyInput.value.trim() : '',
             MediaRootPath: cfgMediaDirInput ? cfgMediaDirInput.value.trim() : '',
+            SearchOnlyGoldByDefault: cfgSearchOnlyGoldByDefaultCheck ? cfgSearchOnlyGoldByDefaultCheck.checked : false,
+            OnlyGoldTorrentsForNonAdmins: cfgOnlyGoldCheck ? cfgOnlyGoldCheck.checked : false,
             DisabledTrackers: disabledTrackers,
             TrackerRules: trackerRules,
             Categories: categories,

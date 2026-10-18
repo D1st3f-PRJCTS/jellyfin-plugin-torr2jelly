@@ -132,7 +132,7 @@ public class TorrentSearchService
                         return releaseTags.Any(t => rule.AllowedTags.Any(at => at.Equals(t, StringComparison.OrdinalIgnoreCase)));
                     }
 
-                    return false;
+                    return true;
                 }
 
                 if (config.DisabledTrackers != null && config.DisabledTrackers.Contains(indexer, StringComparer.OrdinalIgnoreCase))
@@ -149,8 +149,14 @@ public class TorrentSearchService
             results = results.Where(r => !disabled.Contains(r.Indexer)).ToList();
         }
 
-        // Quick filter parameter if explicitly requested (e.g. from UI "With Tags" filter)
-        if (onlyGold == true)
+        // Filter by Gold/Tags according to user parameter or plugin configuration
+        var shouldFilterGold = onlyGold ?? config.SearchOnlyGoldByDefault;
+        if (!isUserAdmin && config.OnlyGoldTorrentsForNonAdmins)
+        {
+            shouldFilterGold = true;
+        }
+
+        if (shouldFilterGold)
         {
             results = results.Where(r => r.IsGold || (r.Tags != null && r.Tags.Count > 0)).ToList();
         }
@@ -173,9 +179,16 @@ public class TorrentSearchService
             }
         }
 
+        if (shouldFilterGold)
+        {
+            return deduped
+                .OrderByDescending(r => (r.Tags != null && r.Tags.Count > 0) ? (r.IsGold ? 3 : 2) : 0)
+                .ThenByDescending(r => r.Seeders)
+                .ToList();
+        }
+
         return deduped
-            .OrderByDescending(r => (r.Tags != null && r.Tags.Count > 0) ? (r.IsGold ? 3 : 2) : 0)
-            .ThenByDescending(r => r.Seeders)
+            .OrderByDescending(r => r.Seeders)
             .ToList();
     }
 

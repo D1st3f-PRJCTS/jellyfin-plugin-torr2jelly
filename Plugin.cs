@@ -24,6 +24,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
         Instance = this;
         Configuration?.DeduplicateCategories();
+        Configuration?.NormalizeTrackerRules();
     }
 
     public IEnumerable<PluginPageInfo> GetPages()

@@ -500,6 +500,41 @@
     justify-content: center !important;
     flex-shrink: 0 !important;
     border-radius: 8px !important;
+    background: rgba(244, 63, 94, 0.15) !important;
+    background-color: rgba(244, 63, 94, 0.15) !important;
+    color: #fda4af !important;
+    border: 1px solid rgba(244, 63, 94, 0.3) !important;
+}
+#torr2jellyPage .t2j-cat-del-btn:hover {
+    background: rgba(244, 63, 94, 0.25) !important;
+    background-color: rgba(244, 63, 94, 0.25) !important;
+    color: #ffffff !important;
+}
+
+/* Detected Server Path Chips */
+#torr2jellyPage .t2j-chip-path {
+    background-color: #0f172a !important;
+    background: #0f172a !important;
+    color: #38bdf8 !important;
+    border: 1px solid #334155 !important;
+    border-radius: 6px !important;
+    padding: 2px 8px !important;
+    font-size: 11px !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    transition: all 0.15s ease-in-out !important;
+    outline: none !important;
+    line-height: 1.4 !important;
+}
+#torr2jellyPage .t2j-chip-path:hover {
+    background-color: #1e293b !important;
+    background: #1e293b !important;
+    border-color: #0284c7 !important;
+    color: #7dd3fc !important;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.25) !important;
 }
 
 /* Tracker Tag Badges & Checkboxes */
@@ -1288,7 +1323,7 @@
     };
 
     function getLang() {
-        return localStorage.getItem('torr2jelly_lang') || (window.t2jState.config && window.t2jState.config.DefaultLanguage) || 'en';
+        return localStorage.getItem('torr2jelly_lang') || (window.t2jState && window.t2jState.config && window.t2jState.config.DefaultLanguage) || 'uk';
     }
     window.t2jGetLang = getLang;
 
@@ -1550,10 +1585,12 @@
             html += '  </div>';
 
             if (locations.length > 0) {
-                html += '  <div class="flex items-center space-x-2 text-[11px] text-slate-400 flex-wrap gap-y-1">';
-                html += '    <span class="text-slate-500">Detected server paths:</span>';
+                var detectedLabel = (getLang() === 'uk') ? 'Виявлені шляхи на сервері:' : 'Detected server paths:';
+                var chipTitle = (getLang() === 'uk') ? 'Натисніть щоб застосувати цей шлях' : 'Click to apply this path';
+                html += '  <div class="flex items-center space-x-2 text-[11px] text-slate-300 flex-wrap gap-y-1.5 mt-1">';
+                html += '    <span class="text-slate-400 font-medium" style="color: #94a3b8 !important;">' + escapeHtml(detectedLabel) + '</span>';
                 locations.forEach(function (loc) {
-                    html += '    <button type="button" data-idx="' + idx + '" data-path="' + escapeHtml(loc) + '" onclick="window.t2jApplyChipPath(this)" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-cyan-300 font-mono text-[10px] border border-slate-700 transition-colors" title="Click to apply this path">' + escapeHtml(loc) + '</button>';
+                    html += '    <button type="button" data-idx="' + idx + '" data-path="' + escapeHtml(loc) + '" onclick="window.t2jApplyChipPath(this)" class="t2j-chip-path" style="background-color: #0f172a !important; color: #38bdf8 !important; border: 1px solid #334155 !important; border-radius: 6px !important; padding: 2px 8px !important; font-size: 11px !important; font-family: ui-monospace, monospace !important; cursor: pointer !important; line-height: 1.4 !important; font-weight: 500 !important; display: inline-flex !important; align-items: center !important;" title="' + escapeHtml(chipTitle) + '">' + escapeHtml(loc) + '</button>';
                 });
                 html += '  </div>';
             }
@@ -2712,12 +2749,13 @@
             };
         }
 
-        // Apply saved language (default 'en')
+        // Apply saved language
         applyTranslations(getLang());
 
         // Initial loads
         checkStatus();
         loadLibraries();
+        loadSettings();
     }
     window.initTorr2Jelly = initTorr2Jelly;
     window.t2jBoot = function () {

@@ -48,7 +48,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool OnlyGoldTorrentsForNonAdmins { get; set; } = false;
     public List<string> DisabledTrackers { get; set; } = new();
     public List<TrackerRule> TrackerRules { get; set; } = new();
-    public string DefaultLanguage { get; set; } = "en"; // "en" (default) or "uk"
+    public string DefaultLanguage { get; set; } = "uk"; // "uk" (default) or "en"
 
     // Library & Storage
     public string MediaRootPath { get; set; } = "/media";

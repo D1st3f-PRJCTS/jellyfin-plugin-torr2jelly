@@ -160,3 +160,29 @@
 .torr2jelly-root .t2j-result-row.is-gold:hover {
     background: rgba(245, 158, 11, 0.08);
 }
+
+/* Detected Server Path Chips */
+.torr2jelly-root .t2j-chip-path {
+    background-color: #0f172a !important;
+    background: #0f172a !important;
+    color: #38bdf8 !important;
+    border: 1px solid #334155 !important;
+    border-radius: 6px !important;
+    padding: 2px 8px !important;
+    font-size: 11px !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    transition: all 0.15s ease-in-out !important;
+    outline: none !important;
+    line-height: 1.4 !important;
+}
+.torr2jelly-root .t2j-chip-path:hover {
+    background-color: #1e293b !important;
+    background: #1e293b !important;
+    border-color: #0284c7 !important;
+    color: #7dd3fc !important;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.25) !important;
+}

@@ -528,7 +528,7 @@
         });
 
         var activeList = (window._t2jCurrentFilter === 'gold') ? taggedResults : results;
-        var displayResults = activeList.slice(0, 16);
+        var displayResults = activeList;
 
         var headerHtml = `
             <div class="t2j-search-header">
@@ -544,7 +544,7 @@
                         <button type="button" class="t2j-chip ${window._t2jCurrentFilter === 'all' ? 'active' : ''}" onclick="window._t2jSetFilter && window._t2jSetFilter('all')">${i18n.filterAll} (${results.length})</button>
                         <button type="button" class="t2j-chip ${window._t2jCurrentFilter === 'gold' ? 'active' : ''}" onclick="window._t2jSetFilter && window._t2jSetFilter('gold')">${i18n.filterGold} (${taggedResults.length})</button>
                     </div>
-                    <div class="t2j-search-badge">${displayResults.length} / ${activeList.length}</div>
+                    <div class="t2j-search-badge">${activeList.length}</div>
                 </div>
             </div>
         `;

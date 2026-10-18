@@ -1,0 +1,284 @@
+/* Torr2Jelly Modern Glassmorphic Theme for Jellyfin Web */
+
+.torr2jelly-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+    font-family: inherit;
+    color: #e2e8f0;
+}
+
+.t2j-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.t2j-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.t2j-title {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0;
+}
+
+.t2j-subtitle {
+    font-size: 13px;
+    color: #94a3b8;
+    margin: 2px 0 0 0;
+}
+
+.t2j-daemon-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.t2j-daemon-badge.offline {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.t2j-pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 8px currentColor;
+}
+
+/* Tabs Navigation */
+.t2j-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 12px;
+    overflow-x: auto;
+}
+
+.t2j-tab-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+    padding: 10px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.t2j-tab-btn:hover, .t2j-tab-btn:focus-visible {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    outline: 2px solid #6366f1;
+}
+
+.t2j-tab-btn.active {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(56, 189, 248, 0.3) 100%);
+    border-color: rgba(99, 102, 241, 0.5);
+    color: #ffffff;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.2);
+}
+
+/* Tab Panels */
+.t2j-panel {
+    display: none;
+}
+.t2j-panel.active {
+    display: block;
+}
+
+/* Search Bar */
+.t2j-search-box {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 10px 14px;
+}
+
+.t2j-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 15px;
+    padding: 6px 10px;
+    outline: none;
+}
+
+.t2j-select {
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e2e8f0;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    outline: none;
+}
+
+.t2j-btn-primary {
+    background: linear-gradient(135deg, #6366f1 0%, #38bdf8 100%);
+    border: none;
+    color: #fff;
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.2s;
+}
+
+.t2j-btn-primary:hover, .t2j-btn-primary:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    outline: 2px solid #fff;
+}
+
+/* Search Results Grid */
+.t2j-results-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.t2j-card {
+    background: rgba(30, 41, 59, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.t2j-card:hover, .t2j-card:focus-within {
+    background: rgba(30, 41, 59, 0.7);
+    border-color: rgba(99, 102, 241, 0.4);
+}
+
+.t2j-card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.t2j-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f8fafc;
+    margin: 0 0 6px 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.t2j-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.t2j-badge-gold {
+    background: rgba(234, 179, 8, 0.15);
+    color: #eab308;
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 700;
+}
+
+.t2j-seeders {
+    color: #34d399;
+    font-weight: 600;
+}
+
+.t2j-card-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.t2j-btn-stream {
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #34d399;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.t2j-btn-stream:hover, .t2j-btn-stream:focus-visible {
+    background: rgba(16, 185, 129, 0.4);
+    color: #fff;
+    outline: 2px solid #34d399;
+}
+
+/* Dashboard Metrics */
+.t2j-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.t2j-metric-box {
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.t2j-metric-label {
+    font-size: 12px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.t2j-metric-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+
+/* TV / D-pad Navigation Focus */
+@media (hover: none) and (pointer: coarse), (min-width: 1920px) {
+    .t2j-tab-btn:focus, .t2j-btn-primary:focus, .t2j-btn-stream:focus, .t2j-card:focus-within {
+        outline: 3px solid #38bdf8 !important;
+        outline-offset: 2px;
+        transform: scale(1.02);
+    }
+}

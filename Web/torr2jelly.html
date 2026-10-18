@@ -1,0 +1,163 @@
+<div id="torr2jellyPage" data-role="page" class="page type-interior pluginConfigurationPage fullWidthContent" data-controller="__plugin/torr2jellyjs">
+    <div class="content-primary">
+        <div class="torr2jelly-container">
+
+            <!-- Header -->
+            <div class="t2j-header">
+                <div class="t2j-brand">
+                    <span style="font-size: 32px;">⚡</span>
+                    <div>
+                        <h1 class="t2j-title">Torr2Jelly</h1>
+                        <p class="t2j-subtitle" id="t2jSubtitle">Standalone Torrent Streaming & Prowlarr Hub for Jellyfin</p>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <select id="t2jLangSelect" class="t2j-select">
+                        <option value="uk">🇺🇦 Українська</option>
+                        <option value="en">🇬🇧 English</option>
+                    </select>
+                    <div id="t2jDaemonStatus" class="t2j-daemon-badge">
+                        <span class="t2j-pulse"></span>
+                        <span id="t2jDaemonStatusText">Connecting...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="t2j-tabs" role="tablist">
+                <button class="t2j-tab-btn active" data-tab="search" tabindex="0">
+                    <span>🔍</span> <span id="tabSearchText">Пошук</span>
+                </button>
+                <button class="t2j-tab-btn" data-tab="dashboard" tabindex="0">
+                    <span>📊</span> <span id="tabDashboardText">Стріми & Швидкість</span>
+                </button>
+                <button class="t2j-tab-btn" data-tab="settings" tabindex="0">
+                    <span>⚙️</span> <span id="tabSettingsText">Налаштування</span>
+                </button>
+            </div>
+
+            <!-- Tab 1: Search -->
+            <div id="panel-search" class="t2j-panel active">
+                <div class="t2j-search-box">
+                    <input type="text" id="t2jSearchInput" class="t2j-input" placeholder="Введіть назву фільму або серіалу (наприклад, Dune 2)..." tabindex="0" />
+                    <select id="t2jCategorySelect" class="t2j-select" tabindex="0">
+                        <option value="">Усі категорії</option>
+                        <option value="Movies">Фільми</option>
+                        <option value="TV Shows">Серіали</option>
+                        <option value="Anime">Аніме</option>
+                    </select>
+                    <button id="t2jSearchBtn" class="t2j-btn-primary" tabindex="0">Пошук</button>
+                </div>
+
+                <!-- Custom magnet / link add row -->
+                <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+                    <input type="text" id="t2jDirectMagnetInput" class="t2j-input" style="background: rgba(15,23,42,0.4); border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; padding: 6px 12px; font-size: 13px;" placeholder="Або вставте пряме посилання Magnet / .torrent..." tabindex="0" />
+                    <button id="t2jAddDirectBtn" class="t2j-btn-stream" tabindex="0">Додати лінк</button>
+                </div>
+
+                <div id="t2jSearchLoading" style="display: none; text-align: center; padding: 40px; color: #94a3b8;">
+                    <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
+                    <span>Шукаємо роздачі на трекерах...</span>
+                </div>
+
+                <div id="t2jSearchResults" class="t2j-results-grid"></div>
+            </div>
+
+            <!-- Tab 2: Dashboard & Active Streams -->
+            <div id="panel-dashboard" class="t2j-panel">
+                <div class="t2j-metrics-grid">
+                    <div class="t2j-metric-box">
+                        <div class="t2j-metric-label">Активні торенти</div>
+                        <div class="t2j-metric-value" id="metricActiveCount">0</div>
+                    </div>
+                    <div class="t2j-metric-box">
+                        <div class="t2j-metric-label">Двигун стрімінгу</div>
+                        <div class="t2j-metric-value" id="metricDaemonEngine" style="font-size: 16px; color: #38bdf8;">TorrServer Matrix</div>
+                    </div>
+                    <div class="t2j-metric-box">
+                        <div class="t2j-metric-label">Режим роботи</div>
+                        <div class="t2j-metric-value" id="metricDaemonMode" style="font-size: 16px; color: #34d399;">Embedded Standalone</div>
+                    </div>
+                    <div class="t2j-metric-box">
+                        <div class="t2j-metric-label">Адреса потоку</div>
+                        <div class="t2j-metric-value" id="metricStreamUrl" style="font-size: 14px; word-break: break-all; color: #94a3b8;">-</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="margin: 0; font-size: 18px;">Активні роздачі в пам'яті TorrServer</h3>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="t2jRefreshTorrentsBtn" class="t2j-btn-stream" tabindex="0">Оновити</button>
+                        <button id="t2jTriggerScanBtn" class="t2j-btn-primary" tabindex="0">Сканувати медіатеку</button>
+                    </div>
+                </div>
+
+                <div id="t2jActiveTorrentsList" class="t2j-results-grid"></div>
+            </div>
+
+            <!-- Tab 3: Settings -->
+            <div id="panel-settings" class="t2j-panel">
+                <div style="max-width: 800px; background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 24px;">
+                    <h3 style="margin-top: 0; margin-bottom: 20px; font-size: 18px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
+                        Параметри автономного торент-рушія
+                    </h3>
+
+                    <div style="margin-bottom: 18px;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="cfgUseEmbedded" checked style="width: 18px; height: 18px;" />
+                            <span style="font-weight: 600;">Використовувати вбудований автономний TorrServer (Рекомендовано)</span>
+                        </label>
+                        <p style="font-size: 12px; color: #94a3b8; margin: 4px 0 0 28px;">
+                            Плагін самостійно завантажить і запустить оптимізований фоновий бінарник TorrServer-Matrix без потреби розгортати сторонні сервіси.
+                        </p>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px;">
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;">Внутрішній порт TorrServer:</label>
+                            <input type="number" id="cfgPort" class="t2j-input" style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;" value="8095" />
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;">Розмір RAM кешу (МБ):</label>
+                            <input type="number" id="cfgCacheSize" class="t2j-input" style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;" value="256" />
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 18px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;">Зовнішня адреса потоку (для .strm):</label>
+                        <input type="text" id="cfgStreamUrl" class="t2j-input" style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; width: 100%; box-sizing: border-box;" placeholder="Залиште порожнім для автовизначення (http://127.0.0.1:8095)" />
+                    </div>
+
+                    <h3 style="margin-top: 28px; margin-bottom: 20px; font-size: 18px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
+                        Налаштування пошукових індексаторів (Prowlarr / Torznab)
+                    </h3>
+
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 18px;">
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;">URL Prowlarr:</label>
+                            <input type="text" id="cfgProwlarrUrl" class="t2j-input" style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; width: 100%; box-sizing: border-box;" value="http://127.0.0.1:9696" />
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;">API Key Prowlarr:</label>
+                            <input type="password" id="cfgProwlarrApiKey" class="t2j-input" style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; width: 100%; box-sizing: border-box;" />
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 24px;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="cfgOnlyGold" style="width: 18px; height: 18px;" />
+                            <span style="font-weight: 600;">Показувати звичайним користувачам лише Freeleech / Gold роздачі</span>
+                        </label>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; margin-top: 24px;">
+                        <button id="t2jSaveSettingsBtn" class="t2j-btn-primary" tabindex="0">Зберегти налаштування</button>
+                        <button id="t2jRestartDaemonBtn" class="t2j-btn-stream" tabindex="0">Перезапустити торент-рушій</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>

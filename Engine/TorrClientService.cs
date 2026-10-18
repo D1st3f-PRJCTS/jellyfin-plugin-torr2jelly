@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.Torr2Jelly.Configuration;
 using Jellyfin.Plugin.Torr2Jelly.Daemon;
 using Microsoft.Extensions.Logging;
 
@@ -25,17 +25,17 @@ public class TorrTorrentFile
 
 public class TorrTorrentStat
 {
-    [JsonPropertyName("stat")]
-    public int Stat { get; set; }
+    [JsonPropertyName("title")]
+    public string Title { get; set; } = string.Empty;
 
-    [JsonPropertyName("stat_string")]
-    public string StatString { get; set; } = string.Empty;
+    [JsonPropertyName("torrent_size")]
+    public long TorrentSize { get; set; }
 
     [JsonPropertyName("loaded_size")]
     public long LoadedSize { get; set; }
 
-    [JsonPropertyName("torrent_size")]
-    public long TorrentSize { get; set; }
+    [JsonPropertyName("preload_size")]
+    public long PreloadSize { get; set; }
 
     [JsonPropertyName("download_speed")]
     public double DownloadSpeed { get; set; }
@@ -43,20 +43,20 @@ public class TorrTorrentStat
     [JsonPropertyName("upload_speed")]
     public double UploadSpeed { get; set; }
 
-    [JsonPropertyName("connected_seeders")]
-    public int ConnectedSeeders { get; set; }
-
-    [JsonPropertyName("total_seeders")]
-    public int TotalSeeders { get; set; }
-
-    [JsonPropertyName("connected_peers")]
-    public int ConnectedPeers { get; set; }
-
     [JsonPropertyName("total_peers")]
     public int TotalPeers { get; set; }
 
+    [JsonPropertyName("connected_seeders")]
+    public int ConnectedSeeders { get; set; }
+
     [JsonPropertyName("active_peers")]
     public int ActivePeers { get; set; }
+
+    [JsonPropertyName("stat")]
+    public int Stat { get; set; }
+
+    [JsonPropertyName("stat_string")]
+    public string StatString { get; set; } = string.Empty;
 }
 
 public class TorrTorrent
@@ -66,6 +66,9 @@ public class TorrTorrent
 
     [JsonPropertyName("title")]
     public string Title { get; set; } = string.Empty;
+
+    [JsonPropertyName("category")]
+    public string Category { get; set; } = string.Empty;
 
     [JsonPropertyName("poster")]
     public string? Poster { get; set; }
@@ -109,7 +112,10 @@ public class TorrClientService
         _daemonManager = daemonManager;
     }
 
-    private string GetBaseUrl() => _daemonManager.GetEffectiveUrl();
+    private string GetBaseUrl()
+    {
+        return _daemonManager.GetEffectiveUrl();
+    }
 
     public async Task<List<TorrTorrent>> ListTorrentsAsync(CancellationToken cancellationToken = default)
     {
@@ -157,6 +163,7 @@ public class TorrClientService
         string link,
         string? title = null,
         string? poster = null,
+        string? category = null,
         bool saveToDb = true,
         CancellationToken cancellationToken = default)
     {
@@ -167,6 +174,7 @@ public class TorrClientService
             link,
             title = title ?? string.Empty,
             poster = poster ?? string.Empty,
+            category = category ?? string.Empty,
             save_to_db = saveToDb
         };
 
@@ -184,6 +192,35 @@ public class TorrClientService
         }
     }
 
+    public async Task<bool> SetTorrentCategoryAsync(
+        string hash,
+        string category,
+        string? title = null,
+        string? poster = null,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{GetBaseUrl()}/torrents";
+        var payload = new
+        {
+            action = "set",
+            hash,
+            category = category ?? string.Empty,
+            title = title ?? string.Empty,
+            poster = poster ?? string.Empty
+        };
+
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync(url, payload, cancellationToken);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to set category '{Category}' on torrent {Hash}", category, hash);
+            return false;
+        }
+    }
+
     public async Task<bool> RemoveTorrentAsync(string hash, CancellationToken cancellationToken = default)
     {
         var url = $"{GetBaseUrl()}/torrents";
@@ -196,14 +233,14 @@ public class TorrClientService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to remove torrent {Hash}", hash);
+            _logger.LogError(ex, "Failed to remove torrent {Hash} from TorrServer", hash);
             return false;
         }
     }
 
-    public async Task<TorrTorrentStat?> GetTorrentStatsAsync(string hash, CancellationToken cancellationToken = default)
+    public async Task<TorrTorrentStat?> GetTorrentStatAsync(string hash, CancellationToken cancellationToken = default)
     {
-        var url = $"{GetBaseUrl()}/torrents";
+        var url = $"{GetBaseUrl()}/viewed";
         var payload = new { action = "get", hash };
 
         try
@@ -218,7 +255,7 @@ public class TorrClientService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to fetch stats for torrent {Hash}", hash);
+            _logger.LogWarning(ex, "Failed to get stats for torrent {Hash}", hash);
             return null;
         }
     }

@@ -76,9 +76,20 @@ public class StrmEngine
 
     public string ResolveMediaRoot(string? targetFolder = null)
     {
+        // 0. If targetFolder is explicitly an absolute path specified by the user in CategoryMapping
+        if (!string.IsNullOrWhiteSpace(targetFolder) && Path.IsPathRooted(targetFolder))
+        {
+            try
+            {
+                Directory.CreateDirectory(targetFolder);
+            }
+            catch { }
+            return targetFolder;
+        }
+
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
 
-        // 1. Explicit configured path
+        // 1. Explicit configured root path
         if (!string.IsNullOrWhiteSpace(config.MediaRootPath) && Directory.Exists(config.MediaRootPath))
         {
             return string.IsNullOrWhiteSpace(targetFolder)
@@ -118,6 +129,7 @@ public class StrmEngine
         string? customTitle = null,
         string? posterUrl = null,
         int? tmdbId = null,
+        bool forceCategory = false,
         CancellationToken cancellationToken = default)
     {
         var result = new StrmSyncResult
@@ -156,8 +168,8 @@ public class StrmEngine
             var isDetectedShow = EpisodeMatcher.IsShowRelease(rawTitle, videoFiles.Select(f => f.Path)) || videoFiles.Count > 1;
             var isShow = chosenCat.Type.Equals("show", StringComparison.OrdinalIgnoreCase) || isDetectedShow;
 
-            // Auto-route series to Show category if it was accidentally targeted to Movies
-            if (isShow && chosenCat.Type.Equals("movie", StringComparison.OrdinalIgnoreCase))
+            // Auto-route series to Show category ONLY IF category was not explicitly specified/forced
+            if (!forceCategory && string.IsNullOrWhiteSpace(category) && isShow && chosenCat.Type.Equals("movie", StringComparison.OrdinalIgnoreCase))
             {
                 var showCat = config.Categories.FirstOrDefault(c => c.Type.Equals("show", StringComparison.OrdinalIgnoreCase))
                     ?? new CategoryMapping("Shows", "shows", "show", new List<int>());

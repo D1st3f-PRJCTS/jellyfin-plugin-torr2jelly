@@ -430,6 +430,7 @@
 
       <!-- Header Navigation Bar -->
             <!-- Header Navigation Bar -->
+            <!-- Header Navigation Bar -->
       <header class="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           <!-- Logo & Brand -->
@@ -513,7 +514,7 @@
                 </button>
               </div>
 
-              <!-- Category selector (populated dynamically from server libraries) -->
+              <!-- Category selector (populated dynamically from categories) -->
               <select id="t2jSearchCategorySelect" class="bg-slate-900 border border-slate-700 hover:border-slate-600 rounded-xl px-4 py-3 text-xs text-slate-200 focus:outline-none focus:border-brand-500 cursor-pointer shadow-sm">
                 <option value="">All Categories</option>
               </select>
@@ -604,7 +605,7 @@
                 </div>
 
                 <div>
-                  <label class="block text-xs font-medium text-slate-300 mb-1.5" id="lblDirectCat">Server Library / Category:</label>
+                  <label class="block text-xs font-medium text-slate-300 mb-1.5" id="lblDirectCat">Category / Target Library:</label>
                   <select id="directCategorySelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 cursor-pointer">
                     <!-- Populated dynamically -->
                   </select>
@@ -670,7 +671,7 @@
               </div>
 
               <div class="flex items-center space-x-2">
-                <button type="button" id="refreshTorrentsBtn" onclick="window.t2jLoadTorrents && window.t2jLoadTorrents()" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 flex items-center space-x-1.5 transition-all">
+                <button type="button" id="refreshTorrentsBtn" onclick="window.t2jLoadTorrents && window.t2jLoadTorrents(true)" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 flex items-center space-x-1.5 transition-all">
                   <i class="fa-solid fa-arrows-rotate text-xs"></i>
                   <span id="btnRefreshText">Refresh</span>
                 </button>
@@ -734,9 +735,9 @@
                   </div>
 
                   <div>
-                    <label class="block text-slate-300 font-medium mb-1" id="lblCfgMediaRoot">Media Root Directory (Media Dir):</label>
+                    <label class="block text-slate-300 font-medium mb-1" id="lblCfgMediaRoot">Default Media Root Directory (Media Dir):</label>
                     <input type="text" id="cfgMediaDirInput" placeholder="/media" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
-                    <p class="text-[10px] text-slate-500 mt-1" id="lblCfgMediaRootHint">Root path where movies/shows folders reside. Auto-detected from server libraries if empty.</p>
+                    <p class="text-[10px] text-slate-500 mt-1" id="lblCfgMediaRootHint">Fallback root path. You can customize exact folder paths for each category below.</p>
                   </div>
                 </div>
               </div>
@@ -894,18 +895,32 @@
                 </div>
               </div>
 
-              <!-- Server Libraries Card -->
+              <!-- Server Categories & Folder Paths Manager -->
               <div class="md:col-span-2 bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 space-y-4">
-                <div class="flex items-center space-x-2.5">
-                  <div class="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-sm">📚</div>
-                  <div>
-                    <h3 class="font-bold text-sm text-white" id="cfgServerLibsTitle">Detected Jellyfin Server Libraries</h3>
-                    <p class="text-[11px] text-slate-400" id="cfgServerLibsSub">Libraries queried from your Jellyfin server. Used for category routing and targeted scanning.</p>
+                <div class="flex items-center justify-between flex-wrap gap-2">
+                  <div class="flex items-center space-x-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-sm">📚</div>
+                    <div>
+                      <h3 class="font-bold text-sm text-white" id="cfgCategoriesTitle">Server Libraries & Folder Paths</h3>
+                      <p class="text-[11px] text-slate-400" id="cfgCategoriesSub">Specify the exact disk paths for each library where .strm files will be saved.</p>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center space-x-2">
+                    <button type="button" onclick="window.t2jAutofillCategories && window.t2jAutofillCategories()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-all">
+                      <i class="fa-solid fa-wand-magic-sparkles text-cyan-400 text-[11px]"></i>
+                      <span id="btnAutofillText">Auto-fill from Jellyfin</span>
+                    </button>
+                    <button type="button" onclick="window.t2jAddCategoryRow && window.t2jAddCategoryRow()" class="px-3 py-1.5 rounded-lg bg-brand-600/30 hover:bg-brand-600/50 text-brand-300 border border-brand-500/40 text-xs font-semibold flex items-center space-x-1.5 transition-all">
+                      <i class="fa-solid fa-plus text-[11px]"></i>
+                      <span id="btnAddCatText">+ Add Category</span>
+                    </button>
                   </div>
                 </div>
 
-                <div id="cfgServerLibrariesList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
-                  <div class="text-slate-500 text-xs italic" id="lblLoadingLibs">Loading libraries from server...</div>
+                <!-- Editable categories table -->
+                <div id="cfgCategoriesContainer" class="space-y-3">
+                  <div class="text-slate-500 text-xs italic" id="lblLoadingCategories">Loading categories...</div>
                 </div>
               </div>
 
@@ -970,7 +985,7 @@
             magnetDesc: 'Add any magnet link or direct .torrent URL. STRM files will be generated instantaneously.',
             lblDirectLink: 'Magnet link or .torrent URL:',
             lblDirectTitle: 'Custom Title (optional):',
-            lblDirectCat: 'Server Library / Category:',
+            lblDirectCat: 'Category / Target Library:',
             lblDirectSync: 'Generate .strm immediately and notify Jellyfin',
             btnDirectSubmit: 'Add to Library',
             dashActiveTorrents: 'Active Torrents',
@@ -995,8 +1010,8 @@
             cfgGeneralSub: 'Default language and media storage folder',
             lblCfgLanguage: 'Default UI Language:',
             lblCfgLanguageHint: 'English is active by default. You can switch to Ukrainian anytime.',
-            lblCfgMediaRoot: 'Media Root Directory (Media Dir):',
-            lblCfgMediaRootHint: 'Root path where movies/shows folders reside. Auto-detected from server libraries if empty.',
+            lblCfgMediaRoot: 'Default Media Root Directory (Media Dir):',
+            lblCfgMediaRootHint: 'Fallback root path. You can customize exact folder paths for each category below.',
             cfgTorrServerTitle: 'TorrServer (Streaming Engine)',
             cfgTorrServerSub: 'External server (e.g. via VPN) or embedded binary process',
             lblCfgExternalUrl: 'External TorrServer URL (API & Streaming):',
@@ -1022,9 +1037,10 @@
             lblCfgSeasonFolder: 'Season Folder:',
             lblCfgEpisodeFile: 'Episode File (.strm):',
             lblTemplateTokensTitle: 'Available Tokens:',
-            cfgServerLibsTitle: 'Detected Jellyfin Server Libraries',
-            cfgServerLibsSub: 'Libraries queried from your Jellyfin server. Used for category routing and targeted scanning.',
-            lblLoadingLibs: 'Loading libraries from server...'
+            cfgCategoriesTitle: 'Server Libraries & Folder Paths',
+            cfgCategoriesSub: 'Specify the exact disk paths for each library where .strm files will be saved.',
+            btnAutofillText: 'Auto-fill from Jellyfin',
+            btnAddCatText: '+ Add Category'
         },
         uk: {
             search: 'Пошук',
@@ -1059,7 +1075,7 @@
             magnetDesc: 'Додайте будь-який magnet link або прямий URL на .torrent. STRM файли з’являться миттєво.',
             lblDirectLink: 'Магнет посилання або .torrent URL:',
             lblDirectTitle: 'Власна назва (необов’язково):',
-            lblDirectCat: 'Бібліотека сервера / Категорія:',
+            lblDirectCat: 'Категорія / Бібліотека:',
             lblDirectSync: 'Згенерувати .strm негайно та сповістити Jellyfin',
             btnDirectSubmit: 'Додати в бібліотеку',
             dashActiveTorrents: 'Активні торенти',
@@ -1084,8 +1100,8 @@
             cfgGeneralSub: 'Мова за замовчуванням та розташування сховища',
             lblCfgLanguage: 'Мова інтерфейсу за замовчуванням:',
             lblCfgLanguageHint: 'Англійська активна за замовчуванням. Ви можете будь-коли перемкнути на українську.',
-            lblCfgMediaRoot: 'Шлях до кореневої папки медіа (Media Dir):',
-            lblCfgMediaRootHint: 'Папка, де розміщені фільми та серіали. Авто-визначається з бібліотек сервера, якщо порожньо.',
+            lblCfgMediaRoot: 'Коренева папка за замовчуванням (Media Dir):',
+            lblCfgMediaRootHint: 'Резервний шлях. Ви можете налаштувати точні шляхи для кожної категорії нижче.',
             cfgTorrServerTitle: 'TorrServer (Торент-рушій)',
             cfgTorrServerSub: 'Зовнішній сервер (наприклад через VPN) або вбудований процес',
             lblCfgExternalUrl: 'Зовнішня адреса TorrServer (API & стрімінг):',
@@ -1111,9 +1127,10 @@
             lblCfgSeasonFolder: 'Папка сезону:',
             lblCfgEpisodeFile: 'Файл серії (.strm):',
             lblTemplateTokensTitle: 'Доступні теги шаблону:',
-            cfgServerLibsTitle: 'Виявлені бібліотеки сервера Jellyfin',
-            cfgServerLibsSub: 'Бібліотеки, отримані з вашого сервера. Використовуються для маршрутизації та точкового сканування.',
-            lblLoadingLibs: 'Завантаження бібліотек сервера...'
+            cfgCategoriesTitle: 'Бібліотеки сервера та шляхи до папок',
+            cfgCategoriesSub: 'Вкажіть точні шляхи на диску для кожної бібліотеки, де зберігатимуться .strm файли.',
+            btnAutofillText: 'Виявити з Jellyfin',
+            btnAddCatText: '+ Додати категорію'
         }
     };
 
@@ -1207,8 +1224,10 @@
             'lblCfgSeasonFolder': t.lblCfgSeasonFolder,
             'lblCfgEpisodeFile': t.lblCfgEpisodeFile,
             'lblTemplateTokensTitle': t.lblTemplateTokensTitle,
-            'cfgServerLibsTitle': t.cfgServerLibsTitle,
-            'cfgServerLibsSub': t.cfgServerLibsSub
+            'cfgCategoriesTitle': t.cfgCategoriesTitle,
+            'cfgCategoriesSub': t.cfgCategoriesSub,
+            'btnAutofillText': t.btnAutofillText,
+            'btnAddCatText': t.btnAddCatText
         };
 
         for (var id in map) {
@@ -1219,7 +1238,6 @@
         var searchInput = page.querySelector('#t2jSearchInput');
         if (searchInput) searchInput.placeholder = t.searchPlaceholder;
 
-        // Re-render search results and streams if active
         if (window.t2jState.currentTab === 'search' && window.t2jState.searchResults.length > 0) {
             renderSearchResults();
         } else if (window.t2jState.currentTab === 'dashboard') {
@@ -1274,13 +1292,28 @@
                 var libs = await res.json();
                 window.t2jState.libraries = Array.isArray(libs) ? libs : [];
                 updateCategorySelects();
-                renderServerLibrariesCard();
             }
         } catch (e) {
             console.warn('Failed to load server libraries', e);
         }
     }
     window.t2jLoadLibraries = loadLibraries;
+
+    function getCategoriesList() {
+        if (window.t2jState.config && window.t2jState.config.Categories && window.t2jState.config.Categories.length > 0) {
+            return window.t2jState.config.Categories;
+        }
+        if (window.t2jState.libraries && window.t2jState.libraries.length > 0) {
+            return window.t2jState.libraries.map(function (lib) {
+                return { Name: lib.Name, Folder: lib.PrimaryLocation || lib.Locations[0] || lib.Name.toLowerCase(), Type: lib.Type };
+            });
+        }
+        return [
+            { Name: 'Movies', Folder: '/media/movies', Type: 'movie' },
+            { Name: 'Shows', Folder: '/media/shows', Type: 'show' },
+            { Name: 'Cartoons', Folder: '/media/cartoons', Type: 'movie' }
+        ];
+    }
 
     function updateCategorySelects() {
         var page = getPage();
@@ -1289,21 +1322,14 @@
 
         var searchCategorySelect = page.querySelector('#t2jSearchCategorySelect');
         var directCategorySelect = page.querySelector('#directCategorySelect');
-
-        var libs = window.t2jState.libraries;
-        if (!libs || libs.length === 0) {
-            libs = [
-                { Name: 'Movies', Type: 'movie' },
-                { Name: 'Shows', Type: 'show' }
-            ];
-        }
+        var cats = getCategoriesList();
 
         if (searchCategorySelect) {
             var curVal = searchCategorySelect.value;
             var searchHtml = '<option value="">' + escapeHtml(t.allCategories) + '</option>';
-            libs.forEach(function (lib) {
-                var isSel = curVal ? curVal === lib.Name : (lib.Type === 'movie');
-                searchHtml += '<option value="' + escapeHtml(lib.Name) + '" ' + (isSel ? 'selected' : '') + '>' + escapeHtml(lib.Name) + ' (' + (lib.Type === 'show' ? 'Series' : 'Movies') + ')</option>';
+            cats.forEach(function (c) {
+                var isSel = curVal ? curVal === c.Name : (c.Type === 'movie');
+                searchHtml += '<option value="' + escapeHtml(c.Name) + '" ' + (isSel ? 'selected' : '') + '>' + escapeHtml(c.Name) + ' (' + (c.Type === 'show' ? 'Series' : 'Movies') + ')</option>';
             });
             searchCategorySelect.innerHTML = searchHtml;
         }
@@ -1311,42 +1337,130 @@
         if (directCategorySelect) {
             var curDirectVal = directCategorySelect.value;
             var directHtml = '';
-            libs.forEach(function (lib, idx) {
-                var isSel = curDirectVal ? curDirectVal === lib.Name : (idx === 0);
-                directHtml += '<option value="' + escapeHtml(lib.Name) + '" ' + (isSel ? 'selected' : '') + '>' + escapeHtml(lib.Name) + ' (' + (lib.Type === 'show' ? 'Series' : 'Movies') + ')</option>';
+            cats.forEach(function (c, idx) {
+                var isSel = curDirectVal ? curDirectVal === c.Name : (idx === 0);
+                directHtml += '<option value="' + escapeHtml(c.Name) + '" ' + (isSel ? 'selected' : '') + '>' + escapeHtml(c.Name) + ' (' + (c.Type === 'show' ? 'Series' : 'Movies') + ')</option>';
             });
             directCategorySelect.innerHTML = directHtml;
         }
     }
 
-    function renderServerLibrariesCard() {
+    // Editable Categories in Settings
+    function renderCategoriesManager(categories) {
         var page = getPage();
         if (!page) return;
-        var container = page.querySelector('#cfgServerLibrariesList');
+        var container = page.querySelector('#cfgCategoriesContainer');
         if (!container) return;
 
+        var cats = categories || getCategoriesList();
         var libs = window.t2jState.libraries || [];
-        if (libs.length === 0) {
-            container.innerHTML = '<div class="text-slate-500 text-xs italic">No libraries returned by server.</div>';
-            return;
-        }
 
         var html = '';
-        libs.forEach(function (lib) {
-            var isShow = lib.Type === 'show';
-            html += '<div class="bg-slate-950 border border-slate-800 rounded-xl p-3 flex items-center justify-between">';
-            html += '  <div>';
-            html += '    <div class="font-bold text-white flex items-center space-x-2">';
-            html += '      <span>' + (isShow ? '📺' : '🎬') + '</span>';
-            html += '      <span>' + escapeHtml(lib.Name) + '</span>';
-            html += '      <span class="text-[10px] px-1.5 py-0.2 rounded ' + (isShow ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30') + '">' + (isShow ? 'Series' : 'Movies') + '</span>';
-            html += '    </div>';
-            html += '    <div class="text-[10px] text-slate-400 font-mono mt-1 truncate max-w-[240px]">' + escapeHtml(lib.PrimaryLocation || lib.Locations[0] || 'Default') + '</div>';
+        cats.forEach(function (cat, idx) {
+            var isShow = cat.Type === 'show';
+            // Find detected locations from server libraries for this category name
+            var matchedLib = libs.find(function (l) { return l.Name.toLowerCase() === (cat.Name || '').toLowerCase(); });
+            var locations = matchedLib && matchedLib.Locations ? matchedLib.Locations : [];
+
+            html += '<div class="t2j-category-row bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2.5" data-idx="' + idx + '">';
+            html += '  <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">';
+            html += '    <select class="t2j-cat-type bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-500 shrink-0 cursor-pointer">';
+            html += '      <option value="movie" ' + (!isShow ? 'selected' : '') + '>🎬 Movie</option>';
+            html += '      <option value="show" ' + (isShow ? 'selected' : '') + '>📺 Series</option>';
+            html += '    </select>';
+            html += '    <input type="text" class="t2j-cat-name w-full sm:w-48 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-semibold" placeholder="Category Name" value="' + escapeHtml(cat.Name) + '">';
+            html += '    <input type="text" class="t2j-cat-folder flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono" placeholder="Absolute Target Folder Path (e.g. /nas-torrent/Movies)" value="' + escapeHtml(cat.Folder) + '">';
+            html += '    <button type="button" onclick="window.t2jRemoveCategoryRow && window.t2jRemoveCategoryRow(' + idx + ')" class="px-3 py-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold shrink-0 cursor-pointer">';
+            html += '      <i class="fa-solid fa-trash-can text-[11px]"></i>';
+            html += '    </button>';
             html += '  </div>';
-            html += '  <span class="text-emerald-400 text-xs font-bold">✓ Active</span>';
+
+            if (locations.length > 0) {
+                html += '  <div class="flex items-center space-x-2 text-[11px] text-slate-400 flex-wrap gap-y-1">';
+                html += '    <span class="text-slate-500">Detected server paths:</span>';
+                locations.forEach(function (loc) {
+                    html += '    <button type="button" data-idx="' + idx + '" data-path="' + escapeHtml(loc) + '" onclick="window.t2jApplyChipPath(this)" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-cyan-300 font-mono text-[10px] border border-slate-700 transition-colors" title="Click to apply this path">' + escapeHtml(loc) + '</button>';
+                });
+                html += '  </div>';
+            }
             html += '</div>';
         });
+
         container.innerHTML = html;
+    }
+    window.renderCategoriesManager = renderCategoriesManager;
+
+    window.t2jApplyChipPath = function (btn) {
+        if (!btn) return;
+        var idx = btn.getAttribute('data-idx');
+        var path = btn.getAttribute('data-path');
+        window.t2jSetRowFolder(idx, path);
+    };
+
+    window.t2jSetRowFolder = function (idx, path) {
+        var page = getPage();
+        if (!page) return;
+        var row = page.querySelector('.t2j-category-row[data-idx="' + idx + '"]');
+        if (row) {
+            var input = row.querySelector('.t2j-cat-folder');
+            if (input) input.value = path;
+        }
+    };
+
+    window.t2jAddCategoryRow = function () {
+        var page = getPage();
+        if (!page) return;
+        var currentCats = collectCategoriesFromUI();
+        currentCats.push({ Name: 'New Library', Folder: '/media/new', Type: 'movie' });
+        renderCategoriesManager(currentCats);
+    };
+
+    window.t2jRemoveCategoryRow = function (idx) {
+        var currentCats = collectCategoriesFromUI();
+        if (currentCats.length <= 1) {
+            alert('You must keep at least one category.');
+            return;
+        }
+        currentCats.splice(idx, 1);
+        renderCategoriesManager(currentCats);
+    };
+
+    window.t2jAutofillCategories = async function () {
+        await loadLibraries();
+        var libs = window.t2jState.libraries || [];
+        if (libs.length === 0) {
+            alert('No libraries returned by Jellyfin server.');
+            return;
+        }
+        var newCats = libs.map(function (lib) {
+            return {
+                Name: lib.Name,
+                Folder: lib.PrimaryLocation || (lib.Locations && lib.Locations[0]) || '/media/' + lib.Name.toLowerCase(),
+                Type: lib.Type || 'movie'
+            };
+        });
+        renderCategoriesManager(newCats);
+    };
+
+    function collectCategoriesFromUI() {
+        var page = getPage();
+        if (!page) return [];
+        var rows = page.querySelectorAll('.t2j-category-row');
+        var result = [];
+        rows.forEach(function (row) {
+            var typeSelect = row.querySelector('.t2j-cat-type');
+            var nameInput = row.querySelector('.t2j-cat-name');
+            var folderInput = row.querySelector('.t2j-cat-folder');
+            if (nameInput && folderInput) {
+                var name = nameInput.value.trim();
+                var folder = folderInput.value.trim();
+                var type = typeSelect ? typeSelect.value : 'movie';
+                if (name && folder) {
+                    result.push({ Name: name, Folder: folder, Type: type });
+                }
+            }
+        });
+        return result;
     }
 
     // Load Indexers from Prowlarr
@@ -1468,9 +1582,9 @@
         }
 
         var defaultCategory = searchCategorySelect ? searchCategorySelect.value : '';
-        var serverLibs = window.t2jState.libraries || [];
-        var showLib = serverLibs.find(function (l) { return l.Type === 'show'; });
-        var movieLib = serverLibs.find(function (l) { return l.Type === 'movie'; });
+        var cats = getCategoriesList();
+        var showCat = cats.find(function (c) { return c.Type === 'show'; });
+        var movieCat = cats.find(function (c) { return c.Type === 'movie'; });
 
         var html = '';
 
@@ -1484,7 +1598,6 @@
             var peers = item.Peers || item.peers || 0;
             var indexer = item.Indexer || item.indexer || 'Tracker';
 
-            // Auto-detect TV series release from keywords
             var isShowRelease = /(?:s\d{1,2}|season|сезон|\d{1,2}x\d{1,2}|серій|серії|серії|ep\d{1,3})/i.test(title);
 
             var goldBadge = isGold
@@ -1520,26 +1633,20 @@
             html += '    </div>';
             html += '  </div>';
 
-            // Category selector for this item
             html += '  <div class="flex items-center gap-2 shrink-0">';
             html += '    <select id="t2jCatSelect_' + i + '" class="t2j-row-cat-select bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-500 cursor-pointer">';
 
-            if (serverLibs.length > 0) {
-                serverLibs.forEach(function (lib) {
-                    var selected = false;
-                    if (isShowRelease && showLib && lib.Name === showLib.Name) {
-                        selected = true;
-                    } else if (!isShowRelease && movieLib && lib.Name === movieLib.Name) {
-                        selected = true;
-                    } else if (!isShowRelease && defaultCategory && lib.Name === defaultCategory) {
-                        selected = true;
-                    }
-                    html += '<option value="' + escapeHtml(lib.Name) + '" ' + (selected ? 'selected' : '') + '>' + escapeHtml(lib.Name) + ' (' + (lib.Type === 'show' ? 'Series' : 'Movies') + ')</option>';
-                });
-            } else {
-                html += '<option value="Movies" ' + (!isShowRelease ? 'selected' : '') + '>Movies</option>';
-                html += '<option value="Shows" ' + (isShowRelease ? 'selected' : '') + '>Shows</option>';
-            }
+            cats.forEach(function (c) {
+                var selected = false;
+                if (isShowRelease && showCat && c.Name === showCat.Name) {
+                    selected = true;
+                } else if (!isShowRelease && defaultCategory && c.Name === defaultCategory) {
+                    selected = true;
+                } else if (!isShowRelease && movieCat && c.Name === movieCat.Name) {
+                    selected = true;
+                }
+                html += '<option value="' + escapeHtml(c.Name) + '" ' + (selected ? 'selected' : '') + '>' + escapeHtml(c.Name) + ' (' + (c.Type === 'show' ? 'Series' : 'Movies') + ')</option>';
+            });
 
             html += '    </select>';
             html += '    <button type="button" data-index="' + i + '" onclick="window.t2jAddResult && window.t2jAddResult(this)" class="t2j-add-row-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center justify-center space-x-1.5 ' + btnClass + '" style="cursor: pointer !important; pointer-events: auto !important;">';
@@ -1704,7 +1811,7 @@
     };
 
     // Dashboard torrents list
-    async function loadTorrents() {
+    async function loadTorrents(force) {
         var page = getPage();
         if (!page) return;
         var dashTorrentsCount = page.querySelector('#dashTorrentsCount');
@@ -1713,6 +1820,12 @@
         var torrentsEmptyNotice = page.querySelector('#torrentsEmptyNotice');
         var t = I18N[getLang()] || I18N.en;
 
+        // CRITICAL FIX: If user is interacting with an element (e.g. dropdown open), do NOT wipe DOM!
+        var activeEl = document.activeElement;
+        if (!force && activeEl && torrentsListTable && torrentsListTable.contains(activeEl)) {
+            return;
+        }
+
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), { headers: getAuthHeaders() });
             var torrents = await res.json();
@@ -1720,16 +1833,16 @@
 
             if (dashTorrentsCount) dashTorrentsCount.innerText = window.t2jState.torrents.length;
             if (activeTorrentsBadge) activeTorrentsBadge.innerText = window.t2jState.torrents.length;
-            if (torrentsListTable) torrentsListTable.innerHTML = '';
 
             if (!window.t2jState.torrents || window.t2jState.torrents.length === 0) {
                 if (torrentsEmptyNotice) torrentsEmptyNotice.classList.remove('hidden');
+                if (torrentsListTable) torrentsListTable.innerHTML = '';
                 return;
             }
 
             if (torrentsEmptyNotice) torrentsEmptyNotice.classList.add('hidden');
 
-            var serverLibs = window.t2jState.libraries || [];
+            var cats = getCategoriesList();
 
             var html = '';
             for (var i = 0; i < window.t2jState.torrents.length; i++) {
@@ -1739,10 +1852,16 @@
                 var size = formatBytes(item.torrent_size || item.TorrentSize || 0);
                 var loaded = formatBytes(item.loaded_size || item.LoadedSize || 0);
                 var statusStr = item.stat_string || item.StatString || 'Active';
+                var currentCat = item.category || item.Category || '';
 
-                html += '<div class="py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800/60">';
+                html += '<div class="py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800/60" id="t2jTorrentRow_' + escapeHtml(hash) + '">';
                 html += '  <div class="flex-1 min-w-0">';
-                html += '    <h4 class="text-sm font-bold text-white truncate" title="' + escapeHtml(title) + '">' + escapeHtml(title) + '</h4>';
+                html += '    <div class="flex items-center space-x-2">';
+                html += '      <h4 class="text-sm font-bold text-white truncate" title="' + escapeHtml(title) + '">' + escapeHtml(title) + '</h4>';
+                if (currentCat) {
+                    html += '      <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold shrink-0">' + escapeHtml(currentCat) + '</span>';
+                }
+                html += '    </div>';
                 html += '    <div class="flex items-center space-x-3 text-xs text-slate-400 mt-1 flex-wrap">';
                 html += '      <span class="text-emerald-400 font-semibold">' + escapeHtml(statusStr) + '</span>';
                 html += '      <span>Size: ' + escapeHtml(size) + '</span>';
@@ -1754,17 +1873,14 @@
                 // Category switcher and delete
                 html += '  <div class="flex items-center space-x-2 shrink-0">';
                 html += '    <select id="t2jRecatSelect_' + escapeHtml(hash) + '" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500 cursor-pointer">';
-                if (serverLibs.length > 0) {
-                    serverLibs.forEach(function (lib) {
-                        html += '<option value="' + escapeHtml(lib.Name) + '">' + escapeHtml(lib.Name) + '</option>';
-                    });
-                } else {
-                    html += '<option value="Movies">Movies</option>';
-                    html += '<option value="Shows">Shows</option>';
-                }
+                cats.forEach(function (c) {
+                    var isSelected = (currentCat && currentCat.toLowerCase() === c.Name.toLowerCase());
+                    html += '<option value="' + escapeHtml(c.Name) + '" ' + (isSelected ? 'selected' : '') + '>' + escapeHtml(c.Name) + '</option>';
+                });
                 html += '    </select>';
-                html += '    <button type="button" data-hash="' + escapeHtml(hash) + '" onclick="window.t2jRecategorize && window.t2jRecategorize(this)" class="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all cursor-pointer">';
-                html += '      <i class="fa-solid fa-arrow-right-arrow-left text-[11px] mr-1"></i> ' + escapeHtml(t.btnRecategorize);
+                html += '    <button type="button" data-hash="' + escapeHtml(hash) + '" onclick="window.t2jRecategorize && window.t2jRecategorize(this)" class="px-3 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-xs font-semibold transition-all cursor-pointer flex items-center space-x-1">';
+                html += '      <i class="fa-solid fa-arrow-right-arrow-left text-[11px]"></i>';
+                html += '      <span>' + escapeHtml(t.btnRecategorize) + '</span>';
                 html += '    </button>';
                 html += '    <button type="button" data-hash="' + escapeHtml(hash) + '" data-title="' + escapeHtml(title) + '" onclick="window.t2jDeleteTorrent && window.t2jDeleteTorrent(this)" class="t2j-del-torrent-btn px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all cursor-pointer">';
                 html += '      <i class="fa-solid fa-trash-can text-[11px] mr-1"></i> ' + escapeHtml(t.btnDelete);
@@ -1797,8 +1913,16 @@
                 body: JSON.stringify({ Category: newCat })
             });
             if (res.ok) {
-                btn.innerHTML = '<span class="text-emerald-400">✓ Done</span>';
-                setTimeout(loadTorrents, 1200);
+                // Update local model immediately
+                var tObj = window.t2jState.torrents.find(function (t) { return (t.hash || t.Hash) === hash; });
+                if (tObj) {
+                    tObj.category = newCat;
+                    tObj.Category = newCat;
+                }
+                btn.innerHTML = '<span class="text-emerald-400 font-bold">✓ Moved</span>';
+                setTimeout(function () {
+                    loadTorrents(true);
+                }, 1000);
             } else {
                 alert('Failed to recategorize');
                 btn.disabled = false;
@@ -1825,7 +1949,7 @@
                 method: 'DELETE',
                 headers: getAuthHeaders()
             });
-            loadTorrents();
+            loadTorrents(true);
             checkStatus();
         } catch (err) {
             alert('Delete failed: ' + err.message);
@@ -1884,9 +2008,8 @@
         var cfgShowEpisodeFileTemplateInput = page.querySelector('#cfgShowEpisodeFileTemplateInput');
         var dashMediaDir = page.querySelector('#dashMediaDir');
 
-        // Load indexers and libraries in parallel
         loadIndexers();
-        loadLibraries();
+        await loadLibraries();
 
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), { headers: getAuthHeaders() });
@@ -1913,7 +2036,9 @@
 
             if (dashMediaDir) dashMediaDir.innerText = cfg.MediaRootPath || '/media';
 
-            // Also synchronize search gold check
+            // Render categories manager
+            renderCategoriesManager(cfg.Categories);
+
             var searchGoldOnlyCheck = page.querySelector('#t2jSearchGoldOnlyCheck');
             if (searchGoldOnlyCheck && searchGoldOnlyCheck._init !== true) {
                 searchGoldOnlyCheck._init = true;
@@ -1963,6 +2088,9 @@
             }
         });
 
+        // Collect user-edited categories from UI
+        var categories = collectCategoriesFromUI();
+
         var selectedLang = cfgLanguageSelect ? cfgLanguageSelect.value : 'en';
 
         var payload = {
@@ -1978,6 +2106,7 @@
             SearchOnlyGoldByDefault: cfgSearchOnlyGoldByDefaultCheck ? cfgSearchOnlyGoldByDefaultCheck.checked : false,
             OnlyGoldTorrentsForNonAdmins: cfgOnlyGoldCheck ? cfgOnlyGoldCheck.checked : false,
             DisabledTrackers: disabledTrackers,
+            Categories: categories,
             MovieFolderTemplate: cfgMovieFolderTemplateInput ? cfgMovieFolderTemplateInput.value.trim() : '{Title} ({Year})',
             MovieFileTemplate: cfgMovieFileTemplateInput ? cfgMovieFileTemplateInput.value.trim() : '{Title} ({Year}).strm',
             ShowFolderTemplate: cfgShowFolderTemplateInput ? cfgShowFolderTemplateInput.value.trim() : '{Title} ({Year})',
@@ -1993,8 +2122,11 @@
             });
 
             if (res.ok) {
-                // Apply language switch immediately
                 setLang(selectedLang);
+                if (window.t2jState.config) {
+                    window.t2jState.config.Categories = categories;
+                }
+                updateCategorySelects();
 
                 if (saveSettingsBtnText) saveSettingsBtnText.innerText = I18N[selectedLang].savedSettings;
                 setTimeout(function () {
@@ -2111,7 +2243,7 @@
         } else if (tab === 'dashboard') {
             var d = page.querySelector('#t2jTabDashboard');
             if (d) d.classList.remove('hidden');
-            loadTorrents();
+            loadTorrents(true);
             startPolling();
         } else if (tab === 'settings') {
             var st = page.querySelector('#t2jTabSettings');

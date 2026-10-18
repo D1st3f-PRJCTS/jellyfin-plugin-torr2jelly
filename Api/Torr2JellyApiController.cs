@@ -121,6 +121,46 @@ public class Torr2JellyApiController : ControllerBase
     public async Task<ActionResult<List<TorrTorrent>>> GetTorrents(CancellationToken cancellationToken)
     {
         var torrents = await _torrClient.ListTorrentsAsync(cancellationToken);
+        var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+
+        foreach (var t in torrents)
+        {
+            if (string.IsNullOrWhiteSpace(t.Category))
+            {
+                foreach (var cat in config.Categories)
+                {
+                    var catFolder = _strmEngine.ResolveMediaRoot(cat.Folder);
+                    if (Directory.Exists(catFolder))
+                    {
+                        var strms = Directory.GetFiles(catFolder, "*.strm", SearchOption.AllDirectories);
+                        var found = strms.Any(s =>
+                        {
+                            try { return System.IO.File.ReadAllText(s).Contains(t.Hash, StringComparison.OrdinalIgnoreCase); }
+                            catch { return false; }
+                        });
+
+                        if (found)
+                        {
+                            t.Category = cat.Name;
+                            // Persist in TorrServer in the background
+                            _ = _torrClient.SetTorrentCategoryAsync(t.Hash, cat.Name, t.Title, t.Poster, cancellationToken);
+                            break;
+                        }
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(t.Category))
+                {
+                    var isShow = EpisodeMatcher.IsShowRelease(t.Title, t.FileStats?.Select(f => f.Path) ?? Enumerable.Empty<string>()) || (t.FileStats != null && t.FileStats.Count > 1);
+                    var defaultCat = config.Categories.FirstOrDefault(c => c.Type.Equals(isShow ? "show" : "movie", StringComparison.OrdinalIgnoreCase))?.Name
+                        ?? config.Categories.FirstOrDefault()?.Name
+                        ?? (isShow ? "Shows" : "Movies");
+                    t.Category = defaultCat;
+                    _ = _torrClient.SetTorrentCategoryAsync(t.Hash, defaultCat, t.Title, t.Poster, cancellationToken);
+                }
+            }
+        }
+
         return Ok(torrents);
     }
 
@@ -142,12 +182,18 @@ public class Torr2JellyApiController : ControllerBase
                 link: req.Link,
                 title: req.Title,
                 poster: req.PosterUrl,
+                category: req.Category,
                 saveToDb: true,
                 cancellationToken: cancellationToken);
 
             if (torrent == null)
             {
                 return StatusCode(StatusCodes.Status502BadGateway, new { error = "Failed to communicate with TorrServer." });
+            }
+
+            if (!string.IsNullOrWhiteSpace(req.Category))
+            {
+                await _torrClient.SetTorrentCategoryAsync(torrent.Hash, req.Category, torrent.Title, torrent.Poster, cancellationToken);
             }
 
             if (req.SyncNow)
@@ -158,6 +204,7 @@ public class Torr2JellyApiController : ControllerBase
                     customTitle: req.Title,
                     posterUrl: req.PosterUrl,
                     tmdbId: req.TmdbId,
+                    forceCategory: !string.IsNullOrWhiteSpace(req.Category),
                     cancellationToken: cancellationToken);
 
                 return Ok(syncResult);
@@ -213,11 +260,16 @@ public class Torr2JellyApiController : ControllerBase
             }
         }
 
-        // Re-sync with new category
+        // Persist category in TorrServer
+        await _torrClient.SetTorrentCategoryAsync(hash, req.Category, torrent.Title, torrent.Poster, cancellationToken);
+        torrent.Category = req.Category;
+
+        // Re-sync with new category, forcing user's category selection
         var syncResult = await _strmEngine.SyncTorrentAsync(
             torrent: torrent,
             category: req.Category,
             customTitle: req.CustomTitle,
+            forceCategory: true,
             cancellationToken: cancellationToken);
 
         return Ok(syncResult);

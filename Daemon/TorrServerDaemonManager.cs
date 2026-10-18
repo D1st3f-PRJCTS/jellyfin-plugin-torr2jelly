@@ -1,6 +1,8 @@
 using System;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.Torr2Jelly.Configuration;
@@ -55,6 +57,7 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
         _logger.LogInformation("Torr2Jelly connecting to TorrServer at {Url}", config.ExternalTorrServerUrl);
         await CheckExternalServerAsync(cancellationToken);
+        await EnsureCacheSettingsSyncedAsync(cancellationToken);
 
         _watchdogCts = new CancellationTokenSource();
         _ = Task.Run(() => WatchdogLoopAsync(_watchdogCts.Token), CancellationToken.None);
@@ -66,37 +69,134 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
         return Task.CompletedTask;
     }
 
-    public async Task ConfigureDaemonSettingsAsync(CancellationToken cancellationToken = default)
+    public async Task EnsureCacheSettingsSyncedAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
             var effectiveUrl = GetEffectiveUrl();
 
-            var cacheSizeBytes = (long)config.CacheSizeMb * 1024 * 1024;
-            var payload = new
-            {
-                action = "set",
-                sets = new
-                {
-                    CacheSize = cacheSizeBytes,
-                    PreloadCache = config.PreloadCachePercent,
-                    ReaderReadAHead = config.ReaderReadAHeadPercent,
-                    UseDisk = config.UseDiskCache,
-                    TorrentsSavePath = config.DiskCachePath ?? string.Empty
-                }
-            };
+            // 1. Fetch current settings from TorrServer
+            using var getResponse = await _httpClient.PostAsJsonAsync(
+                $"{effectiveUrl}/settings",
+                new { action = "get" },
+                cancellationToken);
 
-            var response = await _httpClient.PostAsJsonAsync($"{effectiveUrl}/settings", payload, cancellationToken);
-            if (response.IsSuccessStatusCode)
+            if (!getResponse.IsSuccessStatusCode)
             {
-                _logger.LogInformation("TorrServer cache configured: {Mb} MB RAM, Preload: {Preload}%", config.CacheSizeMb, config.PreloadCachePercent);
+                return;
+            }
+
+            var jsonContent = await getResponse.Content.ReadAsStringAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(jsonContent))
+            {
+                return;
+            }
+
+            var rootObj = JsonNode.Parse(jsonContent)?.AsObject();
+            if (rootObj == null)
+            {
+                return;
+            }
+
+            var desiredCacheBytes = (long)config.CacheSizeMb * 1024 * 1024;
+            var currentUseDisk = rootObj["UseDisk"]?.GetValue<bool>() ?? false;
+            var currentCacheSize = rootObj["CacheSize"]?.GetValue<long>() ?? 0;
+            var currentPreload = rootObj["PreloadCache"]?.GetValue<int>() ?? 0;
+            var currentReader = rootObj["ReaderReadAHead"]?.GetValue<int>() ?? 0;
+            var currentPath = rootObj["TorrentsSavePath"]?.GetValue<string>() ?? string.Empty;
+            var currentPort = rootObj["PeersListenPort"]?.GetValue<int>() ?? 0;
+
+            // Check if Proton VPN forwarded port file exists
+            int? targetPort = null;
+            string[] possiblePortFiles = { "/mnt/sdb/AppFiles/torrserver/data/forwarded_port", "/opt/ts/forwarded_port" };
+            foreach (var pf in possiblePortFiles)
+            {
+                if (File.Exists(pf))
+                {
+                    try
+                    {
+                        var portStr = (await File.ReadAllTextAsync(pf, cancellationToken)).Trim();
+                        if (int.TryParse(portStr, out var p) && p > 0)
+                        {
+                            targetPort = p;
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore file read locks
+                    }
+                }
+            }
+
+            var needsUpdate = false;
+
+            if (currentUseDisk != config.UseDiskCache ||
+                currentCacheSize != desiredCacheBytes ||
+                currentPreload != config.PreloadCachePercent ||
+                currentReader != config.ReaderReadAHeadPercent ||
+                currentPath != (config.DiskCachePath ?? string.Empty))
+            {
+                needsUpdate = true;
+                _logger.LogInformation(
+                    "TorrServer cache mismatch detected (Current: Disk={CurDisk}, Size={CurMb}MB, Path='{CurPath}'; Desired: Disk={DesDisk}, Size={DesMb}MB, Path='{DesPath}'). Syncing...",
+                    currentUseDisk, currentCacheSize / (1024 * 1024), currentPath,
+                    config.UseDiskCache, config.CacheSizeMb, config.DiskCachePath);
+            }
+
+            if (targetPort.HasValue && currentPort != targetPort.Value)
+            {
+                needsUpdate = true;
+                _logger.LogInformation("TorrServer peer port mismatch detected (Current: {CurPort}, Target: {TgtPort}). Syncing...",
+                    currentPort, targetPort.Value);
+            }
+
+            if (needsUpdate)
+            {
+                rootObj["UseDisk"] = config.UseDiskCache;
+                rootObj["CacheSize"] = desiredCacheBytes;
+                rootObj["PreloadCache"] = config.PreloadCachePercent;
+                rootObj["ReaderReadAHead"] = config.ReaderReadAHeadPercent;
+                rootObj["TorrentsSavePath"] = config.DiskCachePath ?? string.Empty;
+
+                if (targetPort.HasValue)
+                {
+                    rootObj["PeersListenPort"] = targetPort.Value;
+                }
+
+                var payload = new
+                {
+                    action = "set",
+                    sets = rootObj
+                };
+
+                using var setResponse = await _httpClient.PostAsJsonAsync(
+                    $"{effectiveUrl}/settings",
+                    payload,
+                    cancellationToken);
+
+                if (setResponse.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation(
+                        "TorrServer settings synced successfully: {Mb} MB (Disk: {UseDisk}, Path: '{Path}', Port: {Port})",
+                        config.CacheSizeMb, config.UseDiskCache, config.DiskCachePath, rootObj["PeersListenPort"]?.GetValue<int>());
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to apply TorrServer settings, status code: {Code}", setResponse.StatusCode);
+                }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to apply TorrServer settings");
+            _logger.LogWarning(ex, "Failed to check or sync TorrServer settings");
         }
+    }
+
+    public async Task ConfigureDaemonSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        await EnsureCacheSettingsSyncedAsync(cancellationToken);
     }
 
     public async Task<bool> CheckExternalServerAsync(CancellationToken cancellationToken = default)
@@ -120,12 +220,21 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
 
     private async Task WatchdogLoopAsync(CancellationToken cancellationToken)
     {
+        var syncCycleCounter = 0;
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(15), cancellationToken);
-                await CheckExternalServerAsync(cancellationToken);
+                var isOnline = await CheckExternalServerAsync(cancellationToken);
+
+                // Run cache settings sync every 60 seconds (every 4th cycle of 15s)
+                syncCycleCounter++;
+                if (isOnline && syncCycleCounter >= 4)
+                {
+                    syncCycleCounter = 0;
+                    await EnsureCacheSettingsSyncedAsync(cancellationToken);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -141,7 +250,7 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
     public async Task RestartAsync(CancellationToken cancellationToken = default)
     {
         await CheckExternalServerAsync(cancellationToken);
-        await ConfigureDaemonSettingsAsync(cancellationToken);
+        await EnsureCacheSettingsSyncedAsync(cancellationToken);
     }
 
     public void Dispose()

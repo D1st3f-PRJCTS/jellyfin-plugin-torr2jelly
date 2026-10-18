@@ -573,41 +573,52 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-              <!-- Embedded Daemon Settings -->
+              <!-- TorrServer Settings -->
               <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 space-y-4">
                 <div class="flex items-center space-x-2.5">
                   <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">⚡</div>
                   <div>
-                    <h3 class="font-bold text-sm text-white">Вбудований торент-рушій (Standalone)</h3>
-                    <p class="text-[11px] text-slate-400">Автоматичний супервайзер процесу TorrServer</p>
+                    <h3 class="font-bold text-sm text-white">TorrServer (Торент-рушій)</h3>
+                    <p class="text-[11px] text-slate-400">Зовнішній сервер (наприклад через VPN) або вбудований процес</p>
                   </div>
                 </div>
 
                 <div class="space-y-3 text-xs">
-                  <label class="flex items-center space-x-3 cursor-pointer">
-                    <input type="checkbox" id="cfgEmbeddedCheck" class="rounded text-brand-600 focus:ring-brand-500 bg-slate-950 border-slate-700 w-4 h-4">
-                    <span class="font-semibold text-white">Використовувати вбудований TorrServer (Рекомендовано)</span>
-                  </label>
-
                   <div>
-                    <label class="block text-slate-300 font-medium mb-1">Порт вбудованого сервера:</label>
-                    <input type="number" id="cfgPortInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                    <label class="block text-slate-300 font-medium mb-1">Зовнішня адреса TorrServer (API & стрімінг):</label>
+                    <input type="text" id="cfgExternalUrlInput" placeholder="http://torrserver:8090" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                    <p class="text-[10px] text-slate-500 mt-1">Основний URL для зовнішнього TorrServer (наприклад контейнер через VPN).</p>
                   </div>
 
                   <div>
-                    <label class="block text-slate-300 font-medium mb-1">Розмір RAM кешу (МБ):</label>
-                    <input type="number" id="cfgCacheSizeInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                    <label class="block text-slate-300 font-medium mb-1">Адреса потоку для .strm (TorrServer Stream URL):</label>
+                    <input type="text" id="cfgStreamUrlInput" placeholder="http://torrserver:8090" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                    <p class="text-[10px] text-slate-500 mt-1">URL, що записується у .strm файли для плеєра Jellyfin.</p>
                   </div>
 
-                  <div>
-                    <label class="block text-slate-300 font-medium mb-1">Адреса потоку (TorrServer Stream URL):</label>
-                    <input type="text" id="cfgStreamUrlInput" placeholder="http://127.0.0.1:8095" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                  <div class="pt-2 border-t border-slate-800/60">
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                      <input type="checkbox" id="cfgEmbeddedCheck" class="rounded text-brand-600 focus:ring-brand-500 bg-slate-950 border-slate-700 w-4 h-4">
+                      <span class="font-semibold text-white">Використовувати вбудований TorrServer (запуск окремого бінарника)</span>
+                    </label>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="block text-slate-300 font-medium mb-1">Порт вбудованого сервера:</label>
+                      <input type="number" id="cfgPortInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                    </div>
+
+                    <div>
+                      <label class="block text-slate-300 font-medium mb-1">Розмір RAM кешу (МБ):</label>
+                      <input type="number" id="cfgCacheSizeInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                    </div>
                   </div>
 
                   <div class="pt-2">
                     <button type="button" id="restartDaemonBtn" onclick="window.t2jRestartDaemon && window.t2jRestartDaemon()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-all">
                       <i class="fa-solid fa-power-off text-amber-400"></i>
-                      <span>Перезапустити торент-рушій</span>
+                      <span>Перевірити / Перезапустити торент-рушій</span>
                     </button>
                   </div>
                 </div>
@@ -732,10 +743,11 @@
                 var daemonPort = data.DaemonPort || data.daemonPort || 8095;
                 var activeCount = data.ActiveTorrentsCount !== undefined ? data.ActiveTorrentsCount : (data.activeTorrentsCount !== undefined ? data.activeTorrentsCount : 0);
 
+                var mode = data.Mode || data.mode || 'External';
                 if (daemonBadge) daemonBadge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
-                if (daemonBadgeText) daemonBadgeText.innerText = 'TorrServer Online (' + daemonVer + ')';
-                if (dashDaemonEngine) dashDaemonEngine.innerText = 'TorrServer ' + daemonVer;
-                if (dashCacheSize) dashCacheSize.innerText = daemonPort ? ('Порт ' + daemonPort) : '256 MB';
+                if (daemonBadgeText) daemonBadgeText.innerText = 'TorrServer Online (' + (mode === 'External' ? 'Зовнішній' : daemonVer) + ')';
+                if (dashDaemonEngine) dashDaemonEngine.innerText = mode === 'External' ? 'Зовнішній TorrServer' : ('Вбудований ' + daemonVer);
+                if (dashCacheSize) dashCacheSize.innerText = mode === 'External' ? (data.EffectiveUrl || 'http://torrserver:8090') : ('Порт ' + daemonPort);
                 if (activeTorrentsBadge) activeTorrentsBadge.innerText = activeCount;
                 if (dashTorrentsCount) dashTorrentsCount.innerText = activeCount;
             } else {
@@ -1105,6 +1117,7 @@
     async function loadSettings() {
         var page = getPage();
         if (!page) return;
+        var cfgExternalUrlInput = page.querySelector('#cfgExternalUrlInput');
         var cfgEmbeddedCheck = page.querySelector('#cfgEmbeddedCheck');
         var cfgPortInput = page.querySelector('#cfgPortInput');
         var cfgCacheSizeInput = page.querySelector('#cfgCacheSizeInput');
@@ -1118,7 +1131,8 @@
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), { headers: getAuthHeaders() });
             var cfg = await res.json();
-            if (cfgEmbeddedCheck) cfgEmbeddedCheck.checked = cfg.UseEmbeddedTorrServer;
+            if (cfgExternalUrlInput) cfgExternalUrlInput.value = cfg.ExternalTorrServerUrl || 'http://torrserver:8090';
+            if (cfgEmbeddedCheck) cfgEmbeddedCheck.checked = !!cfg.UseEmbeddedTorrServer;
             if (cfgPortInput) cfgPortInput.value = cfg.EmbeddedTorrServerPort;
             if (cfgCacheSizeInput) cfgCacheSizeInput.value = cfg.CacheSizeMb;
             if (cfgStreamUrlInput) cfgStreamUrlInput.value = cfg.TorrServerStreamUrl || '';
@@ -1151,10 +1165,11 @@
         if (saveSettingsBtnText) saveSettingsBtnText.innerText = 'Збереження...';
 
         var payload = {
-            UseEmbeddedTorrServer: cfgEmbeddedCheck ? cfgEmbeddedCheck.checked : true,
+            UseEmbeddedTorrServer: cfgEmbeddedCheck ? cfgEmbeddedCheck.checked : false,
+            ExternalTorrServerUrl: cfgExternalUrlInput ? cfgExternalUrlInput.value.trim() : 'http://torrserver:8090',
             EmbeddedTorrServerPort: parseInt(cfgPortInput ? cfgPortInput.value : '8095', 10) || 8095,
             CacheSizeMb: parseInt(cfgCacheSizeInput ? cfgCacheSizeInput.value : '256', 10) || 256,
-            TorrServerStreamUrl: cfgStreamUrlInput ? cfgStreamUrlInput.value.trim() : '',
+            TorrServerStreamUrl: cfgStreamUrlInput ? cfgStreamUrlInput.value.trim() : 'http://torrserver:8090',
             ProwlarrUrl: cfgProwlarrUrlInput ? cfgProwlarrUrlInput.value.trim() : '',
             ProwlarrApiKey: cfgProwlarrKeyInput ? cfgProwlarrKeyInput.value.trim() : '',
             MediaRootPath: cfgMediaDirInput ? cfgMediaDirInput.value.trim() : '',

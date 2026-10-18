@@ -126,7 +126,7 @@ public class StrmEngine
             }
             else if (videoFiles.Count == 0 && files.Count == 0)
             {
-                videoFiles.Add(new TorrTorrentFile { Id = 0, Path = $"{cleanTitle}.mkv", Length = torrent.TorrentSize });
+                videoFiles.Add(new TorrTorrentFile { Id = 1, Path = $"{cleanTitle}.mkv", Length = torrent.TorrentSize });
             }
 
             result.VideoFilesCount = videoFiles.Count;
@@ -144,7 +144,7 @@ public class StrmEngine
                 var strmName = $"{folderName}.strm";
                 var strmPath = Path.Combine(movieDir, strmName);
 
-                var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream/{Uri.EscapeDataString(folderName + ".mkv")}?link={torrent.Hash}&index={mainFile.Id}&preload";
+                var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream?link={torrent.Hash}&index={mainFile.Id}&play\n";
                 await File.WriteAllTextAsync(strmPath, streamUrl, Encoding.UTF8, cancellationToken);
                 result.CreatedStrmFiles.Add(strmPath);
 
@@ -179,7 +179,7 @@ public class StrmEngine
                     var strmFileName = TitleCleaner.SanitizeFilename($"{cleanTitle} - {epTag}.strm");
                     var strmPath = Path.Combine(seasonDir, strmFileName);
 
-                    var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream/{Uri.EscapeDataString(cleanTitle + " " + epTag + ".mkv")}?link={torrent.Hash}&index={videoFile.Id}&preload";
+                    var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream?link={torrent.Hash}&index={videoFile.Id}&play\n";
                     await File.WriteAllTextAsync(strmPath, streamUrl, Encoding.UTF8, cancellationToken);
                     result.CreatedStrmFiles.Add(strmPath);
                 }

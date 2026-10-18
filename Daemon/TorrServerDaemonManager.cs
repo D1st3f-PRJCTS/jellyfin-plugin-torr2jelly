@@ -23,7 +23,18 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
     private CancellationTokenSource? _watchdogCts;
     private bool _isDisposed;
 
-    public bool IsRunning => _process != null && !_process.HasExited;
+    public bool IsRunning
+    {
+        get
+        {
+            var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+            if (!config.UseEmbeddedTorrServer)
+            {
+                return !string.IsNullOrWhiteSpace(DaemonVersion) && DaemonVersion != "Unknown";
+            }
+            return _process != null && !_process.HasExited;
+        }
+    }
     public int? ProcessId => IsRunning ? _process?.Id : null;
     public string StatusMessage { get; private set; } = "Stopped";
     public string DaemonVersion { get; private set; } = "Unknown";
@@ -74,7 +85,7 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
         }
 
         return string.IsNullOrWhiteSpace(config.ExternalTorrServerUrl)
-            ? "http://127.0.0.1:8090"
+            ? "http://torrserver:8090"
             : config.ExternalTorrServerUrl.TrimEnd('/');
     }
 
@@ -94,9 +105,13 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
         if (!config.UseEmbeddedTorrServer)
         {
+            StopProcess();
             StatusMessage = "Using External TorrServer";
             _logger.LogInformation("Torr2Jelly is configured to use external TorrServer at {Url}", config.ExternalTorrServerUrl);
             await CheckExternalServerAsync(cancellationToken);
+
+            _watchdogCts = new CancellationTokenSource();
+            _ = Task.Run(() => WatchdogLoopAsync(_watchdogCts.Token), CancellationToken.None);
             return;
         }
 
@@ -281,18 +296,22 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
         }
     }
 
-    private async Task CheckExternalServerAsync(CancellationToken cancellationToken)
+    public async Task<bool> CheckExternalServerAsync(CancellationToken cancellationToken = default)
     {
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
         try
         {
-            var response = await _httpClient.GetStringAsync($"{config.ExternalTorrServerUrl.TrimEnd('/')}/echo", cancellationToken);
+            var url = string.IsNullOrWhiteSpace(config.ExternalTorrServerUrl) ? "http://torrserver:8090" : config.ExternalTorrServerUrl.TrimEnd('/');
+            var response = await _httpClient.GetStringAsync($"{url}/echo", cancellationToken);
             DaemonVersion = response.Trim();
             StatusMessage = $"Connected ({DaemonVersion})";
+            return true;
         }
         catch (Exception ex)
         {
+            DaemonVersion = "Unknown";
             StatusMessage = $"Cannot reach {config.ExternalTorrServerUrl}: {ex.Message}";
+            return false;
         }
     }
 
@@ -314,6 +333,7 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
                 var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
                 if (!config.UseEmbeddedTorrServer)
                 {
+                    await CheckExternalServerAsync(cancellationToken);
                     continue;
                 }
 

@@ -6,10 +6,10 @@ namespace Jellyfin.Plugin.Torr2Jelly.Configuration;
 public class PluginConfiguration : BasePluginConfiguration
 {
     // Embedded Standalone TorrServer Daemon settings
-    public bool UseEmbeddedTorrServer { get; set; } = true;
+    public bool UseEmbeddedTorrServer { get; set; } = false;
     public int EmbeddedTorrServerPort { get; set; } = 8095;
     public string ExternalTorrServerUrl { get; set; } = "http://torrserver:8090";
-    public string TorrServerStreamUrl { get; set; } = "http://127.0.0.1:8095"; // URL embedded into .strm files
+    public string TorrServerStreamUrl { get; set; } = "http://torrserver:8090"; // URL embedded into .strm files
 
     // Torrent Cache & Performance
     public int CacheSizeMb { get; set; } = 256;

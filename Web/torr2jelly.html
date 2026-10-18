@@ -1793,7 +1793,7 @@
             }
 
             var posterImgHtml = posterUrl
-                ? '<img src="' + escapeHtml(posterUrl) + '" alt="Poster" class="w-10 h-14 object-cover rounded-md flex-shrink-0 border border-slate-700/60 shadow-sm" onerror="this.style.display='none'" />'
+                ? '<img src="' + escapeHtml(posterUrl) + '" alt="Poster" class="w-10 h-14 object-cover rounded-md flex-shrink-0 border border-slate-700/60 shadow-sm" onerror="this.remove()" />'
                 : '';
 
             var btnClass = hasAnyTag

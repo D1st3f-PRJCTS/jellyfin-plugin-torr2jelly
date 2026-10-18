@@ -117,6 +117,9 @@ public class TorznabSearchProvider : ITorrentSearchProvider
                 string infoHash = string.Empty;
                 bool isGold = false;
                 var tags = new List<string>();
+                string? posterUrl = null;
+                string? imdbId = null;
+                int? tmdbId = null;
 
                 foreach (var attr in item.Elements(TorznabNs + "attr"))
                 {
@@ -169,6 +172,20 @@ public class TorznabSearchProvider : ITorrentSearchProvider
                         if (!tags.Contains("doubleupload", StringComparer.OrdinalIgnoreCase))
                             tags.Add("doubleupload");
                     }
+                    else if ((attrName == "imdb" || attrName == "imdbid") && !string.IsNullOrWhiteSpace(attrVal))
+                    {
+                        imdbId = attrVal.StartsWith("tt", StringComparison.OrdinalIgnoreCase)
+                            ? attrVal
+                            : (long.TryParse(attrVal, out var inum) && inum > 0 ? $"tt{inum:D7}" : attrVal);
+                    }
+                    else if ((attrName == "tmdb" || attrName == "tmdbid") && int.TryParse(attrVal, out var tid) && tid > 0)
+                    {
+                        tmdbId = tid;
+                    }
+                    else if ((attrName == "poster" || attrName == "banner") && !string.IsNullOrWhiteSpace(attrVal))
+                    {
+                        posterUrl = attrVal;
+                    }
                 }
 
                 if ((title.Contains("[Авторськ", StringComparison.OrdinalIgnoreCase) ||
@@ -203,7 +220,10 @@ public class TorznabSearchProvider : ITorrentSearchProvider
                     InfoHash = infoHash,
                     IsGold = isGold,
                     IsFreeleech = isGold,
-                    Tags = tags
+                    Tags = tags,
+                    PosterUrl = posterUrl,
+                    ImdbId = imdbId,
+                    TmdbId = tmdbId
                 });
             }
 

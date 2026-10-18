@@ -1781,11 +1781,29 @@
                 }
             });
 
+            var posterUrl = item.PosterUrl || item.posterUrl;
+            var imdbId = item.ImdbId || item.imdbId;
+            var tmdbId = item.TmdbId || item.tmdbId;
+
+            if (imdbId) {
+                tagBadgesHtml += '<span class="text-xs px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1"><i class="fa-brands fa-imdb text-yellow-400"></i> ' + escapeHtml(imdbId) + '</span>';
+            }
+            if (tmdbId) {
+                tagBadgesHtml += '<span class="text-xs px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 font-semibold flex items-center gap-1"><i class="fa-solid fa-film text-cyan-400"></i> TMDb ' + escapeHtml(tmdbId) + '</span>';
+            }
+
+            var posterImgHtml = posterUrl
+                ? '<img src="' + escapeHtml(posterUrl) + '" alt="Poster" class="w-10 h-14 object-cover rounded-md flex-shrink-0 border border-slate-700/60 shadow-sm" onerror="this.style.display='none'" />'
+                : '';
+
             var btnClass = hasAnyTag
                 ? 'bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-bold'
                 : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-600/30';
 
             html += '<div class="t2j-result-row ' + (hasAnyTag ? 'is-gold' : '') + '" style="display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: space-between !important; gap: 16px !important; width: 100% !important; box-sizing: border-box !important;">';
+            if (posterImgHtml) {
+                html += posterImgHtml;
+            }
             html += '  <div class="t2j-row-main" style="flex: 1 1 0% !important; min-width: 0 !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">';
             html += '    <div style="display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 6px !important;">';
             html += '      ' + tagBadgesHtml;
@@ -1919,6 +1937,9 @@
                     Link: link,
                     Title: title,
                     Category: category,
+                    PosterUrl: item.PosterUrl || item.posterUrl || '',
+                    TmdbId: item.TmdbId || item.tmdbId || null,
+                    ImdbId: item.ImdbId || item.imdbId || null,
                     SyncNow: true
                 })
             });

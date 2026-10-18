@@ -9,6 +9,7 @@ public class AddTorrentRequestDto
     public string? Category { get; set; }
     public string? PosterUrl { get; set; }
     public int? TmdbId { get; set; }
+    public string? ImdbId { get; set; }
     public bool SyncNow { get; set; } = true;
 }
 

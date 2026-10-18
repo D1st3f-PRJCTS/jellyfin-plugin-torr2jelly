@@ -206,6 +206,7 @@ public class Torr2JellyApiController : ControllerBase
                     customTitle: req.Title,
                     posterUrl: req.PosterUrl,
                     tmdbId: req.TmdbId,
+                    imdbId: req.ImdbId,
                     forceCategory: !string.IsNullOrWhiteSpace(req.Category),
                     cancellationToken: cancellationToken);
 

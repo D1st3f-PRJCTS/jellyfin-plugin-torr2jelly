@@ -80,6 +80,18 @@ public class ProwlarrRawItem
 
     [JsonPropertyName("categories")]
     public List<ProwlarrCategoryItem>? Categories { get; set; }
+
+    [JsonPropertyName("imdbId")]
+    public long? ImdbId { get; set; }
+
+    [JsonPropertyName("tmdbId")]
+    public int? TmdbId { get; set; }
+
+    [JsonPropertyName("tvdbId")]
+    public int? TvdbId { get; set; }
+
+    [JsonPropertyName("posterUrl")]
+    public string? PosterUrl { get; set; }
 }
 
 public class ProwlarrSearchProvider : ITorrentSearchProvider
@@ -287,7 +299,10 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
                     IsFreeleech = isFreeleech,
                     Tags = tags,
                     PublishDate = item.PublishDate,
-                    Categories = item.Categories?.Select(c => c.Id).ToList() ?? new List<int>()
+                    Categories = item.Categories?.Select(c => c.Id).ToList() ?? new List<int>(),
+                    PosterUrl = !string.IsNullOrWhiteSpace(item.PosterUrl) ? item.PosterUrl : null,
+                    ImdbId = item.ImdbId.HasValue && item.ImdbId.Value > 0 ? $"tt{item.ImdbId.Value:D7}" : null,
+                    TmdbId = item.TmdbId.HasValue && item.TmdbId.Value > 0 ? item.TmdbId.Value : null
                 };
 
                 results.Add(searchResult);

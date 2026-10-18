@@ -129,6 +129,7 @@ public class StrmEngine
         string? customTitle = null,
         string? posterUrl = null,
         int? tmdbId = null,
+        string? imdbId = null,
         bool forceCategory = false,
         CancellationToken cancellationToken = default)
     {
@@ -142,7 +143,7 @@ public class StrmEngine
         {
             var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
             var rawTitle = !string.IsNullOrWhiteSpace(customTitle) ? customTitle : torrent.Title;
-            var (cleanTitle, extractedYear) = TitleCleaner.CleanTitleAndExtractYear(rawTitle);
+            var (cleanTitle, originalTitle, extractedYear) = TitleCleaner.CleanTitleAndExtractYear(rawTitle);
 
             // Determine initial category
             var chosenCat = config.Categories.FirstOrDefault(c => c.Name.Equals(category, StringComparison.OrdinalIgnoreCase))
@@ -204,6 +205,7 @@ public class StrmEngine
                 var tokens = new Dictionary<string, string>
                 {
                     ["Title"] = cleanTitle,
+                    ["OriginalTitle"] = originalTitle ?? cleanTitle,
                     ["Year"] = yearToken,
                     ["RawTitle"] = rawTitle
                 };
@@ -261,6 +263,9 @@ public class StrmEngine
                     var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream?link={torrent.Hash}&index={mainFile.Id}&play\n";
                     await File.WriteAllTextAsync(strmPath, streamUrl, Encoding.UTF8, cancellationToken);
                     result.CreatedStrmFiles.Add(strmPath);
+
+                    // Write Movie NFO (always write clean NFO so Jellyfin matches reliably)
+                    await WriteMovieNfoAsync(movieDir, folderName, cleanTitle, originalTitle, extractedYear, tmdbId, imdbId, cancellationToken);
                 }
                 else
                 {
@@ -271,7 +276,7 @@ public class StrmEngine
                         if (config.EnableMovieRenaming)
                         {
                             var fileBase = Path.GetFileNameWithoutExtension(videoFile.Path) ?? string.Empty;
-                            var (itemCleanTitle, itemYear) = TitleCleaner.CleanTitleAndExtractYear(fileBase);
+                            var (itemCleanTitle, itemOrigTitle, itemYear) = TitleCleaner.CleanTitleAndExtractYear(fileBase);
                             if (!string.IsNullOrWhiteSpace(itemCleanTitle) && itemCleanTitle.Length > 2)
                             {
                                 var itemYearToken = itemYear.HasValue && !itemCleanTitle.Contains(itemYear.Value.ToString(), StringComparison.Ordinal)
@@ -281,6 +286,7 @@ public class StrmEngine
                                 var itemTokens = new Dictionary<string, string>
                                 {
                                     ["Title"] = itemCleanTitle,
+                                    ["OriginalTitle"] = itemOrigTitle ?? itemCleanTitle,
                                     ["Year"] = itemYearToken,
                                     ["RawTitle"] = fileBase
                                 };
@@ -312,13 +318,12 @@ public class StrmEngine
                         var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream?link={torrent.Hash}&index={videoFile.Id}&play\n";
                         await File.WriteAllTextAsync(strmPath, streamUrl, Encoding.UTF8, cancellationToken);
                         result.CreatedStrmFiles.Add(strmPath);
-                    }
-                }
 
-                // Write NFO if TMDB ID provided (for single movie)
-                if (videoFiles.Count == 1 && tmdbId.HasValue && tmdbId.Value > 0)
-                {
-                    await WriteMovieNfoAsync(movieDir, folderName, cleanTitle, extractedYear, tmdbId.Value, cancellationToken);
+                        // Also write per-movie NFO for collection movies so Jellyfin can identify each individually
+                        var itemBaseWithoutExt = Path.GetFileNameWithoutExtension(strmName);
+                        var (partTitle, partOrig, partYear) = TitleCleaner.CleanTitleAndExtractYear(itemBaseWithoutExt);
+                        await WriteMovieItemNfoAsync(movieDir, itemBaseWithoutExt, partTitle, partOrig, partYear ?? extractedYear, tmdbId, imdbId, cancellationToken);
+                    }
                 }
 
                 // Download poster if provided
@@ -345,6 +350,7 @@ public class StrmEngine
                 var showTokens = new Dictionary<string, string>
                 {
                     ["Title"] = cleanTitle,
+                    ["OriginalTitle"] = originalTitle ?? cleanTitle,
                     ["Year"] = showYearToken,
                     ["RawTitle"] = rawTitle
                 };
@@ -427,11 +433,8 @@ public class StrmEngine
                     result.CreatedStrmFiles.Add(strmPath);
                 }
 
-                // Write Series NFO if TMDB ID provided
-                if (tmdbId.HasValue && tmdbId.Value > 0)
-                {
-                    await WriteShowNfoAsync(seriesDir, cleanTitle, extractedYear, tmdbId.Value, cancellationToken);
-                }
+                // Write Series tvshow.nfo (always write so Jellyfin identifies series properly)
+                await WriteShowNfoAsync(seriesDir, cleanTitle, originalTitle, extractedYear, tmdbId, imdbId, cancellationToken);
 
                 // Download poster
                 if (!string.IsNullOrWhiteSpace(posterUrl))
@@ -537,24 +540,28 @@ public class StrmEngine
         }
     }
 
-    private async Task WriteMovieNfoAsync(string movieDir, string folderName, string title, int? year, int tmdbId, CancellationToken cancellationToken)
+    private async Task WriteMovieNfoAsync(
+        string movieDir,
+        string folderName,
+        string title,
+        string? originalTitle,
+        int? year,
+        int? tmdbId,
+        string? imdbId,
+        CancellationToken cancellationToken)
     {
         try
         {
-            var nfoPath = Path.Combine(movieDir, $"{folderName}.nfo");
-            var sb = new StringBuilder();
-            sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>");
-            sb.AppendLine("<movie>");
-            sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
-            if (year.HasValue)
-            {
-                sb.AppendLine($"  <year>{year.Value}</year>");
-            }
-            sb.AppendLine($"  <uniqueid type=\"tmdb\" default=\"true\">{tmdbId}</uniqueid>");
-            sb.AppendLine($"  <tmdbid>{tmdbId}</tmdbid>");
-            sb.AppendLine("</movie>");
+            var nfoContent = BuildMovieNfoXml(title, originalTitle, year, tmdbId, imdbId);
 
-            await File.WriteAllTextAsync(nfoPath, sb.ToString(), Encoding.UTF8, cancellationToken);
+            var movieNfoPath = Path.Combine(movieDir, "movie.nfo");
+            await File.WriteAllTextAsync(movieNfoPath, nfoContent, Encoding.UTF8, cancellationToken);
+
+            var namedNfoPath = Path.Combine(movieDir, $"{folderName}.nfo");
+            if (!namedNfoPath.Equals(movieNfoPath, StringComparison.OrdinalIgnoreCase))
+            {
+                await File.WriteAllTextAsync(namedNfoPath, nfoContent, Encoding.UTF8, cancellationToken);
+            }
         }
         catch (Exception ex)
         {
@@ -562,23 +569,106 @@ public class StrmEngine
         }
     }
 
-    private async Task WriteShowNfoAsync(string showDir, string title, int? year, int tmdbId, CancellationToken cancellationToken)
+    private async Task WriteMovieItemNfoAsync(
+        string movieDir,
+        string itemBaseName,
+        string title,
+        string? originalTitle,
+        int? year,
+        int? tmdbId,
+        string? imdbId,
+        CancellationToken cancellationToken)
     {
         try
         {
-            var nfoPath = Path.Combine(showDir, "tvshow.nfo");
+            var nfoContent = BuildMovieNfoXml(title, originalTitle, year, tmdbId, imdbId);
+            var itemNfoPath = Path.Combine(movieDir, $"{itemBaseName}.nfo");
+            await File.WriteAllTextAsync(itemNfoPath, nfoContent, Encoding.UTF8, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write movie item NFO for {Title}", title);
+        }
+    }
+
+    private static string BuildMovieNfoXml(string title, string? originalTitle, int? year, int? tmdbId, string? imdbId)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>");
+        sb.AppendLine("<movie>");
+        sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
+        if (!string.IsNullOrWhiteSpace(originalTitle) && !originalTitle.Equals(title, StringComparison.OrdinalIgnoreCase))
+        {
+            sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(originalTitle)}</originaltitle>");
+        }
+        if (year.HasValue)
+        {
+            sb.AppendLine($"  <year>{year.Value}</year>");
+        }
+        if (tmdbId.HasValue && tmdbId.Value > 0)
+        {
+            sb.AppendLine($"  <uniqueid type=\"tmdb\" default=\"true\">{tmdbId.Value}</uniqueid>");
+            sb.AppendLine($"  <tmdbid>{tmdbId.Value}</tmdbid>");
+        }
+        if (!string.IsNullOrWhiteSpace(imdbId))
+        {
+            var cleanImdb = imdbId.Trim();
+            if (!cleanImdb.StartsWith("tt", StringComparison.OrdinalIgnoreCase) && long.TryParse(cleanImdb, out var inum))
+            {
+                cleanImdb = $"tt{inum:D7}";
+            }
+            var isDefault = !(tmdbId.HasValue && tmdbId.Value > 0);
+            sb.AppendLine($"  <uniqueid type=\"imdb\"{(isDefault ? " default=\"true\"" : "")}>{cleanImdb}</uniqueid>");
+            sb.AppendLine($"  <imdbid>{cleanImdb}</imdbid>");
+            sb.AppendLine($"  <id>{cleanImdb}</id>");
+        }
+        sb.AppendLine("</movie>");
+        return sb.ToString();
+    }
+
+    private async Task WriteShowNfoAsync(
+        string showDir,
+        string title,
+        string? originalTitle,
+        int? year,
+        int? tmdbId,
+        string? imdbId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
             var sb = new StringBuilder();
             sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>");
             sb.AppendLine("<tvshow>");
             sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
+            if (!string.IsNullOrWhiteSpace(originalTitle) && !originalTitle.Equals(title, StringComparison.OrdinalIgnoreCase))
+            {
+                sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(originalTitle)}</originaltitle>");
+            }
             if (year.HasValue)
             {
                 sb.AppendLine($"  <year>{year.Value}</year>");
             }
-            sb.AppendLine($"  <uniqueid type=\"tmdb\" default=\"true\">{tmdbId}</uniqueid>");
-            sb.AppendLine($"  <tmdbid>{tmdbId}</tmdbid>");
+            if (tmdbId.HasValue && tmdbId.Value > 0)
+            {
+                sb.AppendLine($"  <uniqueid type=\"tmdb\" default=\"true\">{tmdbId.Value}</uniqueid>");
+                sb.AppendLine($"  <tmdbid>{tmdbId.Value}</tmdbid>");
+            }
+            if (!string.IsNullOrWhiteSpace(imdbId))
+            {
+                var cleanImdb = imdbId.Trim();
+                if (!cleanImdb.StartsWith("tt", StringComparison.OrdinalIgnoreCase) && long.TryParse(cleanImdb, out var inum))
+                {
+                    cleanImdb = $"tt{inum:D7}";
+                }
+                var isDefault = !(tmdbId.HasValue && tmdbId.Value > 0);
+                sb.AppendLine($"  <uniqueid type=\"imdb\"{(isDefault ? " default=\"true\"" : "")}>{cleanImdb}</uniqueid>");
+                sb.AppendLine($"  <imdbid>{cleanImdb}</imdbid>");
+                sb.AppendLine($"  <id>{cleanImdb}</id>");
+            }
             sb.AppendLine("</tvshow>");
 
+            var nfoPath = Path.Combine(showDir, "tvshow.nfo");
             await File.WriteAllTextAsync(nfoPath, sb.ToString(), Encoding.UTF8, cancellationToken);
         }
         catch (Exception ex)

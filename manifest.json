@@ -10,10 +10,10 @@
     "versions": [
       {
         "version": "1.0.10.0",
-        "changelog": "Category dropdown selector in Jellyfin global search bar and plugin search, fixed search results button layout, toggleable media renaming for movies and series (preserving original torrent names when disabled), multi-tag badges (Gold/Freeleech, Silver, Bronze, Author, Exclusive, 2x), custom library categories manager, and STRM templates.",
+        "changelog": "Per-tracker tag filters in Settings (choose which tags to search for each tracker), fix duplicate gold/silver tag bug with strict leech discount mutual exclusion, responsive search results row layout, category selector in Jellyfin global search, and media renaming toggles.",
         "targetAbi": "10.9.0.0",
         "sourceUrl": "https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/releases/download/v1.0.10/Torr2Jelly_1.0.10.0.zip",
-        "checksum": "15546bbf5375eafa4f771590bc8ed209",
+        "checksum": "fec2f2569da88300b5ebb5d3781ea20a",
         "timestamp": "2026-10-18T21:45:00Z"
       },
       {

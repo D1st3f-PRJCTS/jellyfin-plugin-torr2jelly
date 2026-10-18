@@ -44,12 +44,22 @@ public class TorrentSearchService
             var prowlarrIndexers = await _prowlarr.GetIndexersAsync(cancellationToken);
             foreach (var idx in prowlarrIndexers)
             {
+                var isExplicitlyDisabled = disabled.Contains(idx.Name);
+                if (!isExplicitlyDisabled && config.TrackerRules != null)
+                {
+                    var rule = config.TrackerRules.FirstOrDefault(r => r.Tracker.Equals(idx.Name, StringComparison.OrdinalIgnoreCase));
+                    if (rule != null && !rule.Enabled)
+                    {
+                        isExplicitlyDisabled = true;
+                    }
+                }
+
                 list.Add(new IndexerStatusDto
                 {
                     Id = idx.Id,
                     Name = idx.Name,
                     EnabledInProwlarr = idx.Enable,
-                    DisabledInPlugin = disabled.Contains(idx.Name)
+                    DisabledInPlugin = isExplicitlyDisabled
                 });
             }
         }
@@ -91,24 +101,58 @@ public class TorrentSearchService
             results.AddRange(torznabResults);
         }
 
-        // Filter out disabled trackers
-        if (config.DisabledTrackers != null && config.DisabledTrackers.Count > 0)
+        // Filter by TrackerRules (enabled status + allowed tags per tracker)
+        if (config.TrackerRules != null && config.TrackerRules.Count > 0)
+        {
+            var ruleMap = config.TrackerRules
+                .Where(r => !string.IsNullOrWhiteSpace(r.Tracker))
+                .ToDictionary(r => r.Tracker.Trim(), r => r, StringComparer.OrdinalIgnoreCase);
+
+            results = results.Where(r =>
+            {
+                var indexer = r.Indexer?.Trim() ?? string.Empty;
+                if (ruleMap.TryGetValue(indexer, out var rule))
+                {
+                    if (!rule.Enabled)
+                    {
+                        return false;
+                    }
+
+                    if (rule.AllowedTags != null && rule.AllowedTags.Count > 0)
+                    {
+                        var releaseTags = r.Tags ?? new List<string>();
+                        var hasTags = releaseTags.Count > 0;
+
+                        if (!hasTags)
+                        {
+                            return rule.AllowedTags.Any(t => t.Equals("regular", StringComparison.OrdinalIgnoreCase) ||
+                                                             t.Equals("untagged", StringComparison.OrdinalIgnoreCase));
+                        }
+
+                        return releaseTags.Any(t => rule.AllowedTags.Any(at => at.Equals(t, StringComparison.OrdinalIgnoreCase)));
+                    }
+
+                    return false;
+                }
+
+                if (config.DisabledTrackers != null && config.DisabledTrackers.Contains(indexer, StringComparer.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                return true;
+            }).ToList();
+        }
+        else if (config.DisabledTrackers != null && config.DisabledTrackers.Count > 0)
         {
             var disabled = new HashSet<string>(config.DisabledTrackers, StringComparer.OrdinalIgnoreCase);
             results = results.Where(r => !disabled.Contains(r.Indexer)).ToList();
         }
 
-        // Apply Tagged filter: explicit parameter wins, otherwise default from config
-        var filterTagged = onlyGold ?? config.SearchOnlyGoldByDefault;
-        if (filterTagged)
+        // Quick filter parameter if explicitly requested (e.g. from UI "With Tags" filter)
+        if (onlyGold == true)
         {
-            results = results.Where(r => r.IsGold || r.IsFreeleech || (r.Tags != null && r.Tags.Count > 0)).ToList();
-        }
-
-        // Apply Tagged filter for regular users if configured
-        if (!isUserAdmin && config.OnlyGoldTorrentsForNonAdmins)
-        {
-            results = results.Where(r => r.IsGold || r.IsFreeleech || (r.Tags != null && r.Tags.Count > 0)).ToList();
+            results = results.Where(r => r.IsGold || (r.Tags != null && r.Tags.Count > 0)).ToList();
         }
 
         // Deduplicate by InfoHash if present, otherwise by Title

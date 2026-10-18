@@ -492,8 +492,10 @@
 
         // Sort results: Gold first, then Seeders descending
         results.sort(function (a, b) {
-            if (a.IsGold && !b.IsGold) return -1;
-            if (!a.IsGold && b.IsGold) return 1;
+            var aGold = a.IsGold || (a.Tags && a.Tags.some(function (t) { return /freeleech|gold/i.test(t); }));
+            var bGold = b.IsGold || (b.Tags && b.Tags.some(function (t) { return /freeleech|gold/i.test(t); }));
+            if (aGold && !bGold) return -1;
+            if (!aGold && bGold) return 1;
             return (b.Seeders || 0) - (a.Seeders || 0);
         });
 
@@ -532,14 +534,24 @@
             var size = item.SizeFormatted || '';
             var seeds = item.Seeders || 0;
             var tracker = item.Indexer || 'Torrent';
-            var isGold = item.IsGold || item.IsFreeleech;
+            var isGold = !!(item.IsGold || item.isGold);
             var isShow = /(?:s\d{1,2}|season|сезон|\d{1,2}x\d{1,2}|серій|сері\u0457|серії|ep\d{1,3})/i.test(title);
 
             var rawTags = (item.Tags || item.tags || []).slice();
-            if (isGold && !rawTags.some(function (tg) { return /freeleech|gold/i.test(tg); })) {
+            var hasFreeleech = isGold || rawTags.some(function (tg) { return /freeleech|gold/i.test(tg); });
+            var hasHalfleech = !hasFreeleech && rawTags.some(function (tg) { return /halfleech|silver|50%/i.test(tg); });
+            var hasBronze = !hasFreeleech && !hasHalfleech && rawTags.some(function (tg) { return /bronze/i.test(tg); });
+
+            rawTags = rawTags.filter(function (tg) {
+                return !/^(freeleech|gold|halfleech|silver|bronze)$/i.test(tg.trim());
+            });
+
+            if (hasFreeleech) {
                 rawTags.unshift('freeleech');
-            } else if (item.IsFreeleech && !rawTags.some(function (tg) { return /halfleech|50%/i.test(tg); })) {
+            } else if (hasHalfleech) {
                 rawTags.unshift('halfleech');
+            } else if (hasBronze) {
+                rawTags.unshift('bronze');
             }
 
             var tagBadgesHtml = '';

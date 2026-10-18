@@ -3,6 +3,24 @@ using MediaBrowser.Model.Plugins;
 
 namespace Jellyfin.Plugin.Torr2Jelly.Configuration;
 
+public class TrackerRule
+{
+    public string Tracker { get; set; } = string.Empty;
+    public bool Enabled { get; set; } = true;
+    public List<string> AllowedTags { get; set; } = new();
+
+    public TrackerRule()
+    {
+    }
+
+    public TrackerRule(string tracker, bool enabled, List<string> allowedTags)
+    {
+        Tracker = tracker;
+        Enabled = enabled;
+        AllowedTags = allowedTags;
+    }
+}
+
 public class PluginConfiguration : BasePluginConfiguration
 {
     // Embedded Standalone TorrServer Daemon settings
@@ -31,6 +49,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool SearchOnlyGoldByDefault { get; set; } = false;
     public bool OnlyGoldTorrentsForNonAdmins { get; set; } = false;
     public List<string> DisabledTrackers { get; set; } = new();
+    public List<TrackerRule> TrackerRules { get; set; } = new();
     public string DefaultLanguage { get; set; } = "en"; // "en" (default) or "uk"
 
     // Library & Storage

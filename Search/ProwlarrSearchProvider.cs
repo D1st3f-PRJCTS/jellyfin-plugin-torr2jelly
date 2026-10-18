@@ -221,17 +221,33 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
                 var isBronze = (item.DownloadVolumeFactor.HasValue && item.DownloadVolumeFactor.Value == 0.75) ||
                                flags.Any(f => f.Equals("bronze", StringComparison.OrdinalIgnoreCase));
 
-                if (isFreeleech && !tags.Contains("freeleech", StringComparer.OrdinalIgnoreCase))
+                // Strict mutual exclusion for leech discount tags
+                if (isFreeleech)
                 {
-                    tags.Add("freeleech");
+                    isHalfleech = false;
+                    isBronze = false;
+                    tags.RemoveAll(t => t.Equals("halfleech", StringComparison.OrdinalIgnoreCase) || t.Equals("bronze", StringComparison.OrdinalIgnoreCase));
+                    if (!tags.Contains("freeleech", StringComparer.OrdinalIgnoreCase))
+                    {
+                        tags.Add("freeleech");
+                    }
                 }
-                else if (isHalfleech && !tags.Contains("halfleech", StringComparer.OrdinalIgnoreCase))
+                else if (isHalfleech)
                 {
-                    tags.Add("halfleech");
+                    isBronze = false;
+                    tags.RemoveAll(t => t.Equals("freeleech", StringComparison.OrdinalIgnoreCase) || t.Equals("bronze", StringComparison.OrdinalIgnoreCase));
+                    if (!tags.Contains("halfleech", StringComparer.OrdinalIgnoreCase))
+                    {
+                        tags.Add("halfleech");
+                    }
                 }
-                else if (isBronze && !tags.Contains("bronze", StringComparer.OrdinalIgnoreCase))
+                else if (isBronze)
                 {
-                    tags.Add("bronze");
+                    tags.RemoveAll(t => t.Equals("freeleech", StringComparison.OrdinalIgnoreCase) || t.Equals("halfleech", StringComparison.OrdinalIgnoreCase));
+                    if (!tags.Contains("bronze", StringComparer.OrdinalIgnoreCase))
+                    {
+                        tags.Add("bronze");
+                    }
                 }
 
                 if (item.UploadVolumeFactor.HasValue && item.UploadVolumeFactor.Value > 1 && !tags.Contains("doubleupload", StringComparer.OrdinalIgnoreCase))
@@ -268,7 +284,7 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
                     MagnetUrl = item.MagnetUrl ?? (link.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase) ? link : string.Empty),
                     InfoHash = item.InfoHash ?? string.Empty,
                     IsGold = isFreeleech,
-                    IsFreeleech = isFreeleech || isHalfleech,
+                    IsFreeleech = isFreeleech,
                     Tags = tags,
                     PublishDate = item.PublishDate,
                     Categories = item.Categories?.Select(c => c.Id).ToList() ?? new List<int>()

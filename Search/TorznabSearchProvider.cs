@@ -116,7 +116,6 @@ public class TorznabSearchProvider : ITorrentSearchProvider
                 int peers = 0;
                 string infoHash = string.Empty;
                 bool isGold = false;
-                bool isHalfleech = false;
                 var tags = new List<string>();
 
                 foreach (var attr in item.Elements(TorznabNs + "attr"))
@@ -148,17 +147,19 @@ public class TorznabSearchProvider : ITorrentSearchProvider
                         if (factor == 0)
                         {
                             isGold = true;
+                            tags.RemoveAll(t => t.Equals("halfleech", StringComparison.OrdinalIgnoreCase) || t.Equals("bronze", StringComparison.OrdinalIgnoreCase));
                             if (!tags.Contains("freeleech", StringComparer.OrdinalIgnoreCase))
                                 tags.Add("freeleech");
                         }
                         else if (factor == 0.5)
                         {
-                            isHalfleech = true;
+                            tags.RemoveAll(t => t.Equals("freeleech", StringComparison.OrdinalIgnoreCase) || t.Equals("bronze", StringComparison.OrdinalIgnoreCase));
                             if (!tags.Contains("halfleech", StringComparer.OrdinalIgnoreCase))
                                 tags.Add("halfleech");
                         }
                         else if (factor == 0.75)
                         {
+                            tags.RemoveAll(t => t.Equals("freeleech", StringComparison.OrdinalIgnoreCase) || t.Equals("halfleech", StringComparison.OrdinalIgnoreCase));
                             if (!tags.Contains("bronze", StringComparer.OrdinalIgnoreCase))
                                 tags.Add("bronze");
                         }
@@ -201,7 +202,7 @@ public class TorznabSearchProvider : ITorrentSearchProvider
                     MagnetUrl = magnetUrl,
                     InfoHash = infoHash,
                     IsGold = isGold,
-                    IsFreeleech = isGold || isHalfleech,
+                    IsFreeleech = isGold,
                     Tags = tags
                 });
             }

@@ -423,7 +423,22 @@
     padding: 6px 10px !important;
     font-size: 12px !important;
 }
-</style>
+
+        @media (max-width: 640px) {
+            .t2j-result-row {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 12px !important;
+            }
+            .t2j-row-side {
+                flex: 1 1 100% !important;
+                width: 100% !important;
+                min-width: 100% !important;
+                max-width: 100% !important;
+            }
+        }
+
+    </style>
 
 <div class="content-primary">
     <div class="torr2jelly-root bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
@@ -812,34 +827,13 @@
                     <input type="password" id="cfgProwlarrKeyInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
                   </div>
 
-                  <div class="pt-2 border-t border-slate-800/60 space-y-2">
-                    <label class="flex items-start space-x-3 cursor-pointer">
-                      <input type="checkbox" id="cfgSearchOnlyGoldByDefaultCheck" class="mt-0.5 rounded text-amber-500 focus:ring-amber-500 bg-slate-950 border-slate-700 w-4 h-4">
-                      <div>
-                        <span class="font-semibold text-white flex items-center space-x-1.5">
-                          <span class="text-amber-400">⭐</span>
-                          <span id="lblCfgSearchGoldDefault">Search only Gold (Freeleech) torrents by default</span>
-                        </span>
-                        <p class="text-[11px] text-slate-400 mt-0.5" id="lblCfgSearchGoldDefaultSub">When enabled, search queries automatically filter for Gold/Freeleech releases.</p>
-                      </div>
-                    </label>
-
-                    <label class="flex items-start space-x-3 cursor-pointer">
-                      <input type="checkbox" id="cfgOnlyGoldCheck" class="mt-0.5 rounded text-amber-500 focus:ring-amber-500 bg-slate-950 border-slate-700 w-4 h-4">
-                      <div>
-                        <span class="font-semibold text-white flex items-center space-x-1.5">
-                          <span class="text-amber-400">⚡</span>
-                          <span id="lblCfgOnlyGoldNonAdmin">Only Gold releases for regular non-admin users</span>
-                        </span>
-                        <p class="text-[11px] text-slate-400 mt-0.5" id="lblCfgOnlyGoldNonAdminSub">Restricts non-admin users from generating torrents with high upload requirements.</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  <!-- Active Trackers List -->
-                  <div class="pt-2 border-t border-slate-800/60">
-                    <label class="block text-slate-300 font-semibold mb-2" id="lblCfgTrackersList">Individual Trackers / Indexers:</label>
-                    <div id="cfgTrackersList" class="space-y-2">
+                  <!-- Active Trackers & Allowed Tags List -->
+                  <div class="pt-3 border-t border-slate-800/60">
+                    <div class="mb-3">
+                      <label class="block text-slate-200 font-bold text-sm mb-0.5" id="lblCfgTrackersList">Individual Trackers & Search Tags:</label>
+                      <p class="text-xs text-slate-400" id="lblCfgTrackersDesc">Configure which trackers and which specific release tags to include in search.</p>
+                    </div>
+                    <div id="cfgTrackersList" class="space-y-3">
                       <div class="text-slate-500 text-[11px] italic" id="lblLoadingTrackers">Loading trackers from Prowlarr...</div>
                     </div>
                   </div>
@@ -1170,6 +1164,9 @@
     function setLang(lang) {
         localStorage.setItem('torr2jelly_lang', lang);
         applyTranslations(lang);
+        if (typeof renderIndexersUI === 'function') {
+            renderIndexersUI();
+        }
     }
     window.t2jSetLang = setLang;
 
@@ -1244,6 +1241,7 @@
             'lblCfgOnlyGoldNonAdmin': t.lblCfgOnlyGoldNonAdmin,
             'lblCfgOnlyGoldNonAdminSub': t.lblCfgOnlyGoldNonAdminSub,
             'lblCfgTrackersList': t.lblCfgTrackersList,
+            'lblCfgTrackersDesc': t.lblCfgTrackersDesc,
             'cfgStrmStructureTitle': t.cfgStrmStructureTitle,
             'cfgStrmStructureSub': t.cfgStrmStructureSub,
             'lblCfgMovieFolder': t.lblCfgMovieFolder,
@@ -1507,8 +1505,113 @@
         return result;
     }
 
+    // Render Indexers & Tag Filters
+    function renderIndexersUI(trackerRules) {
+        var page = getPage();
+        if (!page) return;
+        var container = page.querySelector('#cfgTrackersList');
+        if (!container) return;
+
+        var indexers = window.t2jState.indexers || [];
+        var rules = trackerRules || (window.t2jState.config ? window.t2jState.config.TrackerRules : null) || [];
+        var isUk = getLang() === 'uk';
+
+        if (indexers.length === 0) {
+            container.innerHTML = '<div class="text-slate-500 text-xs italic">No indexers configured in Prowlarr.</div>';
+            return;
+        }
+
+        var tagsList = [
+            { id: 'freeleech', label: isUk ? '⚡ Золота' : '⚡ Gold', cls: 'text-amber-300 border-amber-500/40 bg-amber-500/10 hover:border-amber-400' },
+            { id: 'halfleech', label: isUk ? '🥈 Срібна' : '🥈 Silver', cls: 'text-slate-200 border-slate-500/40 bg-slate-500/10 hover:border-slate-400' },
+            { id: 'bronze', label: isUk ? '🥉 Бронзова' : '🥉 Bronze', cls: 'text-orange-300 border-orange-500/40 bg-orange-500/10 hover:border-orange-400' },
+            { id: 'internal', label: isUk ? '💎 Авторський' : '💎 Author', cls: 'text-purple-300 border-purple-500/40 bg-purple-500/10 hover:border-purple-400' },
+            { id: 'exclusive', label: isUk ? '🔥 Ексклюзив' : '🔥 Exclusive', cls: 'text-rose-300 border-rose-500/40 bg-rose-500/10 hover:border-rose-400' },
+            { id: 'doubleupload', label: isUk ? '🚀 2x Аплоад' : '🚀 2x Upload', cls: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10 hover:border-emerald-400' },
+            { id: 'regular', label: isUk ? '📦 Без тегів' : '📦 Untagged', cls: 'text-sky-300 border-sky-500/40 bg-sky-500/10 hover:border-sky-400' }
+        ];
+
+        var html = '';
+        indexers.forEach(function (idx) {
+            var rule = rules.find(function (r) { return r.Tracker && r.Tracker.toLowerCase() === idx.Name.toLowerCase(); });
+            var isEnabled = rule ? (rule.Enabled !== false) : !idx.DisabledInPlugin;
+            var allowedTags = (rule && Array.isArray(rule.AllowedTags))
+                ? rule.AllowedTags
+                : ['freeleech', 'halfleech', 'bronze', 'internal', 'exclusive', 'doubleupload', 'regular'];
+
+            var isTagChecked = function (tag) {
+                return allowedTags.some(function (t) { return t.toLowerCase() === tag.toLowerCase(); });
+            };
+
+            html += '<div class="t2j-tracker-card p-3 sm:p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/80 hover:border-slate-700 transition-all space-y-2.5" data-tracker="' + escapeHtml(idx.Name) + '">';
+            html += '  <div class="flex items-center justify-between flex-wrap gap-2">';
+            html += '    <div class="flex items-center space-x-2.5">';
+            html += '      <span class="w-2.5 h-2.5 rounded-full ' + (idx.EnabledInProwlarr ? 'bg-emerald-400' : 'bg-slate-600') + '"></span>';
+            html += '      <span class="font-bold text-white text-xs sm:text-sm">' + escapeHtml(idx.Name) + '</span>';
+            if (!idx.EnabledInProwlarr) {
+                html += '      <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-medium">Prowlarr: off</span>';
+            }
+            html += '    </div>';
+            html += '    <div class="flex items-center space-x-3">';
+            html += '      <div class="flex items-center space-x-1 text-[11px] text-slate-400">';
+            html += '        <button type="button" onclick="window.t2jSelectAllTrackerTags && window.t2jSelectAllTrackerTags(this, true)" class="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 font-semibold transition-colors cursor-pointer">' + (isUk ? 'Всі' : 'All') + '</button>';
+            html += '        <button type="button" onclick="window.t2jSelectAllTrackerTags && window.t2jSelectAllTrackerTags(this, false)" class="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer">' + (isUk ? 'Зняти' : 'None') + '</button>';
+            html += '      </div>';
+            html += '      <label class="flex items-center space-x-2 cursor-pointer select-none pl-2 border-l border-slate-800">';
+            html += '        <input type="checkbox" onchange="window.t2jToggleTrackerActive && window.t2jToggleTrackerActive(this)" data-tracker="' + escapeHtml(idx.Name) + '" class="t2j-tracker-checkbox rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700 w-4 h-4 cursor-pointer" ' + (isEnabled ? 'checked' : '') + '>';
+            html += '        <span class="text-xs font-semibold t2j-tracker-status-label ' + (isEnabled ? 'text-emerald-400' : 'text-slate-500') + '">' + (isEnabled ? (isUk ? 'Включений' : 'Enabled') : (isUk ? 'Вимкнено' : 'Disabled')) + '</span>';
+            html += '      </label>';
+            html += '    </div>';
+            html += '  </div>';
+
+            html += '  <div class="t2j-tracker-tags-wrap pt-2 border-t border-slate-800/60 flex flex-wrap items-center gap-1.5 ' + (isEnabled ? '' : 'opacity-40 pointer-events-none') + '">';
+            tagsList.forEach(function (tag) {
+                var checked = isTagChecked(tag.id);
+                html += '<label class="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border text-xs cursor-pointer select-none transition-all ' + tag.cls + '">';
+                html += '  <input type="checkbox" data-tracker="' + escapeHtml(idx.Name) + '" data-tag="' + tag.id + '" class="t2j-tracker-tag-check rounded bg-slate-950 border-slate-700 w-3.5 h-3.5 cursor-pointer" ' + (checked ? 'checked' : '') + '>';
+                html += '  <span class="font-medium">' + tag.label + '</span>';
+                html += '</label>';
+            });
+            html += '  </div>';
+            html += '</div>';
+        });
+
+        container.innerHTML = html;
+    }
+    window.renderIndexersUI = renderIndexersUI;
+
+    window.t2jSelectAllTrackerTags = function (btn, selectAll) {
+        var card = btn.closest('.t2j-tracker-card');
+        if (!card) return;
+        var checks = card.querySelectorAll('.t2j-tracker-tag-check');
+        checks.forEach(function (chk) { chk.checked = selectAll; });
+    };
+
+    window.t2jToggleTrackerActive = function (chk) {
+        var card = chk.closest('.t2j-tracker-card');
+        if (!card) return;
+        var tagsWrap = card.querySelector('.t2j-tracker-tags-wrap');
+        var label = card.querySelector('.t2j-tracker-status-label');
+        var isUk = getLang() === 'uk';
+        if (chk.checked) {
+            if (tagsWrap) tagsWrap.className = tagsWrap.className.replace('opacity-40 pointer-events-none', '').trim();
+            if (label) {
+                label.className = 'text-xs font-semibold t2j-tracker-status-label text-emerald-400';
+                label.innerText = isUk ? 'Включений' : 'Enabled';
+            }
+        } else {
+            if (tagsWrap && tagsWrap.className.indexOf('opacity-40 pointer-events-none') === -1) {
+                tagsWrap.className += ' opacity-40 pointer-events-none';
+            }
+            if (label) {
+                label.className = 'text-xs font-semibold t2j-tracker-status-label text-slate-500';
+                label.innerText = isUk ? 'Вимкнено' : 'Disabled';
+            }
+        }
+    };
+
     // Load Indexers from Prowlarr
-    async function loadIndexers() {
+    async function loadIndexers(trackerRules) {
         var page = getPage();
         if (!page) return;
         var container = page.querySelector('#cfgTrackersList');
@@ -1519,27 +1622,7 @@
             if (res.ok) {
                 var indexers = await res.json();
                 window.t2jState.indexers = Array.isArray(indexers) ? indexers : [];
-
-                if (window.t2jState.indexers.length === 0) {
-                    container.innerHTML = '<div class="text-slate-500 text-xs italic">No indexers configured in Prowlarr.</div>';
-                    return;
-                }
-
-                var html = '';
-                window.t2jState.indexers.forEach(function (idx) {
-                    var isChecked = !idx.DisabledInPlugin;
-                    html += '<div class="flex items-center justify-between p-2 rounded-lg bg-slate-950/80 border border-slate-800/80">';
-                    html += '  <div class="flex items-center space-x-2.5">';
-                    html += '    <span class="w-2 h-2 rounded-full ' + (idx.EnabledInProwlarr ? 'bg-emerald-400' : 'bg-slate-600') + '"></span>';
-                    html += '    <span class="font-medium text-white text-xs">' + escapeHtml(idx.Name) + '</span>';
-                    html += '  </div>';
-                    html += '  <label class="flex items-center space-x-2 cursor-pointer">';
-                    html += '    <input type="checkbox" data-tracker="' + escapeHtml(idx.Name) + '" class="t2j-tracker-checkbox rounded text-brand-600 focus:ring-brand-500 bg-slate-900 border-slate-700 w-4 h-4" ' + (isChecked ? 'checked' : '') + '>';
-                    html += '    <span class="text-[11px] text-slate-300">Enabled</span>';
-                    html += '  </label>';
-                    html += '</div>';
-                });
-                container.innerHTML = html;
+                renderIndexersUI(trackerRules);
             }
         } catch (e) {
             console.warn('Failed to load indexers', e);
@@ -1657,12 +1740,22 @@
 
             var isShowRelease = /(?:s\d{1,2}|season|сезон|\d{1,2}x\d{1,2}|серій|серії|серії|ep\d{1,3})/i.test(title);
 
-            // Extract tags
+            // Extract tags with strict mutual exclusion for discount levels
             var rawTags = (item.Tags || item.tags || []).slice();
-            if (isGold && !rawTags.some(function (tg) { return /freeleech|gold/i.test(tg); })) {
+            var hasFreeleech = isGold || rawTags.some(function (tg) { return /freeleech|gold/i.test(tg); });
+            var hasHalfleech = !hasFreeleech && rawTags.some(function (tg) { return /halfleech|silver|50%/i.test(tg); });
+            var hasBronze = !hasFreeleech && !hasHalfleech && rawTags.some(function (tg) { return /bronze/i.test(tg); });
+
+            rawTags = rawTags.filter(function (tg) {
+                return !/^(freeleech|gold|halfleech|silver|bronze)$/i.test(tg.trim());
+            });
+
+            if (hasFreeleech) {
                 rawTags.unshift('freeleech');
-            } else if (isFreeleech && !rawTags.some(function (tg) { return /halfleech|50%/i.test(tg); })) {
+            } else if (hasHalfleech) {
                 rawTags.unshift('halfleech');
+            } else if (hasBronze) {
+                rawTags.unshift('bronze');
             }
 
             var hasAnyTag = rawTags.length > 0;
@@ -2086,9 +2179,7 @@
         var cfgProwlarrUrlInput = page.querySelector('#cfgProwlarrUrlInput');
         var cfgProwlarrKeyInput = page.querySelector('#cfgProwlarrKeyInput');
         var cfgMediaDirInput = page.querySelector('#cfgMediaDirInput');
-        var cfgSearchOnlyGoldByDefaultCheck = page.querySelector('#cfgSearchOnlyGoldByDefaultCheck');
-        var cfgOnlyGoldCheck = page.querySelector('#cfgOnlyGoldCheck');
-        var cfgMovieFolderTemplateInput = page.querySelector('#cfgMovieFolderTemplateInput');
+                        var cfgMovieFolderTemplateInput = page.querySelector('#cfgMovieFolderTemplateInput');
         var cfgMovieFileTemplateInput = page.querySelector('#cfgMovieFileTemplateInput');
         var cfgShowFolderTemplateInput = page.querySelector('#cfgShowFolderTemplateInput');
         var cfgShowSeasonFolderTemplateInput = page.querySelector('#cfgShowSeasonFolderTemplateInput');
@@ -2114,8 +2205,6 @@
             if (cfgProwlarrUrlInput) cfgProwlarrUrlInput.value = cfg.ProwlarrUrl || '';
             if (cfgProwlarrKeyInput) cfgProwlarrKeyInput.value = cfg.ProwlarrApiKey || '';
             if (cfgMediaDirInput) cfgMediaDirInput.value = cfg.MediaRootPath || '';
-            if (cfgSearchOnlyGoldByDefaultCheck) cfgSearchOnlyGoldByDefaultCheck.checked = !!cfg.SearchOnlyGoldByDefault;
-            if (cfgOnlyGoldCheck) cfgOnlyGoldCheck.checked = !!cfg.OnlyGoldTorrentsForNonAdmins;
 
             if (cfgMovieFolderTemplateInput) cfgMovieFolderTemplateInput.value = cfg.MovieFolderTemplate || '{Title} ({Year})';
             if (cfgMovieFileTemplateInput) cfgMovieFileTemplateInput.value = cfg.MovieFileTemplate || '{Title} ({Year}).strm';
@@ -2131,6 +2220,7 @@
 
             // Render categories manager
             renderCategoriesManager(cfg.Categories);
+            renderIndexersUI(cfg.TrackerRules);
 
             var searchGoldOnlyCheck = page.querySelector('#t2jSearchGoldOnlyCheck');
             if (searchGoldOnlyCheck && searchGoldOnlyCheck._init !== true) {
@@ -2156,9 +2246,7 @@
         var cfgProwlarrUrlInput = page.querySelector('#cfgProwlarrUrlInput');
         var cfgProwlarrKeyInput = page.querySelector('#cfgProwlarrKeyInput');
         var cfgMediaDirInput = page.querySelector('#cfgMediaDirInput');
-        var cfgSearchOnlyGoldByDefaultCheck = page.querySelector('#cfgSearchOnlyGoldByDefaultCheck');
-        var cfgOnlyGoldCheck = page.querySelector('#cfgOnlyGoldCheck');
-        var cfgMovieFolderTemplateInput = page.querySelector('#cfgMovieFolderTemplateInput');
+                        var cfgMovieFolderTemplateInput = page.querySelector('#cfgMovieFolderTemplateInput');
         var cfgMovieFileTemplateInput = page.querySelector('#cfgMovieFileTemplateInput');
         var cfgShowFolderTemplateInput = page.querySelector('#cfgShowFolderTemplateInput');
         var cfgShowSeasonFolderTemplateInput = page.querySelector('#cfgShowSeasonFolderTemplateInput');
@@ -2196,9 +2284,8 @@
             ProwlarrUrl: cfgProwlarrUrlInput ? cfgProwlarrUrlInput.value.trim() : '',
             ProwlarrApiKey: cfgProwlarrKeyInput ? cfgProwlarrKeyInput.value.trim() : '',
             MediaRootPath: cfgMediaDirInput ? cfgMediaDirInput.value.trim() : '',
-            SearchOnlyGoldByDefault: cfgSearchOnlyGoldByDefaultCheck ? cfgSearchOnlyGoldByDefaultCheck.checked : false,
-            OnlyGoldTorrentsForNonAdmins: cfgOnlyGoldCheck ? cfgOnlyGoldCheck.checked : false,
             DisabledTrackers: disabledTrackers,
+            TrackerRules: trackerRules,
             Categories: categories,
             MovieFolderTemplate: cfgMovieFolderTemplateInput ? cfgMovieFolderTemplateInput.value.trim() : '{Title} ({Year})',
             MovieFileTemplate: cfgMovieFileTemplateInput ? cfgMovieFileTemplateInput.value.trim() : '{Title} ({Year}).strm',

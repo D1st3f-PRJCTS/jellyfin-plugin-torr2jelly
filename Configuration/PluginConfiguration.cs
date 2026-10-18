@@ -28,11 +28,11 @@ public class PluginConfiguration : BasePluginConfiguration
     public string TorrServerStreamUrl { get; set; } = "http://torrserver:8090"; // URL written into .strm files for playback
 
     // Torrent Cache & Performance
-    public int CacheSizeMb { get; set; } = 256;
+    public int CacheSizeMb { get; set; } = 102400; // 100 GB default
     public int PreloadCachePercent { get; set; } = 50;
     public int ReaderReadAHeadPercent { get; set; } = 95;
-    public bool UseDiskCache { get; set; } = false;
-    public string DiskCachePath { get; set; } = string.Empty;
+    public bool UseDiskCache { get; set; } = true;
+    public string DiskCachePath { get; set; } = "/mnt/sdb/AppFiles/jellyfin/cache/torrserver";
 
     // Search Indexer (Prowlarr / Torznab)
     public bool EnableProwlarr { get; set; } = true;

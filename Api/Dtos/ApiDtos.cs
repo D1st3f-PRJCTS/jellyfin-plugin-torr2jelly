@@ -36,6 +36,9 @@ public class PluginStatusDto
     public string EffectiveUrl { get; set; } = string.Empty;
     public string StreamBaseUrl { get; set; } = string.Empty;
     public int ActiveTorrentsCount { get; set; }
+    public int CacheSizeMb { get; set; }
+    public bool UseDiskCache { get; set; }
+    public string DiskCachePath { get; set; } = string.Empty;
 }
 
 public class TestConnectionRequestDto

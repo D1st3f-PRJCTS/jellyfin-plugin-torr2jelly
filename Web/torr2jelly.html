@@ -869,9 +869,36 @@
                     <input type="text" id="cfgStreamUrlInput" placeholder="http://torrserver:8090" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
                   </div>
 
-                  <div>
-                    <label class="block text-slate-300 font-medium mb-1" id="lblCfgCacheSize">RAM Cache (MB):</label>
-                    <input type="number" id="cfgCacheSizeInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                  <!-- Cache Configuration -->
+                  <div class="pt-2 border-t border-slate-800/60 space-y-3">
+                    <label class="flex items-start space-x-3 cursor-pointer select-none">
+                      <input type="checkbox" id="cfgUseDiskCacheCheck" onchange="window.t2jToggleDiskCacheUI && window.t2jToggleDiskCacheUI(this.checked)" class="rounded text-emerald-500 focus:ring-emerald-500 bg-slate-950 border-slate-700 w-4 h-4 mt-0.5 cursor-pointer">
+                      <div>
+                        <span class="font-semibold text-white block text-xs" id="lblCfgUseDiskCache">Enable Disk Cache (Buffer to SSD/HDD)</span>
+                        <span class="text-[11px] text-slate-400 block" id="lblCfgUseDiskCacheSub">Recommended when server RAM is limited. Buffers torrent streams directly to disk.</span>
+                      </div>
+                    </label>
+
+                    <div id="cfgDiskPathGroup" class="space-y-1">
+                      <label class="block text-slate-300 font-medium" id="lblCfgDiskCachePath">Disk Cache Directory Path:</label>
+                      <input type="text" id="cfgDiskCachePathInput" placeholder="/mnt/sdb/AppFiles/jellyfin/cache/torrserver" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                      <p class="text-[10px] text-slate-500">Folder inside Jellyfin cache directory on disk sdb.</p>
+                    </div>
+
+                    <div class="space-y-1.5">
+                      <div class="flex items-center justify-between">
+                        <label class="block text-slate-300 font-medium" id="lblCfgCacheSize">Cache Size (MB):</label>
+                        <span class="text-[11px] text-emerald-400 font-mono font-semibold" id="cfgCacheSizeHuman">100 GB</span>
+                      </div>
+                      <input type="number" id="cfgCacheSizeInput" placeholder="102400" oninput="window.t2jUpdateCacheHuman && window.t2jUpdateCacheHuman(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                      <div class="flex items-center gap-1.5 flex-wrap pt-1">
+                        <button type="button" onclick="window.t2jSetCachePreset && window.t2jSetCachePreset(512)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">512 MB</button>
+                        <button type="button" onclick="window.t2jSetCachePreset && window.t2jSetCachePreset(2048)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">2 GB</button>
+                        <button type="button" onclick="window.t2jSetCachePreset && window.t2jSetCachePreset(10240)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">10 GB</button>
+                        <button type="button" onclick="window.t2jSetCachePreset && window.t2jSetCachePreset(51200)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">50 GB</button>
+                        <button type="button" onclick="window.t2jSetCachePreset && window.t2jSetCachePreset(102400)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium cursor-pointer">100 GB</button>
+                      </div>
+                    </div>
                   </div>
 
                   <div class="pt-2">
@@ -1131,7 +1158,10 @@
             cfgTorrServerSub: 'TorrServer connection and RAM cache settings',
             lblCfgExternalUrl: 'TorrServer URL (API & Streaming):',
             lblCfgStreamUrl: 'TorrServer Stream URL (for .strm files):',
-                                    lblCfgCacheSize: 'RAM Cache (MB):',
+                                    lblCfgCacheSize: 'Cache Size (MB):',
+            lblCfgUseDiskCache: 'Enable Disk Cache (Buffer to SSD/HDD)',
+            lblCfgUseDiskCacheSub: 'Recommended when server RAM is limited. Buffers streams directly to disk.',
+            lblCfgDiskCachePath: 'Disk Cache Directory Path:',
             btnRestartTorrServer: 'Test Connection / Sync Cache',
             restarting: 'Restarting...',
             cfgProwlarrTitle: 'Prowlarr & Trackers Customization',
@@ -1224,7 +1254,10 @@
             cfgTorrServerSub: 'Підключення до TorrServer та налаштування RAM кешу',
             lblCfgExternalUrl: 'Адреса TorrServer (API & стрімінг):',
             lblCfgStreamUrl: 'Адреса потоку для .strm (Stream URL):',
-                                    lblCfgCacheSize: 'Розмір RAM кешу (МБ):',
+                                    lblCfgCacheSize: 'Розмір кешу (МБ):',
+            lblCfgUseDiskCache: 'Кешувати на диск (SSD/HDD замість RAM)',
+            lblCfgUseDiskCacheSub: 'Рекомендовано при малій кількості оперативної пам\'яті. Зберігає кеш на швидкий диск.',
+            lblCfgDiskCachePath: 'Шлях до папки кешу на диску:',
             btnRestartTorrServer: 'Перевірити зв\'язок / Синхронізувати кеш',
             restarting: 'Перезапуск...',
             cfgProwlarrTitle: 'Prowlarr та кастомізація трекерів',
@@ -1329,6 +1362,9 @@
             'lblCfgExternalUrl': t.lblCfgExternalUrl,
             'lblCfgStreamUrl': t.lblCfgStreamUrl,
             'lblCfgCacheSize': t.lblCfgCacheSize,
+            'lblCfgUseDiskCache': t.lblCfgUseDiskCache,
+            'lblCfgUseDiskCacheSub': t.lblCfgUseDiskCacheSub,
+            'lblCfgDiskCachePath': t.lblCfgDiskCachePath,
             'btnRestartTorrServerText': t.btnRestartTorrServer,
             'cfgProwlarrTitle': t.cfgProwlarrTitle,
             'cfgProwlarrSub': t.cfgProwlarrSub,
@@ -1759,7 +1795,11 @@
                 var dashDaemonEngineSub = page.querySelector('#dashDaemonEngineSub');
                 if (dashDaemonEngine) dashDaemonEngine.innerText = 'TorrServer ' + daemonVer;
                 if (dashDaemonEngineSub) dashDaemonEngineSub.innerText = data.StatusMessage || 'Connected';
-                if (dashCacheSize) dashCacheSize.innerText = data.EffectiveUrl || 'http://torrserver:8090';
+                if (dashCacheSize) {
+                    var cMb = data.CacheSizeMb || 102400;
+                    var cStr = (cMb >= 1024) ? (cMb / 1024).toFixed(1).replace(/\.0$/, '') + ' GB' : cMb + ' MB';
+                    dashCacheSize.innerText = data.UseDiskCache ? (cStr + ' (Диск)') : (cStr + ' (RAM)');
+                }
                 if (activeTorrentsBadge) activeTorrentsBadge.innerText = activeCount;
                 if (dashTorrentsCount) dashTorrentsCount.innerText = activeCount;
             } else {
@@ -2321,7 +2361,17 @@
 
             if (cfgLanguageSelect) cfgLanguageSelect.value = cfg.DefaultLanguage || 'en';
             if (cfgExternalUrlInput) cfgExternalUrlInput.value = cfg.ExternalTorrServerUrl || 'http://torrserver:8090';
-            if (cfgCacheSizeInput) cfgCacheSizeInput.value = cfg.CacheSizeMb || 256;
+            var cfgUseDiskCacheCheck = page.querySelector('#cfgUseDiskCacheCheck');
+            var cfgDiskCachePathInput = page.querySelector('#cfgDiskCachePathInput');
+            if (cfgUseDiskCacheCheck) {
+                cfgUseDiskCacheCheck.checked = cfg.UseDiskCache !== false;
+                window.t2jToggleDiskCacheUI(cfgUseDiskCacheCheck.checked);
+            }
+            if (cfgDiskCachePathInput) cfgDiskCachePathInput.value = cfg.DiskCachePath || '/mnt/sdb/AppFiles/jellyfin/cache/torrserver';
+            if (cfgCacheSizeInput) {
+                cfgCacheSizeInput.value = cfg.CacheSizeMb || 102400;
+                window.t2jUpdateCacheHuman(cfgCacheSizeInput.value);
+            }
             if (cfgStreamUrlInput) cfgStreamUrlInput.value = cfg.TorrServerStreamUrl || '';
             if (cfgProwlarrUrlInput) cfgProwlarrUrlInput.value = cfg.ProwlarrUrl || '';
             if (cfgProwlarrKeyInput) cfgProwlarrKeyInput.value = cfg.ProwlarrApiKey || '';
@@ -2422,7 +2472,9 @@
         var payload = {
             DefaultLanguage: selectedLang,
             ExternalTorrServerUrl: cfgExternalUrlInput ? cfgExternalUrlInput.value.trim() : 'http://torrserver:8090',
-            CacheSizeMb: parseInt(cfgCacheSizeInput ? cfgCacheSizeInput.value : '256', 10) || 256,
+            UseDiskCache: (page.querySelector('#cfgUseDiskCacheCheck') ? page.querySelector('#cfgUseDiskCacheCheck').checked : true),
+            DiskCachePath: (page.querySelector('#cfgDiskCachePathInput') ? page.querySelector('#cfgDiskCachePathInput').value.trim() : '/mnt/sdb/AppFiles/jellyfin/cache/torrserver'),
+            CacheSizeMb: parseInt(cfgCacheSizeInput ? cfgCacheSizeInput.value : '102400', 10) || 102400,
             TorrServerStreamUrl: cfgStreamUrlInput ? cfgStreamUrlInput.value.trim() : 'http://torrserver:8090',
             ProwlarrUrl: cfgProwlarrUrlInput ? cfgProwlarrUrlInput.value.trim() : '',
             ProwlarrApiKey: cfgProwlarrKeyInput ? cfgProwlarrKeyInput.value.trim() : '',
@@ -2473,6 +2525,38 @@
         }
     }
     window.t2jSaveSettings = saveSettings;
+
+    window.t2jSetCachePreset = function(mb) {
+        var page = getPage();
+        if (!page) return;
+        var input = page.querySelector('#cfgCacheSizeInput');
+        if (input) {
+            input.value = mb;
+            window.t2jUpdateCacheHuman(mb);
+        }
+    };
+
+    window.t2jUpdateCacheHuman = function(val) {
+        var page = getPage();
+        if (!page) return;
+        var label = page.querySelector('#cfgCacheSizeHuman');
+        if (!label) return;
+        var mb = parseInt(val, 10) || 0;
+        if (mb >= 1024) {
+            label.innerText = (mb / 1024).toFixed(1).replace(/\.0$/, '') + ' GB';
+        } else {
+            label.innerText = mb + ' MB';
+        }
+    };
+
+    window.t2jToggleDiskCacheUI = function(isDisk) {
+        var page = getPage();
+        if (!page) return;
+        var group = page.querySelector('#cfgDiskPathGroup');
+        if (group) {
+            group.style.display = isDisk ? 'block' : 'none';
+        }
+    };
 
     async function restartDaemon() {
         var page = getPage();

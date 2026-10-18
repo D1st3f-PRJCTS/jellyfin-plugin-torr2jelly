@@ -486,7 +486,7 @@
             try {
                 const res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), { headers: getAuthHeaders() });
                 const cfg = await res.json();
-                cfgCacheSizeInput.value = cfg.CacheSizeMb;
+                cfgCacheSizeInput.value = cfg.CacheSizeMb || 102400;
                 cfgStreamUrlInput.value = cfg.TorrServerStreamUrl || '';
                 cfgProwlarrUrlInput.value = cfg.ProwlarrUrl || '';
                 cfgProwlarrKeyInput.value = cfg.ProwlarrApiKey || '';
@@ -503,7 +503,9 @@
             saveSettingsBtnText.innerText = 'Збереження...';
 
             const payload = {
-                CacheSizeMb: parseInt(cfgCacheSizeInput.value, 10) || 256,
+                UseDiskCache: true,
+                DiskCachePath: '/mnt/sdb/AppFiles/jellyfin/cache/torrserver',
+                CacheSizeMb: parseInt(cfgCacheSizeInput.value, 10) || 102400,
                 TorrServerStreamUrl: cfgStreamUrlInput.value.trim(),
                 ProwlarrUrl: cfgProwlarrUrlInput.value.trim(),
                 ProwlarrApiKey: cfgProwlarrKeyInput.value.trim(),

@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/main/logo.png",
     "versions": [
       {
+        "version": "1.0.14.0",
+        "changelog": "Configurable Disk Cache: native TorrServer API integration for caching to fast disk/SSD (/mnt/sdb/AppFiles/jellyfin/cache/torrserver) with size presets (up to 100GB+) instead of small RAM cache.",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/releases/download/v1.0.14/Torr2Jelly_1.0.14.0.zip",
+        "checksum": "8d59ba629fea2f50d52b4e241b7cbb39",
+        "timestamp": "2026-10-19T00:45:00Z"
+      },
+      {
         "version": "1.0.13.1",
         "changelog": "Fix Jellyfin search engine releases filter: properly respect SearchOnlyGoldByDefault settings, sort by seeders when showing all releases, add interactive filter chips in search UI, and restore global tag checkboxes in settings.",
         "targetAbi": "10.9.0.0",

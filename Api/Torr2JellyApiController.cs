@@ -59,7 +59,10 @@ public class Torr2JellyApiController : ControllerBase
             StatusMessage = _daemonManager.StatusMessage,
             EffectiveUrl = _daemonManager.GetEffectiveUrl(),
             StreamBaseUrl = _daemonManager.GetStreamBaseUrl(),
-            ActiveTorrentsCount = torrents.Count
+            ActiveTorrentsCount = torrents.Count,
+            CacheSizeMb = config.CacheSizeMb,
+            UseDiskCache = config.UseDiskCache,
+            DiskCachePath = config.DiskCachePath
         };
 
         return Ok(status);

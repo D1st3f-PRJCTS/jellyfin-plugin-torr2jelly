@@ -10,11 +10,19 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.Torr2Jelly.Engine;
 
 /// <summary>
-/// One alternate version of an existing item: the torrent lives in <see cref="TargetDir"/> next to the
-/// item's primary stream instead of in a standalone folder of its own.
+/// A torrent that lives inside the folder of an existing library item instead of in a standalone folder of its own.
+/// <see cref="Kind"/> says how: an <see cref="AlternateStreamEntry.KindAlternate"/> version sits next to the item's
+/// primary stream (movies); a <see cref="AlternateStreamEntry.KindSeries"/> release has its episodes written into
+/// the season folders of an existing series, which <see cref="TargetDir"/> is.
 /// </summary>
 public sealed class AlternateStreamEntry
 {
+    /// <summary>An alternate version of a movie (the default; also what entries written by older versions are).</summary>
+    public const string KindAlternate = "alternate";
+
+    /// <summary>A release whose episodes are merged into an existing series folder.</summary>
+    public const string KindSeries = "series";
+
     [JsonPropertyName("targetDir")]
     public string TargetDir { get; init; } = string.Empty;
 
@@ -23,12 +31,24 @@ public sealed class AlternateStreamEntry
 
     [JsonPropertyName("strmPath")]
     public string StrmPath { get; init; } = string.Empty;
+
+    /// <summary><see cref="KindAlternate"/> or <see cref="KindSeries"/>; a missing or unknown value reads as alternate.</summary>
+    [JsonPropertyName("kind")]
+    public string Kind { get; init; } = KindAlternate;
+
+    [JsonIgnore]
+    public bool IsSeries => string.Equals(Kind, KindSeries, StringComparison.OrdinalIgnoreCase);
+
+    internal static string NormalizeKind(string? kind) =>
+        string.Equals(kind?.Trim(), KindSeries, StringComparison.OrdinalIgnoreCase) ? KindSeries : KindAlternate;
 }
 
 /// <summary>
-/// Persists <c>hash -> alternate stream</c> state so that sync runs never turn an alternate version into a
-/// standalone item (and never delete it from the folder of the item it belongs to).
-/// The file is <c>{DataPath}/torr2jelly/alternate-streams.json</c>. A missing or corrupt file is treated as empty.
+/// Persists <c>hash -> alternate stream / series torrent</c> state so that sync runs never turn an alternate version
+/// into a standalone item (and never delete it from the folder of the item it belongs to), and keep re-materialising
+/// a series torrent inside its series folder.
+/// The file is <c>{DataPath}/torr2jelly/alternate-streams.json</c>. A missing or corrupt file is treated as empty;
+/// entries without a <c>kind</c> (written by older versions) are alternates.
 /// </summary>
 public sealed class AlternateStreamStore
 {
@@ -72,8 +92,11 @@ public sealed class AlternateStreamStore
         return false;
     }
 
-    /// <summary>Adds or replaces the entry for <paramref name="hash"/>. Invalid hashes are ignored.</summary>
-    public void Register(string hash, string targetDir, Guid? itemId, string strmPath)
+    /// <summary>
+    /// Adds or replaces the entry for <paramref name="hash"/>. Invalid hashes are ignored.
+    /// <paramref name="kind"/> is <see cref="AlternateStreamEntry.KindAlternate"/> unless stated otherwise.
+    /// </summary>
+    public void Register(string hash, string targetDir, Guid? itemId, string strmPath, string kind = AlternateStreamEntry.KindAlternate)
     {
         var key = TorrentHash.Normalize(hash);
         if (!TorrentHash.IsValid(key) || string.IsNullOrWhiteSpace(targetDir))
@@ -83,7 +106,13 @@ public sealed class AlternateStreamStore
 
         lock (_gate)
         {
-            Load()[key] = new AlternateStreamEntry { TargetDir = targetDir, ItemId = itemId, StrmPath = strmPath };
+            Load()[key] = new AlternateStreamEntry
+            {
+                TargetDir = targetDir,
+                ItemId = itemId,
+                StrmPath = strmPath ?? string.Empty,
+                Kind = AlternateStreamEntry.NormalizeKind(kind)
+            };
             Save();
         }
     }
@@ -169,7 +198,17 @@ public sealed class AlternateStreamStore
                         var key = TorrentHash.Normalize(hash ?? string.Empty);
                         if (entry != null && TorrentHash.IsValid(key) && !string.IsNullOrWhiteSpace(entry.TargetDir))
                         {
-                            entries[key] = entry;
+                            // A missing, null or unknown kind is an alternate: the safe reading (such an entry is
+                            // only ever left alone).
+                            entries[key] = string.Equals(entry.Kind, AlternateStreamEntry.NormalizeKind(entry.Kind), StringComparison.Ordinal)
+                                ? entry
+                                : new AlternateStreamEntry
+                                {
+                                    TargetDir = entry.TargetDir,
+                                    ItemId = entry.ItemId,
+                                    StrmPath = entry.StrmPath ?? string.Empty,
+                                    Kind = AlternateStreamEntry.NormalizeKind(entry.Kind)
+                                };
                         }
                     }
                 }

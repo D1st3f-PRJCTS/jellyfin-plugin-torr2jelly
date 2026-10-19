@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using Jellyfin.Plugin.Torr2Jelly.Search.Models;
 
 namespace Jellyfin.Plugin.Torr2Jelly.Api.Dtos;
@@ -75,6 +76,50 @@ public class AlternateStreamResultDto
     public string StrmFilePath { get; set; } = string.Empty;
     public string VersionLabel { get; set; } = string.Empty;
     public string? ErrorMessage { get; set; }
+}
+
+public class AddSeriesTorrentRequestDto
+{
+    public string Link { get; set; } = string.Empty;
+    public string? TorrentTitle { get; set; }
+}
+
+/// <summary>Why <see cref="SeriesTorrentResultDto.Success"/> is false. Server-side only: never serialised.</summary>
+public enum SeriesTorrentFailure
+{
+    None = 0,
+
+    /// <summary>The torrent has no usable info-hash (TorrServer answered with something unexpected).</summary>
+    InvalidHash,
+
+    /// <summary>The series folder is missing, outside the managed roots, or is a root itself.</summary>
+    InvalidTarget,
+
+    /// <summary>The torrent is already registered as an alternate stream or to another folder, or lives elsewhere in the library.</summary>
+    Conflict,
+
+    /// <summary>The torrent's file list holds no video file.</summary>
+    NoVideoFiles,
+
+    /// <summary>Writing the .strm files failed (details are in the log).</summary>
+    WriteFailed
+}
+
+public class SeriesTorrentResultDto
+{
+    public bool Success { get; set; }
+    public string TorrentHash { get; set; } = string.Empty;
+
+    /// <summary>Number of episode .strm files of this torrent that are in place in the series folder after the call.</summary>
+    public int EpisodesWritten { get; set; }
+
+    /// <summary>TorrServer has not loaded the file list yet: nothing was written now, the episodes appear on the next sync.</summary>
+    public bool Pending { get; set; }
+
+    public string? Message { get; set; }
+
+    [JsonIgnore]
+    public SeriesTorrentFailure Failure { get; set; }
 }
 
 public class MovieStreamInfoDto

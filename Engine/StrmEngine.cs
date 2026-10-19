@@ -879,15 +879,28 @@ public class StrmEngine
 
         try
         {
-            // An alternate version lives inside its item's folder; syncing it would create a standalone folder
-            // and then delete the alternate from the item it belongs to.
             if (_altStore.TryGet(hash, out var alternate) && Directory.Exists(alternate.TargetDir))
             {
-                result.Success = true;
-                result.FolderPath = alternate.TargetDir;
-                result.Category = GetCategoryNameForPath(alternate.TargetDir, roots) ?? string.Empty;
-                _logger.LogDebug("Torrent {Hash} is an alternate stream of {Dir}; skipping standalone sync", hash, alternate.TargetDir);
-                return result;
+                if (alternate.IsSeries)
+                {
+                    // A release merged into an existing series: keep its episodes in that series folder (idempotent)
+                    // instead of creating a standalone folder, and skip the standard path and its cleanup. When the
+                    // folder can no longer be used, fall through to the standard path like an unregistered torrent.
+                    if (await TrySyncRegisteredSeriesAsync(torrent, hash, alternate, roots, result, ct))
+                    {
+                        return result;
+                    }
+                }
+                else
+                {
+                    // An alternate version lives inside its item's folder; syncing it would create a standalone folder
+                    // and then delete the alternate from the item it belongs to.
+                    result.Success = true;
+                    result.FolderPath = alternate.TargetDir;
+                    result.Category = GetCategoryNameForPath(alternate.TargetDir, roots) ?? string.Empty;
+                    _logger.LogDebug("Torrent {Hash} is an alternate stream of {Dir}; skipping standalone sync", hash, alternate.TargetDir);
+                    return result;
+                }
             }
 
             var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
@@ -1158,29 +1171,72 @@ public class StrmEngine
 
         // Multi-episode series
         var showFolderTemplate = !string.IsNullOrWhiteSpace(config.ShowFolderTemplate) ? config.ShowFolderTemplate : "{Title} ({Year})";
-        var seasonFolderTemplate = !string.IsNullOrWhiteSpace(config.ShowSeasonFolderTemplate) ? config.ShowSeasonFolderTemplate : "Season {Season:00}";
-        var epFileTemplate = !string.IsNullOrWhiteSpace(config.ShowEpisodeFileTemplate) ? config.ShowEpisodeFileTemplate : "{Title} - {EpisodeTag}.strm";
 
         // Ensure file and folder names on disk are always in English/Latin
         var showFileTitle = TitleCleaner.GetEnglishOrLatinTitle(cleanTitle, originalTitle);
 
-        // Avoid duplicating year in show folder name if showFileTitle already contains extractedYear
-        var showYearToken = extractedYear.HasValue && !showFileTitle.Contains(extractedYear.Value.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
-            ? extractedYear.Value.ToString(CultureInfo.InvariantCulture)
+        var showTokens = BuildShowTokens(showFileTitle, originalTitle, extractedYear, rawTitle);
+
+        var seriesFolder = ResolveFolderName(config.EnableShowRenaming, showFolderTemplate, showTokens, rawTitle, showFileTitle, extractedYear, hash);
+        var seriesDir = Path.Combine(categoryDir, seriesFolder);
+        Directory.CreateDirectory(seriesDir);
+        result.FolderPath = seriesDir;
+
+        changed |= await WriteShowEpisodesAsync(config, hash, showTokens, seriesDir, videoFiles, result.CreatedStrmFiles, tracker: null, ct);
+
+        // Write Series tvshow.nfo so Jellyfin identifies the series properly
+        changed |= await WriteShowNfoAsync(seriesDir, cleanTitle, originalTitle, extractedYear, tmdbId, imdbId, ct);
+
+        // Download poster
+        if (!string.IsNullOrWhiteSpace(posterUrl))
+        {
+            changed |= await DownloadPosterAsync(seriesDir, posterUrl, ct);
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// The tokens a show's folder / season / episode templates are filled from. The year token stays empty when the
+    /// title already contains the year (no "Show 2008 (2008)").
+    /// </summary>
+    private static Dictionary<string, string> BuildShowTokens(string showFileTitle, string? originalTitle, int? year, string rawTitle)
+    {
+        // Avoid duplicating year in show folder name if showFileTitle already contains the year
+        var showYearToken = year.HasValue && !showFileTitle.Contains(year.Value.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            ? year.Value.ToString(CultureInfo.InvariantCulture)
             : string.Empty;
 
-        var showTokens = new Dictionary<string, string>
+        return new Dictionary<string, string>
         {
             ["Title"] = showFileTitle,
             ["OriginalTitle"] = originalTitle ?? showFileTitle,
             ["Year"] = showYearToken,
             ["RawTitle"] = rawTitle
         };
+    }
 
-        var seriesFolder = ResolveFolderName(config.EnableShowRenaming, showFolderTemplate, showTokens, rawTitle, showFileTitle, extractedYear, hash);
-        var seriesDir = Path.Combine(categoryDir, seriesFolder);
-        Directory.CreateDirectory(seriesDir);
-        result.FolderPath = seriesDir;
+    /// <summary>
+    /// Writes one .strm per video file into <paramref name="seriesDir"/>, laid out by season
+    /// (season folder / episode file templates, collision and foreign-file rules, write-if-changed). Shared by the
+    /// standalone show sync and by <see cref="AddTorrentToSeriesAsync"/>, which differ only in how the series folder
+    /// and the tokens are chosen. Appends the path of every .strm in place to <paramref name="writtenPaths"/> and
+    /// returns whether anything was written.
+    /// </summary>
+    private async Task<bool> WriteShowEpisodesAsync(
+        PluginConfiguration config,
+        string hash,
+        Dictionary<string, string> showTokens,
+        string seriesDir,
+        List<TorrTorrentFile> videoFiles,
+        List<string> writtenPaths,
+        WriteTracker? tracker,
+        CancellationToken ct)
+    {
+        var changed = false;
+
+        var seasonFolderTemplate = !string.IsNullOrWhiteSpace(config.ShowSeasonFolderTemplate) ? config.ShowSeasonFolderTemplate : "Season {Season:00}";
+        var epFileTemplate = !string.IsNullOrWhiteSpace(config.ShowEpisodeFileTemplate) ? config.ShowEpisodeFileTemplate : "{Title} - {EpisodeTag}.strm";
 
         // Ordinal order, and a fallback episode counter that is independent per season.
         var ordered = videoFiles.OrderBy(f => f.Path, StringComparer.Ordinal).ToList();
@@ -1211,6 +1267,7 @@ public class StrmEngine
             }
 
             var seasonDir = Path.Combine(seriesDir, seasonFolderName);
+            tracker?.NoteDirectory(seasonDir);
             Directory.CreateDirectory(seasonDir);
 
             var epTag = epInfo.FormatEpisodeTag();
@@ -1237,20 +1294,39 @@ public class StrmEngine
             var strmFileName = BuildStrmFileName(stemRaw, epTag, hash, wholeNameSanitized: true);
             var strmPath = ResolveStrmPath(seasonDir, strmFileName, videoFile.Id, hash, usedPaths);
             var streamUrl = $"{streamBase}/stream?link={hash}&index={videoFile.Id}&play\n";
+            tracker?.NoteFile(strmPath);
             changed |= await WriteTextIfChangedAsync(strmPath, streamUrl, ct);
-            result.CreatedStrmFiles.Add(strmPath);
-        }
-
-        // Write Series tvshow.nfo so Jellyfin identifies the series properly
-        changed |= await WriteShowNfoAsync(seriesDir, cleanTitle, originalTitle, extractedYear, tmdbId, imdbId, ct);
-
-        // Download poster
-        if (!string.IsNullOrWhiteSpace(posterUrl))
-        {
-            changed |= await DownloadPosterAsync(seriesDir, posterUrl, ct);
+            writtenPaths.Add(strmPath);
         }
 
         return changed;
+    }
+
+    /// <summary>
+    /// Remembers which files and directories a write run created (as opposed to found), so a run that fails halfway
+    /// can take back exactly what it added.
+    /// </summary>
+    private sealed class WriteTracker
+    {
+        public List<string> CreatedFiles { get; } = new();
+
+        public List<string> CreatedDirectories { get; } = new();
+
+        public void NoteFile(string path)
+        {
+            if (!File.Exists(path) && !CreatedFiles.Contains(path, PathComparer))
+            {
+                CreatedFiles.Add(path);
+            }
+        }
+
+        public void NoteDirectory(string path)
+        {
+            if (!Directory.Exists(path) && !CreatedDirectories.Contains(path, PathComparer))
+            {
+                CreatedDirectories.Add(path);
+            }
+        }
     }
 
     // ------------------------------------------------------------------------------------------------------------
@@ -2072,12 +2148,20 @@ public class StrmEngine
             }
         }
 
+        // A series torrent keeps its episodes in the season folders below its series folder; this top-folder delete
+        // says nothing about them, so its registration stays (DeleteTorrentFilesAsync removes it with the episodes).
+        var isSeriesTorrent = _altStore.TryGet(hash, out var registeredEntry) && registeredEntry.IsSeries;
+
         if (deletedAny)
         {
-            _altStore.Unregister(hash);
+            if (!isSeriesTorrent)
+            {
+                _altStore.Unregister(hash);
+            }
+
             PruneAndNotify(new[] { dir }, roots);
         }
-        else if (_altStore.TryGet(hash, out var entry) && PathEquals(Canonicalize(entry.TargetDir) ?? entry.TargetDir, dir))
+        else if (!isSeriesTorrent && _altStore.TryGet(hash, out var entry) && PathEquals(Canonicalize(entry.TargetDir) ?? entry.TargetDir, dir))
         {
             // The alternate's file is already gone; drop the stale registration.
             _altStore.Unregister(hash);
@@ -2144,6 +2228,13 @@ public class StrmEngine
             {
                 // An item that lies loose in a library root has no folder of its own to hold alternate versions.
                 result.ErrorMessage = "The target is a library root, not an item folder.";
+                return result;
+            }
+
+            // A torrent added to a series keeps its episodes there; registering it as an alternate would drop that.
+            if (_altStore.TryGet(hash, out var registered) && registered.IsSeries && Directory.Exists(registered.TargetDir))
+            {
+                result.ErrorMessage = "This torrent is already added to a series.";
                 return result;
             }
 
@@ -2268,6 +2359,402 @@ public class StrmEngine
         {
             _lock.Release();
         }
+    }
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Series torrents: a release (e.g. a new season pack) whose episodes are written into the folder of an
+    // EXISTING series, laid out by season, next to the seasons that are already there.
+    // ------------------------------------------------------------------------------------------------------------
+
+    private sealed class SeriesMaterialization
+    {
+        /// <summary>TorrServer has not loaded the file list yet: nothing was written.</summary>
+        public bool Pending { get; set; }
+
+        /// <summary>The torrent has files, but none of them is a video: nothing was written.</summary>
+        public bool NoVideoFiles { get; set; }
+
+        /// <summary>A .strm was created or changed, or an obsolete one removed.</summary>
+        public bool Changed { get; set; }
+
+        public int VideoFiles { get; set; }
+
+        /// <summary>Every .strm of the torrent in place in the series folder after the run.</summary>
+        public List<string> Written { get; } = new();
+    }
+
+    /// <summary>
+    /// Checks that <paramref name="path"/> can hold a series torrent: an existing directory strictly inside a category
+    /// root or Jellyfin library root. A root itself (or a directory that contains one) is refused: such a folder is
+    /// not a series folder of its own, and it is never written to or pruned.
+    /// </summary>
+    private bool TryValidateSeriesDirectory(string? path, IReadOnlyList<CategoryRoot> managedRoots, out string dir, out string? error)
+    {
+        dir = string.Empty;
+        error = null;
+
+        var canonical = string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path) ? null : Canonicalize(path);
+        if (canonical == null || !Directory.Exists(canonical))
+        {
+            error = "The series folder does not exist.";
+            return false;
+        }
+
+        if (IsCategoryOrLibraryRoot(canonical, managedRoots) || managedRoots.Any(r => IsInsideOrEqual(canonical, r.Dir)))
+        {
+            error = "The series folder is a category or library root, not a folder of a series.";
+            return false;
+        }
+
+        if (FindContainingRoot(managedRoots, canonical) == null)
+        {
+            error = "The series folder is outside the configured category folders and Jellyfin libraries.";
+            return false;
+        }
+
+        dir = canonical;
+        return true;
+    }
+
+    /// <summary>
+    /// True when <paramref name="path"/> is a folder a torrent may be added to as a series torrent (see
+    /// <see cref="AddTorrentToSeriesAsync"/>). <paramref name="error"/> says why not.
+    /// </summary>
+    public bool IsValidSeriesDirectory(string? path, out string? error)
+    {
+        return TryValidateSeriesDirectory(path, GetManagedRoots(), out _, out error);
+    }
+
+    /// <summary>
+    /// Writes the episodes of <paramref name="torrent"/> into the existing series folder <paramref name="seriesDir"/>
+    /// and remembers the torrent as a series torrent, so that later syncs keep them there instead of creating a
+    /// standalone folder. The episodes get exactly the parsing and naming of a normal show sync (season and episode
+    /// numbers, season folder / episode file templates, collision and foreign-file rules, write-if-changed), with the
+    /// series folder fixed to <paramref name="seriesDir"/> and the title taken from that folder's name.
+    /// <c>tvshow.nfo</c> and posters of the series are never written or replaced, other torrents' files are never
+    /// touched, and only this torrent's own obsolete .strm files inside <paramref name="seriesDir"/> are removed.
+    /// While TorrServer has not loaded the file list yet the torrent is only registered
+    /// (<see cref="SeriesTorrentResultDto.Pending"/>): the next sync writes the episodes.
+    /// A failure is reported through <see cref="SeriesTorrentResultDto.Failure"/>; a run that fails halfway takes back
+    /// what it created.
+    /// </summary>
+    public async Task<SeriesTorrentResultDto> AddTorrentToSeriesAsync(
+        string seriesDir,
+        TorrTorrent torrent,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(torrent);
+
+        var hash = TorrentHash.Normalize(torrent.Hash ?? string.Empty);
+        var result = new SeriesTorrentResultDto { TorrentHash = hash };
+
+        if (!TorrentHash.IsValid(hash))
+        {
+            _logger.LogWarning("Refusing to add a series torrent with an invalid hash: '{Hash}'", Truncate(torrent.Hash, 64));
+            result.Failure = SeriesTorrentFailure.InvalidHash;
+            result.Message = "invalid torrent hash";
+            return result;
+        }
+
+        await _lock.WaitAsync(ct);
+        try
+        {
+            return await AddTorrentToSeriesCoreAsync(seriesDir, torrent, hash, result, ct);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    // Callers hold the engine lock and pass a valid, normalised hash.
+    private async Task<SeriesTorrentResultDto> AddTorrentToSeriesCoreAsync(
+        string seriesDir,
+        TorrTorrent torrent,
+        string hash,
+        SeriesTorrentResultDto result,
+        CancellationToken ct)
+    {
+        var tracker = new WriteTracker();
+        var registeredByThisCall = false;
+
+        try
+        {
+            var categoryRoots = GetCategoryRoots();
+            var managedRoots = GetManagedRoots(categoryRoots);
+
+            if (!TryValidateSeriesDirectory(seriesDir, managedRoots, out var dir, out var targetError))
+            {
+                result.Failure = SeriesTorrentFailure.InvalidTarget;
+                result.Message = targetError;
+                return result;
+            }
+
+            // A torrent lives in exactly one place. An entry whose folder is gone is stale and simply replaced.
+            var registeredHere = false;
+            if (_altStore.TryGet(hash, out var existing) && Directory.Exists(existing.TargetDir))
+            {
+                var existingDir = Canonicalize(existing.TargetDir) ?? existing.TargetDir;
+                if (!existing.IsSeries || !PathEquals(existingDir, dir))
+                {
+                    _logger.LogWarning(
+                        "Not adding torrent {Hash} to series folder {Dir}: it is already registered ({Kind}) for {Existing}",
+                        hash, dir, existing.Kind, existing.TargetDir);
+                    result.Failure = SeriesTorrentFailure.Conflict;
+                    result.Message = existing.IsSeries
+                        ? "This torrent is already added to another series."
+                        : "This torrent is already added as an alternate version of another item.";
+                    return result;
+                }
+
+                registeredHere = true;
+            }
+
+            if (!registeredHere)
+            {
+                // Same torrent already in the library as an item of its own (or as an alternate that is not registered
+                // yet): adding it here too would show every episode twice. The user removes it first.
+                var index = BuildStrmIndexCore(managedRoots);
+                if (index.TryGetValue(hash, out var existingFiles) &&
+                    existingFiles.Any(f => File.Exists(f) && !IsInsideOrEqual(dir, Canonicalize(f) ?? f)))
+                {
+                    _logger.LogWarning("Not adding torrent {Hash} to series folder {Dir}: it already has .strm files elsewhere in the library", hash, dir);
+                    result.Failure = SeriesTorrentFailure.Conflict;
+                    result.Message = "This torrent is already in the library as a separate item. Remove it first, then add it to the series.";
+                    return result;
+                }
+            }
+
+            var files = torrent.GetEffectiveFiles();
+            if (files.Count > 0 && !files.Any(f => EpisodeMatcher.IsVideoFile(f.Path)))
+            {
+                result.Failure = SeriesTorrentFailure.NoVideoFiles;
+                result.Message = "The torrent contains no video files.";
+                return result;
+            }
+
+            if (!registeredHere)
+            {
+                _altStore.Register(hash, dir, null, string.Empty, AlternateStreamEntry.KindSeries);
+                registeredByThisCall = true;
+            }
+
+            var outcome = await MaterializeSeriesAsync(dir, hash, torrent, managedRoots, tracker, ct);
+            if (outcome.Pending)
+            {
+                _logger.LogInformation("Torrent {Hash} is registered for series folder {Dir}; its file list is not ready yet", hash, dir);
+                result.Success = true;
+                result.Pending = true;
+                result.Message = "TorrServer has not loaded the torrent's file list yet; the episodes will appear after the next sync.";
+                return result;
+            }
+
+            if (outcome.NoVideoFiles)
+            {
+                if (registeredByThisCall)
+                {
+                    _altStore.Unregister(hash);
+                }
+
+                result.Failure = SeriesTorrentFailure.NoVideoFiles;
+                result.Message = "The torrent contains no video files.";
+                return result;
+            }
+
+            result.Success = true;
+            result.EpisodesWritten = outcome.Written.Count;
+            _logger.LogInformation("Added {Count} episode(s) of torrent {Hash} to series folder {Dir}", outcome.Written.Count, hash, dir);
+            return result;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add torrent {Hash} to series folder {Dir}", hash, seriesDir);
+            RollbackSeriesAdd(tracker, hash, registeredByThisCall);
+            result.Success = false;
+            result.Pending = false;
+            result.EpisodesWritten = 0;
+            result.Failure = SeriesTorrentFailure.WriteFailed;
+            result.Message = "Failed to write the STRM files; see the Jellyfin log for details.";
+            return result;
+        }
+    }
+
+    // Takes back what a failed AddTorrentToSeries run created: its new files, the season folders it made (when still
+    // empty) and its registration. Files and folders that were already there are left alone.
+    private void RollbackSeriesAdd(WriteTracker tracker, string hash, bool registeredByThisCall)
+    {
+        foreach (var file in tracker.CreatedFiles)
+        {
+            try
+            {
+                if (File.Exists(file))
+                {
+                    File.Delete(file);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not remove {File} while rolling back a failed series torrent add", file);
+            }
+        }
+
+        foreach (var directory in Enumerable.Reverse(tracker.CreatedDirectories))
+        {
+            try
+            {
+                if (Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any())
+                {
+                    Directory.Delete(directory, recursive: false);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not remove {Dir} while rolling back a failed series torrent add", directory);
+            }
+        }
+
+        if (registeredByThisCall)
+        {
+            _altStore.Unregister(hash);
+        }
+    }
+
+    // Re-materialises a registered series torrent during a sync. Returns false when its folder can no longer be used,
+    // so that the caller falls back to the standard path. A torrent whose file list is not ready yet comes back as
+    // "metadata not ready" (counted as waiting, not as failed).
+    private async Task<bool> TrySyncRegisteredSeriesAsync(
+        TorrTorrent torrent,
+        string hash,
+        AlternateStreamEntry entry,
+        IReadOnlyList<CategoryRoot> categoryRoots,
+        StrmSyncResult result,
+        CancellationToken ct)
+    {
+        var managedRoots = GetManagedRoots(categoryRoots);
+        if (!TryValidateSeriesDirectory(entry.TargetDir, managedRoots, out var dir, out var reason))
+        {
+            WarnRootOnce(
+                $"series|{hash}|{entry.TargetDir}",
+                "The series folder '{Dir}' of torrent {Hash} can no longer be used ({Reason}); it is synced like an unregistered torrent",
+                entry.TargetDir, hash, reason ?? string.Empty);
+            return false;
+        }
+
+        var outcome = await MaterializeSeriesAsync(dir, hash, torrent, managedRoots, tracker: null, ct);
+
+        result.FolderPath = dir;
+        result.Category = GetCategoryNameForPath(dir, categoryRoots) ?? string.Empty;
+        result.VideoFilesCount = outcome.VideoFiles;
+        result.CreatedStrmFiles.AddRange(outcome.Written);
+
+        if (outcome.Pending)
+        {
+            _logger.LogDebug("Metadata of series torrent {Hash} is not ready; nothing written to {Dir}", hash, dir);
+            result.ErrorMessage = MetadataNotReadyMessage;
+            return true;
+        }
+
+        result.Success = true;
+        _logger.LogDebug("Series torrent {Hash} is up to date in {Dir} ({Count} episode(s))", hash, dir, outcome.Written.Count);
+        return true;
+    }
+
+    // Writes the episodes of a series torrent into the (validated, canonical) series folder and removes the torrent's own
+    // obsolete .strm files there. Nothing is written while the file list is missing. tvshow.nfo and posters are never touched.
+    private async Task<SeriesMaterialization> MaterializeSeriesAsync(
+        string seriesDir,
+        string hash,
+        TorrTorrent torrent,
+        IReadOnlyList<CategoryRoot> managedRoots,
+        WriteTracker? tracker,
+        CancellationToken ct)
+    {
+        var outcome = new SeriesMaterialization();
+
+        var files = torrent.GetEffectiveFiles();
+        if (files.Count == 0)
+        {
+            outcome.Pending = true;
+            return outcome;
+        }
+
+        var videoFiles = files.Where(f => EpisodeMatcher.IsVideoFile(f.Path)).ToList();
+        outcome.VideoFiles = videoFiles.Count;
+        if (videoFiles.Count == 0)
+        {
+            outcome.NoVideoFiles = true;
+            return outcome;
+        }
+
+        var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+
+        // The series already exists under its own name: that name (without "(Year)") is the title of the episodes.
+        var folderName = Path.GetFileName(seriesDir);
+        var (cleanTitle, _, year) = TitleCleaner.CleanTitleAndExtractYear(folderName);
+        var title = string.IsNullOrWhiteSpace(cleanTitle) ? folderName : cleanTitle;
+        var showTokens = BuildShowTokens(title, null, year, folderName);
+
+        outcome.Changed |= await WriteShowEpisodesAsync(config, hash, showTokens, seriesDir, videoFiles, outcome.Written, tracker, ct);
+
+        // Only this torrent's own files, only inside the series folder, and only once something was written.
+        if (outcome.Written.Count > 0 && DeleteObsoleteStrmInDirectory(seriesDir, hash, outcome.Written, managedRoots, ct) > 0)
+        {
+            outcome.Changed = true;
+        }
+
+        if (outcome.Changed)
+        {
+            NotifyPathChanged(seriesDir);
+        }
+
+        return outcome;
+    }
+
+    // Deletes the .strm files (with sidecar .nfo) of <hash> below <dir> that are not in <activePaths>: leftovers of an
+    // earlier run with other names. Files of other torrents, and anything outside <dir>, are never touched.
+    private int DeleteObsoleteStrmInDirectory(
+        string dir,
+        string hash,
+        IReadOnlyCollection<string> activePaths,
+        IReadOnlyList<CategoryRoot> roots,
+        CancellationToken ct)
+    {
+        var active = new HashSet<string>(activePaths.Select(p => Canonicalize(p) ?? p), PathComparer);
+        var deleted = 0;
+        var affectedDirs = new HashSet<string>(PathComparer);
+
+        foreach (var file in Directory.EnumerateFiles(dir, "*.strm", StrmTreeEnumeration).ToList())
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var canonical = Canonicalize(file) ?? file;
+            if (active.Contains(canonical) || !IsInsideOrEqual(dir, canonical) || !FileOwnedBy(file, hash))
+            {
+                continue;
+            }
+
+            _logger.LogInformation("Deleting obsolete .strm of series torrent {Hash}: {File}", hash, file);
+            if (DeleteStrmWithSidecar(file))
+            {
+                deleted++;
+                var parentDir = Path.GetDirectoryName(file);
+                if (!string.IsNullOrWhiteSpace(parentDir))
+                {
+                    affectedDirs.Add(parentDir);
+                }
+            }
+        }
+
+        if (deleted > 0)
+        {
+            PruneAndNotify(affectedDirs, roots);
+        }
+
+        return deleted;
     }
 
     // ------------------------------------------------------------------------------------------------------------

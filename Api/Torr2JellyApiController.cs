@@ -33,6 +33,8 @@ namespace Jellyfin.Plugin.Torr2Jelly.Api;
 [Authorize(Policy = ApiPolicies.RequiresElevation)]
 public class Torr2JellyApiController : ControllerBase
 {
+    private const int MaxTorrentTitleLength = 512;
+
     private static readonly SemaphoreSlim SettingsLock = new(1, 1);
     private static string? _searchScript;
 
@@ -657,6 +659,117 @@ public class Torr2JellyApiController : ControllerBase
             {
                 await RemoveTorrentIfUnreferencedAsync(oldHash, cancellationToken);
             }
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Adds a torrent (typically a new season pack) to an EXISTING series: its episodes are written as .strm files
+    /// into that series' folder, laid out by season, so they merge with the seasons already there.
+    /// </summary>
+    [HttpPost("Items/{itemId}/SeriesTorrent")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<ActionResult<SeriesTorrentResultDto>> AddItemSeriesTorrent(
+        [FromRoute] Guid itemId,
+        [FromBody] AddSeriesTorrentRequestDto req,
+        CancellationToken cancellationToken)
+    {
+        // Pure validation first: nothing here touches the network or TorrServer.
+        if (req == null)
+        {
+            return BadRequest(new { error = "Torrent link or magnet is required." });
+        }
+
+        if (!TorrentLinkResolver.TryNormalize(req.Link, out _, out _, out var linkError))
+        {
+            return BadRequest(new { error = linkError });
+        }
+
+        var item = _libraryManager.GetItemById(itemId);
+        if (item == null)
+        {
+            return NotFound(new { error = "Item not found in Jellyfin library." });
+        }
+
+        if (item is not MediaBrowser.Controller.Entities.TV.Series)
+        {
+            return BadRequest(new { error = "Torrents can only be added to a series here." });
+        }
+
+        var seriesDir = _strmEngine.ResolveItemDirectory(itemId);
+        if (string.IsNullOrWhiteSpace(seriesDir) || !Directory.Exists(seriesDir))
+        {
+            return BadRequest(new { error = "Could not resolve the folder of this series." });
+        }
+
+        // Refused before TorrServer is asked: the folder must lie inside a category folder or a Jellyfin library (the
+        // managed roots, as for IsPathInsideManagedRoots) and must not be such a root itself. The engine checks again
+        // under its lock.
+        if (!_strmEngine.IsValidSeriesDirectory(seriesDir, out var seriesDirError))
+        {
+            return BadRequest(new { error = seriesDirError ?? "The folder of this series cannot hold a series torrent." });
+        }
+
+        var resolution = await _linkResolver.ResolveAsync(req.Link, cancellationToken);
+        if (!resolution.Success)
+        {
+            return BadRequest(new { error = resolution.Error });
+        }
+
+        // Whether TorrServer already holds the torrent decides what a failure may clean up. Null (the list could not
+        // be read) counts as "already there": it is better to leave a torrent behind than to remove someone else's.
+        var before = await _torrClient.ListTorrentsAsync(cancellationToken);
+
+        var torrentTitle = string.IsNullOrWhiteSpace(req.TorrentTitle) ? null : req.TorrentTitle.Trim();
+        if (torrentTitle != null && torrentTitle.Length > MaxTorrentTitleLength)
+        {
+            torrentTitle = torrentTitle[..MaxTorrentTitleLength];
+        }
+
+        // The category of the folder the series lives in (empty when it only lives in a Jellyfin library): if the
+        // folder is ever gone, a sync then files the torrent where that series' siblings are.
+        var category = _strmEngine.GetCategoryNameForPath(seriesDir) ?? string.Empty;
+
+        var torrent = await _torrClient.AddTorrentAsync(
+            link: resolution.Link,
+            title: torrentTitle,
+            poster: null,
+            category: category,
+            saveToDb: true,
+            cancellationToken: cancellationToken);
+
+        if (torrent == null)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = "TorrServer did not accept the torrent." });
+        }
+
+        var preExisting = before == null || before.Any(t => TorrentHash.Equal(t.Hash, torrent.Hash));
+
+        var result = await _strmEngine.AddTorrentToSeriesAsync(seriesDir, torrent, cancellationToken);
+        if (!result.Success)
+        {
+            // Nothing references the torrent we just added: do not leave it behind in TorrServer.
+            var addedHash = TorrentHash.Normalize(torrent.Hash ?? string.Empty);
+            if (!preExisting && TorrentHash.IsValid(addedHash))
+            {
+                await RemoveTorrentIfUnreferencedAsync(addedHash, cancellationToken);
+            }
+
+            // The engine's messages are fixed texts; exception details only ever go to the log.
+            ActionResult failure = result.Failure switch
+            {
+                SeriesTorrentFailure.Conflict => Conflict(new { error = result.Message }),
+                SeriesTorrentFailure.InvalidTarget or SeriesTorrentFailure.NoVideoFiles => BadRequest(new { error = result.Message }),
+                SeriesTorrentFailure.InvalidHash => StatusCode(StatusCodes.Status502BadGateway, new { error = "TorrServer did not accept the torrent." }),
+                _ => StatusCode(StatusCodes.Status500InternalServerError, new { error = "Failed to add the torrent to the series; see the Jellyfin log for details." })
+            };
+            return failure;
         }
 
         return Ok(result);

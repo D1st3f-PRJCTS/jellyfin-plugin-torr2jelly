@@ -113,7 +113,22 @@
             alreadyInLibrary: isUk ? 'Вже в медіатеці' : 'Already in library',
             unauthorized: isUk ? 'Потрібно знову увійти в обліковий запис Jellyfin.' : 'Please sign in to Jellyfin again.',
             forbidden: isUk ? 'Недостатньо прав для цієї дії.' : 'You do not have permission to do this.',
-            searchFailed: isUk ? 'Не вдалося виконати пошук' : 'Search failed'
+            searchFailed: isUk ? 'Не вдалося виконати пошук' : 'Search failed',
+            // Series pages: add season / full-series torrents to the series itself.
+            seriesBtnTitle: isUk ? 'Додати торенти в цей серіал' : 'Add torrents to this series',
+            seriesDialogTitle: isUk ? 'Додати до серіалу' : 'Add to series',
+            seriesAddTitle: isUk ? 'Додати до цього серіалу' : 'Add to this series',
+            seriesAddedTitle: isUk ? 'Додано до цього серіалу' : 'Added to this series',
+            seriesAddedToast: function (count, seriesName) {
+                if (isUk) {
+                    var mod10 = count % 10, mod100 = count % 100;
+                    var noun = (mod10 === 1 && mod100 !== 11) ? 'епізод'
+                        : ((mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) ? 'епізоди' : 'епізодів');
+                    return 'Додано ' + count + ' ' + noun + (seriesName ? ' до «' + seriesName + '»' : '');
+                }
+                return 'Added ' + count + (count === 1 ? ' episode' : ' episodes') + (seriesName ? ' to ' + seriesName : '');
+            },
+            seriesPendingToast: isUk ? 'Торент додано; епізоди з\'являться за кілька хвилин' : 'Torrent added; episodes will appear in a few minutes'
         };
     }
 
@@ -161,6 +176,7 @@
         .t2j-tabs .emby-tab-button { padding: 0.9em 1.1em; border-bottom: 0.14em solid transparent; }
         .t2j-tabs .emby-tab-button.emby-tab-button-active { border-bottom-color: var(--jf-palette-primary-main, #00a4dc); }
         .t2j-dialog-body { flex: 1 1 auto; min-height: 12em; overflow-y: auto; padding: 0.5em 1em 1em; }
+        .t2j-series-bar { flex-shrink: 0; padding: 0.5em 1em 0; }
         .t2j-find-bar { display: flex; align-items: flex-end; gap: 0.5em; }
         .t2j-find-bar .inputContainer { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
         .t2j-filter-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.25em 1em; margin: 0.75em 0 0.25em; }
@@ -360,7 +376,7 @@
         return null;
     }
 
-    // Cached item type lookup so the Streams button only shows on Movie items.
+    // Cached item type lookup so the item page buttons only show on Movie and Series items.
     var _itemTypeCache = {}; // itemId -> { type: string|null, pending: bool, failedAt: number }
     function getItemTypeCached(itemId) {
         var entry = _itemTypeCache[itemId];
@@ -391,14 +407,17 @@
         return null;
     }
 
-    // true = show the Streams button, false = never for this item/user, null = still resolving.
-    function isStreamsButtonEligible(itemId) {
+    // 'movie' = versions button, 'series' = add-to-series button (admins only), false = never for this
+    // item/user, null = still resolving.
+    function getStreamsButtonKind(itemId) {
         var isAdmin = getIsAdminCached();
         if (isAdmin === false) return false;
         if (isAdmin === null) return null;
         var type = getItemTypeCached(itemId);
         if (type === null) return null;
-        return type === 'Movie';
+        if (type === 'Movie') return 'movie';
+        if (type === 'Series') return 'series';
+        return false;
     }
 
     function getAuthHeaders() {
@@ -512,12 +531,13 @@
     }
 
     // A release as a native list row: leading movie/tv icon, title, "indexer · size · seeders" + chips, trailing actions.
-    function releaseRowHtml(item, idx, i18n, actionsHtml, extraChipsHtml) {
+    // leadIconOverride fixes the icon where the context already says what the release is (the series dialog).
+    function releaseRowHtml(item, idx, i18n, actionsHtml, extraChipsHtml, leadIconOverride) {
         var title = item.Title || '';
         var size = item.SizeFormatted || '';
         var seeds = parseInt(item.Seeders, 10) || 0;
         var tracker = item.Indexer || 'Torrent';
-        var leadIcon = isShowTitle(title) ? 'tv' : 'movie';
+        var leadIcon = leadIconOverride || (isShowTitle(title) ? 'tv' : 'movie');
 
         var quality = '';
         parseQuality(title).forEach(function (q) { quality += chipHtml(q, false); });
@@ -997,9 +1017,10 @@
 
 
     // ==========================================
-    // Torrent versions dialog (native Jellyfin form dialog)
+    // Item page dialogs (native Jellyfin form dialog): torrent versions of a movie, add-to-series for a series
     // ==========================================
-    var _drawerData = null;      // { ExistingStreams, Alternatives, Title, Year, ... } for the open dialog; null lists = not loaded yet
+    var _drawerData = null;      // movie dialog: { ExistingStreams, Alternatives, Title, Year, ... }; null lists = not loaded yet
+    var _seriesData = null;      // series dialog state (see openSeriesDialog); only one of the two is set while a dialog is open
     var _activeDrawerTab = 'streams'; // 'streams' or 'search'
     var _drawerSearchFilter = 'all';
     var _drawerToken = 0;        // bumped every time a dialog is opened or closed
@@ -1082,6 +1103,7 @@
         _drawerToken++;
         _drawerItemId = null;
         _drawerData = null;
+        _seriesData = null;
         unlockBodyScroll();
         if (itemId) refreshStreamsButtonCount(itemId);
 
@@ -1131,24 +1153,27 @@
         });
     }
 
-    function updateDrawerItemTitle() {
+    // The header's secondary text after the dialog title ("· Item name").
+    function setDialogSubtitle(text) {
         var titleEl = document.getElementById('t2j-drawer-item-title');
-        var data = _drawerData;
-        if (!titleEl || !data || !data.Title) return;
-        titleEl.textContent = '· ' + data.Title + (data.Year ? ' (' + data.Year + ')' : '');
+        if (titleEl && text) titleEl.textContent = '· ' + text;
     }
 
-    async function openStreamsDrawer(itemId, triggerEl) {
-        var previousFocus = triggerEl || document.activeElement;
+    function updateDrawerItemTitle() {
+        var data = _drawerData;
+        if (!data || !data.Title) return;
+        setDialogSubtitle(data.Title + (data.Year ? ' (' + data.Year + ')' : ''));
+    }
+
+    // Builds the native dialog shared by the movie and series dialogs (backdrop, header with close button, Esc /
+    // back / backdrop closing, scroll lock) around bodyHtml, and makes it the one open dialog. Returns the new
+    // dialog token: the caller sets its own state right after (same tick) and passes the token to every async step.
+    function openDialogShell(previousFocus, titleText, bodyHtml) {
         if (_drawerRoot) closeStreamsDialog(true);
 
-        // Fresh dialog state for every open, so data/tab/filter of a previous item can never leak into
-        // this one, and responses that arrive for a previous open are ignored.
+        // Fresh dialog state for every open, so data of a previous item can never leak into this one, and
+        // responses that arrive for a previous open are ignored.
         var myToken = ++_drawerToken;
-        _drawerItemId = itemId;
-        _drawerData = { ExistingStreams: null, Alternatives: null, Title: '', Year: null, OriginalTitle: '', SearchQuery: '', typedQuery: null, streamsError: '', altsError: '', altsLoading: false };
-        _activeDrawerTab = 'streams';
-        _drawerSearchFilter = 'all';
         _drawerReturnFocus = previousFocus;
 
         var i18n = getI18n();
@@ -1168,14 +1193,10 @@
         dialog.innerHTML =
             '<div class="formDialogHeader">'
             + '<button is="paper-icon-button-light" type="button" class="paper-icon-button-light" id="t2j-drawer-close-btn" title="' + escapeHtml(i18n.closeBtn) + '" aria-label="' + escapeHtml(i18n.closeBtn) + '">' + iconHtml('close') + '</button>'
-            + '<h3 class="formDialogHeaderTitle" id="t2j-dialog-title">' + escapeHtml(i18n.drawerTitle)
+            + '<h3 class="formDialogHeaderTitle" id="t2j-dialog-title">' + escapeHtml(titleText)
             + ' <span class="secondaryText t2j-dialog-subtitle" id="t2j-drawer-item-title"></span></h3>'
             + '</div>'
-            + '<div class="t2j-tabs" role="tablist"><div class="emby-tabs-slider">'
-            + tabButtonHtml('t2j-tab-streams', i18n.activeStreamsTab, true)
-            + tabButtonHtml('t2j-tab-search', i18n.searchAlternativesTab, false)
-            + '</div></div>'
-            + '<div class="t2j-dialog-body" id="t2j-drawer-body" role="tabpanel"></div>';
+            + bodyHtml;
 
         root.appendChild(backdrop);
         root.appendChild(dialog);
@@ -1190,6 +1211,44 @@
             if (e.target === root || e.target === backdrop) closeStreamsDialog();
         });
         document.getElementById('t2j-drawer-close-btn').addEventListener('click', function () { closeStreamsDialog(); });
+
+        return myToken;
+    }
+
+    // The item behind a dialog, through ApiClient (best effort). onItem runs only while the dialog that asked is still open.
+    function loadDialogItem(itemId, token, onItem) {
+        var userId = getCurrentUserIdSafe();
+        if (!userId || !window.ApiClient || typeof window.ApiClient.getItem !== 'function') return;
+        try {
+            Promise.resolve(window.ApiClient.getItem(userId, itemId)).then(function (item) {
+                if (token !== _drawerToken || !item || !item.Name) return;
+                onItem(item);
+            }).catch(function () { });
+        } catch (e) { }
+    }
+
+    // Search box + button of the "Find releases" tab and of the series dialog.
+    function findBarHtml(inputId, buttonId, value, i18n) {
+        return '<div class="t2j-find-bar">'
+            + '<div class="inputContainer"><input is="emby-input" type="text" id="' + inputId + '" label="' + escapeHtml(i18n.searchLabel) + '" value="' + escapeHtml(value) + '" placeholder="' + escapeHtml(i18n.searchPlaceholder) + '"></div>'
+            + '<button is="emby-button" type="button" class="raised button-submit emby-button" id="' + buttonId + '"><span>' + escapeHtml(i18n.findBtn) + '</span></button>'
+            + '</div>';
+    }
+
+    async function openStreamsDrawer(itemId, triggerEl) {
+        var previousFocus = triggerEl || document.activeElement;
+        var i18n = getI18n();
+
+        var myToken = openDialogShell(previousFocus, i18n.drawerTitle,
+            '<div class="t2j-tabs" role="tablist"><div class="emby-tabs-slider">'
+            + tabButtonHtml('t2j-tab-streams', i18n.activeStreamsTab, true)
+            + tabButtonHtml('t2j-tab-search', i18n.searchAlternativesTab, false)
+            + '</div></div>'
+            + '<div class="t2j-dialog-body" id="t2j-drawer-body" role="tabpanel"></div>');
+        _drawerItemId = itemId;
+        _drawerData = { ExistingStreams: null, Alternatives: null, Title: '', Year: null, OriginalTitle: '', SearchQuery: '', typedQuery: null, streamsError: '', altsError: '', altsLoading: false };
+        _activeDrawerTab = 'streams';
+        _drawerSearchFilter = 'all';
 
         var tabStreams = document.getElementById('t2j-tab-streams');
         var tabSearch = document.getElementById('t2j-tab-search');
@@ -1219,18 +1278,12 @@
 
     // The header shows the item's name; Alternatives later overrides it with the server's own title.
     function loadDrawerItemTitle(itemId, token) {
-        var userId = getCurrentUserIdSafe();
-        if (!userId || !window.ApiClient || typeof window.ApiClient.getItem !== 'function') return;
-        try {
-            Promise.resolve(window.ApiClient.getItem(userId, itemId)).then(function (item) {
-                if (token !== _drawerToken || !_drawerData || !item || !item.Name) return;
-                if (!_drawerData.Title) {
-                    _drawerData.Title = String(item.Name);
-                    _drawerData.Year = item.ProductionYear || null;
-                    updateDrawerItemTitle();
-                }
-            }).catch(function () { });
-        } catch (e) { }
+        loadDialogItem(itemId, token, function (item) {
+            if (!_drawerData || _drawerData.Title) return;
+            _drawerData.Title = String(item.Name);
+            _drawerData.Year = item.ProductionYear || null;
+            updateDrawerItemTitle();
+        });
     }
 
     async function loadDrawerStreams(itemId, token) {
@@ -1411,10 +1464,7 @@
         var primaryStream = existingStreams.find(function (s) { return s.IsPrimary; }) || existingStreams[0];
 
         var html =
-            '<div class="t2j-find-bar">'
-            + '<div class="inputContainer"><input is="emby-input" type="text" id="t2j-drawer-search-input" label="' + escapeHtml(i18n.searchLabel) + '" value="' + escapeHtml(queryVal) + '" placeholder="' + escapeHtml(i18n.searchPlaceholder) + '"></div>'
-            + '<button is="emby-button" type="button" class="raised button-submit emby-button" id="t2j-drawer-search-btn"><span>' + escapeHtml(i18n.findBtn) + '</span></button>'
-            + '</div>'
+            findBarHtml('t2j-drawer-search-input', 't2j-drawer-search-btn', queryVal, i18n)
             + '<div class="t2j-filter-row">'
             + '<label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="t2j-filter-tagged-dlg"' + (filterOn ? ' checked' : '') + '>'
             + '<span>' + escapeHtml(i18n.onlyTagged) + ' (' + taggedAlts.length + ')</span></label>'
@@ -1567,6 +1617,265 @@
     }
 
     // ==========================================
+    // Series dialog: add season / full-series torrents to a series
+    // ==========================================
+
+    // A results request belongs to the series dialog that started it. It is stale (and must not render) once that
+    // dialog was closed or replaced, or once a newer request for the same dialog started.
+    function isSeriesRequestStale(data, reqId) {
+        return _seriesData !== data || data.token !== _drawerToken || data.reqId !== reqId;
+    }
+
+    function openSeriesDialog(itemId, triggerEl) {
+        var previousFocus = triggerEl || document.activeElement;
+        var i18n = getI18n();
+
+        var myToken = openDialogShell(previousFocus, i18n.seriesDialogTitle,
+            '<div class="t2j-series-bar">' + findBarHtml('t2j-series-search-input', 't2j-series-search-btn', '', i18n) + '</div>'
+            + '<div class="t2j-dialog-body" id="t2j-drawer-body"></div>');
+        _drawerItemId = itemId;
+        var data = _seriesData = {
+            itemId: itemId,
+            token: myToken,
+            Title: '',
+            OriginalTitle: '',
+            Results: null,   // releases of the last load / search; null = still loading
+            error: '',       // shown instead of the list when the last load / search failed
+            showAll: false,
+            reqId: 0,        // only the latest results request may render
+            searching: '',   // query of the manual search in flight, so a double click does not repeat it
+            edited: false,   // the user typed in the search box: stop prefilling it
+            states: {}       // release link -> 'busy' | 'done' | 'error'; survives re-renders of the list
+        };
+
+        var inputEl = document.getElementById('t2j-series-search-input');
+        var searchBtn = document.getElementById('t2j-series-search-btn');
+        inputEl.addEventListener('input', function () { data.edited = true; });
+        inputEl.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.isComposing) {
+                e.preventDefault();
+                runSeriesSearch();
+            }
+        });
+        searchBtn.addEventListener('click', function () { runSeriesSearch(); });
+
+        renderSeriesResults();
+        // Typing starts right away with a mouse; touch and remote-control devices would pop up a keyboard instead.
+        var finePointer = false;
+        try { finePointer = !!(window.matchMedia && window.matchMedia('(pointer: fine)').matches); } catch (e) { }
+        try { (finePointer ? inputEl : searchBtn).focus(); } catch (e) { }
+
+        // The item's name fills the header and the search box at once; the release search below can take a while.
+        loadDialogItem(itemId, myToken, function (item) {
+            if (_seriesData !== data) return;
+            if (!data.Title) {
+                data.Title = String(item.Name);
+                setDialogSubtitle(data.Title);
+            }
+            prefillSeriesQuery(item.OriginalTitle || item.Name);
+        });
+        loadSeriesAlternatives();
+    }
+
+    // Puts the series name into the (still empty, untouched) search box.
+    function prefillSeriesQuery(text) {
+        var data = _seriesData;
+        var inputEl = document.getElementById('t2j-series-search-input');
+        if (!data || !inputEl || data.edited || inputEl.value || !text) return;
+        inputEl.value = String(text);
+    }
+
+    // Common GET for the dialog's results: marks them loading, then renders the list or the error of the latest request.
+    async function fetchSeriesResults(url, extractResults) {
+        var data = _seriesData;
+        if (!data) return;
+        var i18n = getI18n();
+        var reqId = ++data.reqId;
+        data.Results = null;
+        data.error = '';
+        data.showAll = false;
+        renderSeriesResults();
+
+        try {
+            var res = await fetch(url, { headers: getAuthHeaders() });
+            if (isSeriesRequestStale(data, reqId)) return;
+            if (res.ok) {
+                var payload = await res.json();
+                if (isSeriesRequestStale(data, reqId)) return;
+                data.Results = extractResults(payload, data);
+            } else {
+                var friendly = authErrorMessage(res.status, i18n);
+                var failure = friendly || (i18n.searchFailed + ': ' + await readErrorMessage(res, i18n));
+                if (isSeriesRequestStale(data, reqId)) return;
+                data.error = failure;
+                if (friendly) showToast(friendly, false);
+            }
+        } catch (e) {
+            if (isSeriesRequestStale(data, reqId)) return;
+            data.error = i18n.connError + ': ' + (e && e.message ? e.message : e);
+        }
+        data.searching = '';
+        renderSeriesResults();
+    }
+
+    // Initial results: the same IMDb-then-title search the movie "Find releases" tab starts with.
+    function loadSeriesAlternatives() {
+        var data = _seriesData;
+        if (!data) return;
+        return fetchSeriesResults(getApiUrl('Plugins/Torr2Jelly/Items/' + encodeURIComponent(data.itemId) + '/Alternatives'), function (loaded, d) {
+            if (loaded && loaded.Title) {
+                d.Title = String(loaded.Title);
+                setDialogSubtitle(d.Title);
+            }
+            d.OriginalTitle = (loaded && loaded.OriginalTitle) || '';
+            prefillSeriesQuery(d.OriginalTitle || d.Title);
+            return (loaded && Array.isArray(loaded.Alternatives)) ? loaded.Alternatives : [];
+        });
+    }
+
+    // Manual search, exactly like the "Find releases" tab: GET Search?query=...
+    function runSeriesSearch() {
+        var data = _seriesData;
+        var inputEl = document.getElementById('t2j-series-search-input');
+        if (!data || !inputEl) return;
+        var query = (inputEl.value || '').trim();
+        if (!query || data.searching === query) return;
+        data.searching = query;
+        return fetchSeriesResults(getApiUrl('Plugins/Torr2Jelly/Search?query=' + encodeURIComponent(query)), function (found) {
+            return Array.isArray(found) ? found : [];
+        });
+    }
+
+    // Brings every add button of the list in line with the states kept for the dialog (a re-render, an add that
+    // finishes later, "Show all" must neither lose a check mark nor re-enable a button whose add is running).
+    function applySeriesActStates() {
+        var data = _seriesData;
+        var body = document.getElementById('t2j-drawer-body');
+        if (!data || !data.Results || !body) return;
+        var i18n = getI18n();
+        var buttons = body.querySelectorAll('.t2j-act[data-act="addseries"]');
+        for (var i = 0; i < buttons.length; i++) {
+            var btn = buttons[i];
+            var item = data.Results[parseInt(btn.getAttribute('data-idx'), 10)];
+            var state = (item && data.states[pickLink(item)]) || 'idle';
+            if ((btn.getAttribute('data-state') || 'idle') === state) continue;
+            var title = state === 'busy' ? i18n.adding
+                : (state === 'done' ? i18n.seriesAddedTitle : (state === 'error' ? i18n.serverError : ''));
+            setActState(btn, state, title);
+        }
+    }
+
+    // Loading / error / empty state line, or the first 8 releases (all of them after "Show all") as the shared rows.
+    function renderSeriesResults() {
+        var data = _seriesData;
+        var body = document.getElementById('t2j-drawer-body');
+        if (!data || !body) return;
+        var i18n = getI18n();
+
+        if (data.error) {
+            body.innerHTML = stateLineHtml(data.error, true);
+            return;
+        }
+        if (!data.Results) {
+            body.innerHTML = stateLineHtml(i18n.searchBusy, false);
+            return;
+        }
+        var list = data.Results;
+        if (list.length === 0) {
+            body.innerHTML = stateLineHtml(i18n.nothingFound, false) + '<div class="fieldDescription">' + escapeHtml(i18n.nothingFoundHint) + '</div>';
+            return;
+        }
+
+        var visibleCount = data.showAll ? list.length : Math.min(list.length, SEARCH_PAGE_SIZE);
+        var html = '<div class="paperList t2j-list">';
+        for (var i = 0; i < visibleCount; i++) {
+            html += releaseRowHtml(list[i], i, i18n, actionButtonHtml('addseries', i, 'add', i18n.seriesAddTitle), '', 'tv');
+        }
+        html += '</div>';
+        if (list.length > visibleCount) {
+            html += '<button is="emby-button" type="button" class="button-flat emby-button t2j-more" id="t2j-series-show-all">'
+                + '<span>' + escapeHtml(i18n.showAll) + ' (' + list.length + ')</span></button>';
+        }
+        body.innerHTML = html;
+        applySeriesActStates();
+
+        var listEl = body.querySelector('.t2j-list');
+        listEl.addEventListener('click', function (e) {
+            var btn = closestAct(e.target, listEl);
+            if (!btn || btn.getAttribute('data-act') !== 'addseries') return;
+            var item = list[parseInt(btn.getAttribute('data-idx'), 10)];
+            if (item) addSeriesTorrent(item);
+        });
+
+        var moreBtn = body.querySelector('#t2j-series-show-all');
+        if (moreBtn) {
+            moreBtn.addEventListener('click', function () {
+                var scrollTop = body.scrollTop;
+                data.showAll = true;
+                renderSeriesResults();
+                body.scrollTop = scrollTop;
+                var firstNew = body.querySelector('.t2j-act[data-idx="' + SEARCH_PAGE_SIZE + '"]');
+                if (firstNew && typeof firstNew.focus === 'function') firstNew.focus();
+            });
+        }
+    }
+
+    // Adds one release to the series: the server resolves the episodes of the torrent and writes them into the series.
+    async function addSeriesTorrent(item) {
+        var data = _seriesData;
+        if (!data) return;
+        var link = pickLink(item);
+        if (!link) return;
+        // One add per release at a time, and a release that went in is not added twice.
+        if (data.states[link] === 'busy' || data.states[link] === 'done') return;
+
+        var i18n = getI18n();
+        var seriesName = data.Title;
+        data.states[link] = 'busy';
+        applySeriesActStates();
+        var finalState = 'error';
+
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + encodeURIComponent(data.itemId) + '/SeriesTorrent'), {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ Link: link, TorrentTitle: item.Title || '' })
+            });
+
+            if (res.ok) {
+                // Success and !Pending: the episodes are written (EpisodesWritten). Pending: the torrent was accepted but
+                // TorrServer has not listed its files yet, so the episodes follow with a later sync.
+                var result = await res.json().catch(function () { return null; });
+                var outcome = result || {};
+                var pending = outcome.Pending === true || outcome.pending === true;
+                var success = outcome.Success === true || outcome.success === true;
+                var written = parseInt(outcome.EpisodesWritten != null ? outcome.EpisodesWritten : outcome.episodesWritten, 10);
+
+                if (!pending && !success && result) {
+                    var reason = outcome.Message || outcome.message || '';
+                    showToast(i18n.failedResponse + (reason ? ': ' + reason : ''), false);
+                } else {
+                    finalState = 'done';
+                    if (!pending && success && isFinite(written)) {
+                        showToast(i18n.seriesAddedToast(written, seriesName), true);
+                    } else {
+                        showToast(i18n.seriesPendingToast, true);
+                    }
+                }
+            } else {
+                var errMsg = await readErrorMessage(res, i18n);
+                showToast(authErrorMessage(res.status, i18n) ? errMsg : (i18n.failedResponse + ': ' + errMsg), false);
+            }
+        } catch (e) {
+            showToast(i18n.connError + ': ' + (e && e.message ? e.message : e), false);
+        }
+
+        // The dialog may have been closed meanwhile: its state object is then simply dropped with it.
+        data.states[link] = finalState;
+        applySeriesActStates();
+    }
+
+    // ==========================================
     // Resilient Item Details Page & Button Watcher
     // ==========================================
     function getActiveItemDetailPage() {
@@ -1615,9 +1924,18 @@
         return null;
     }
 
-    // The button carries the version count only in its title ("Torrent versions (2)"); there is no count pill.
+    function openItemDialog(kind, itemId, triggerEl) {
+        if (kind === 'series') {
+            openSeriesDialog(itemId, triggerEl);
+        } else {
+            openStreamsDrawer(itemId, triggerEl);
+        }
+    }
+
+    // The movie button carries the version count only in its title ("Torrent versions (2)"); there is no count pill.
+    // The series button has no count: its title stays "Add torrents to this series".
     async function updateStreamsButtonCount(btn, itemId) {
-        if (!btn || !itemId) return;
+        if (!btn || !itemId || btn._t2jKind === 'series') return;
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + encodeURIComponent(itemId) + '/Streams'), { headers: getAuthHeaders() });
             if (res.ok) {
@@ -1639,13 +1957,14 @@
     }
 
     var _buttonsObserver = null;
-    function ensureButtonInContainer(page, buttonsContainer, itemId) {
+    function ensureButtonInContainer(page, buttonsContainer, itemId, kind) {
         if (!buttonsContainer) return;
 
         var existingBtn = buttonsContainer.querySelector('.t2j-item-streams-btn');
         if (existingBtn) {
-            // A button from an older markup (with a text label or a count pill) is replaced by the current one.
-            if (existingBtn.querySelector('.detailButton-text, .t2j-stream-count')) {
+            // A button from an older markup (with a text label or a count pill), or one of the other kind (the page
+            // was reused for another item type), is replaced by the current one.
+            if (existingBtn.querySelector('.detailButton-text, .t2j-stream-count') || existingBtn._t2jKind !== kind) {
                 existingBtn.remove();
             } else {
                 if (existingBtn._t2jItemId !== itemId) {
@@ -1653,7 +1972,7 @@
                     existingBtn.onclick = function (e) {
                         e.preventDefault();
                         e.stopPropagation();
-                        openStreamsDrawer(itemId, existingBtn);
+                        openItemDialog(kind, itemId, existingBtn);
                     };
                     updateStreamsButtonCount(existingBtn, itemId);
                 }
@@ -1661,7 +1980,7 @@
             }
         }
 
-        injectStreamsButton(page, buttonsContainer, itemId);
+        injectStreamsButton(page, buttonsContainer, itemId, kind);
 
         if (buttonsContainer._t2jObserverAttached !== bindToken) {
             buttonsContainer._t2jObserverAttached = bindToken;
@@ -1674,9 +1993,9 @@
                 if (!currentPage) return;
                 var currentId = getActiveItemId(currentPage);
                 var curContainer = currentPage.querySelector('.mainDetailButtons');
-                if (curContainer && currentId && !curContainer.querySelector('.t2j-item-streams-btn')
-                    && isStreamsButtonEligible(currentId) === true) {
-                    injectStreamsButton(currentPage, curContainer, currentId);
+                if (curContainer && currentId && !curContainer.querySelector('.t2j-item-streams-btn')) {
+                    var currentKind = getStreamsButtonKind(currentId);
+                    if (currentKind) injectStreamsButton(currentPage, curContainer, currentId, currentKind);
                 }
             });
             _buttonsObserver.observe(buttonsContainer, { childList: true });
@@ -1693,37 +2012,40 @@
         var allContainers = page.querySelectorAll('.mainDetailButtons');
         if (allContainers.length === 0) return;
 
-        // Streams management is admin-only on the server and only meaningful for movies, so only
-        // admins get the button and only on Movie items. null = still resolving (admin/type lookup).
-        var eligible = isStreamsButtonEligible(itemId);
-        if (eligible === null) return;
-        if (eligible === false) {
+        // Torrent management is admin-only on the server: only admins get a button, and which one depends on the
+        // item: versions for a Movie, add-to-series for a Series. null = still resolving (admin/type lookup).
+        var kind = getStreamsButtonKind(itemId);
+        if (kind === null) return;
+        if (kind === false) {
             page.querySelectorAll('.t2j-item-streams-btn').forEach(function (b) { b.remove(); });
             return;
         }
 
         allContainers.forEach(function (container) {
-            ensureButtonInContainer(page, container, itemId);
+            ensureButtonInContainer(page, container, itemId, kind);
         });
     }
 
     // Native detail button (icon only), exactly like Play / Favorite next to it.
-    async function injectStreamsButton(page, buttonsContainer, itemId) {
+    async function injectStreamsButton(page, buttonsContainer, itemId, kind) {
         var i18n = getI18n();
+        var isSeries = (kind === 'series');
+        var label = isSeries ? i18n.seriesBtnTitle : i18n.drawerTitle;
         var btn = document.createElement('button');
         btn.setAttribute('is', 'emby-button');
         btn.type = 'button';
-        btn.className = 'button-flat detailButton emby-button t2j-item-streams-btn';
-        btn.setAttribute('title', i18n.drawerTitle);
-        btn.setAttribute('aria-label', i18n.drawerTitle);
+        btn.className = 'button-flat detailButton emby-button t2j-item-streams-btn' + (isSeries ? ' t2j-item-series-btn' : '');
+        btn.setAttribute('title', label);
+        btn.setAttribute('aria-label', label);
         btn._t2jItemId = itemId;
+        btn._t2jKind = kind;
 
-        btn.innerHTML = '<div class="detailButton-content">' + iconHtml('video_library', 'detailButton-icon') + '</div>';
+        btn.innerHTML = '<div class="detailButton-content">' + iconHtml(isSeries ? 'playlist_add' : 'video_library', 'detailButton-icon') + '</div>';
 
         btn.onclick = function (e) {
             e.preventDefault();
             e.stopPropagation();
-            openStreamsDrawer(btn._t2jItemId || itemId, btn);
+            openItemDialog(kind, btn._t2jItemId || itemId, btn);
         };
 
         buttonsContainer.appendChild(btn);

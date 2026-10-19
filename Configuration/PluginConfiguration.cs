@@ -47,8 +47,9 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool UseDiskCache { get; set; } = true;
     public string DiskCachePath { get; set; } = string.Empty;
 
-    // Optional file holding the peer port forwarded by a VPN (e.g. Proton). When set and managing TorrServer
-    // settings, its content is pushed to TorrServer as PeersListenPort.
+    // Optional file holding the peer port forwarded by a VPN (e.g. Proton). Several candidate files may be given,
+    // separated by ';': the first one that exists and holds a valid port is used. When set and managing TorrServer
+    // settings, the port is pushed to TorrServer as PeersListenPort.
     public string ForwardedPortFilePath { get; set; } = string.Empty;
 
     // Search Indexer (Prowlarr / Torznab)

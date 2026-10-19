@@ -784,8 +784,8 @@
 
             <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
               <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold" id="dashCardEngineText">Streaming Engine</div>
-              <div class="text-xl font-bold text-emerald-400 mt-2 flex items-center space-x-2">
-                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <div id="dashDaemonEngineWrap" class="text-xl font-bold text-slate-400 mt-2 flex items-center space-x-2">
+                <span id="dashDaemonEngineDot" class="w-2.5 h-2.5 rounded-full bg-slate-600"></span>
                 <span id="dashDaemonEngine">TorrServer Matrix</span>
               </div>
               <p class="text-[11px] text-slate-500 mt-0.5" id="dashDaemonEngineSub">External Server</p>
@@ -1206,7 +1206,9 @@
         libraries: [],
         indexers: [],
         config: null,
-        refreshInterval: null
+        refreshInterval: null,
+        torrentsInFlight: 0,
+        torrentsSeq: 0
     };
 
     // Bilingual I18N Dictionary
@@ -1238,6 +1240,9 @@
             addToLibrary: 'Add to Library',
             adding: 'Adding...',
             addedToLib: '✓ Added to Library',
+            addedPending: '✓ Added. The files will appear shortly, once TorrServer has loaded the torrent metadata.',
+            movedPending: 'Category saved. The files will be moved shortly, once TorrServer has loaded the torrent metadata.',
+            torrServerOffline: 'TorrServer offline',
             seeds: 'seeds',
             peers: 'peers',
             emptySearchMsg: 'Nothing found for the given search criteria.',
@@ -1346,6 +1351,9 @@
             addToLibrary: 'Додати в бібліотеку',
             adding: 'Додаємо...',
             addedToLib: '✓ Додано в бібліотеку',
+            addedPending: '✓ Додано. Файли з\'являться за кілька хвилин, щойно TorrServer завантажить метадані торента.',
+            movedPending: 'Категорію збережено. Файли буде переміщено за кілька хвилин, щойно TorrServer завантажить метадані торента.',
+            torrServerOffline: 'TorrServer недоступний',
             seeds: 'сидів',
             peers: 'пірів',
             emptySearchMsg: 'Нічого не знайдено за заданими критеріями.',
@@ -1945,8 +1953,7 @@
         var dashDaemonEngine = page.querySelector('#dashDaemonEngine');
         var dashCacheSize = page.querySelector('#dashCacheSize');
 
-        var torrStatusBadge = page.querySelector('#t2jTorrServerStatusBadge');
-        var torrStatusText = page.querySelector('#t2jTorrServerStatusText');
+        var t = I18N[getLang()] || I18N.en;
 
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Status'), { headers: getAuthHeaders() });
@@ -1954,15 +1961,15 @@
                 var data = await res.json();
                 var daemonVer = data.DaemonVersion || data.daemonVersion || 'MatriX';
                 var activeCount = data.ActiveTorrentsCount !== undefined ? data.ActiveTorrentsCount : (data.activeTorrentsCount !== undefined ? data.activeTorrentsCount : 0);
+                var statusMsg = data.StatusMessage || data.statusMessage || '';
 
-                if (torrStatusBadge) {
-                    torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400';
-                    torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span id="t2jTorrServerStatusText">' + escapeHtml(data.StatusMessage || ('Online ' + daemonVer)) + '</span>';
-                }
+                // A 200 only means the plugin answered; whether TorrServer is reachable is IsDaemonRunning.
+                var running = (data.IsDaemonRunning !== undefined ? data.IsDaemonRunning : data.isDaemonRunning) === true;
+                renderDaemonState(page, running, statusMsg || (running ? ('Online ' + daemonVer) : 'Offline'));
 
                 var dashDaemonEngineSub = page.querySelector('#dashDaemonEngineSub');
-                if (dashDaemonEngine) dashDaemonEngine.innerText = 'TorrServer ' + daemonVer;
-                if (dashDaemonEngineSub) dashDaemonEngineSub.innerText = data.StatusMessage || 'Connected';
+                if (dashDaemonEngine) dashDaemonEngine.innerText = running ? ('TorrServer ' + daemonVer) : t.torrServerOffline;
+                if (dashDaemonEngineSub) dashDaemonEngineSub.innerText = statusMsg || (running ? 'Connected' : 'Offline');
                 if (dashCacheSize) {
                     var cMb = data.CacheSizeMb || 102400;
                     var cStr = (cMb >= 1024) ? (cMb / 1024).toFixed(1).replace(/\.0$/, '') + ' GB' : cMb + ' MB';
@@ -1973,19 +1980,28 @@
                 if (activeTorrentsBadge) activeTorrentsBadge.innerText = activeCount;
                 if (dashTorrentsCount) dashTorrentsCount.innerText = activeCount;
             } else {
-                if (torrStatusBadge) {
-                    torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-rose-400';
-                    torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span id="t2jTorrServerStatusText">Offline</span>';
-                }
+                renderDaemonState(page, false, 'Offline');
             }
         } catch (e) {
-            if (torrStatusBadge) {
-                torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-rose-400';
-                torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span id="t2jTorrServerStatusText">Offline</span>';
-            }
+            renderDaemonState(page, false, 'Offline');
         }
     }
     window.t2jCheckStatus = checkStatus;
+
+    // Draws the TorrServer state in the settings badge and on the dashboard card in one place, so a "not running"
+    // answer can never be painted green.
+    function renderDaemonState(page, running, text) {
+        var badge = page.querySelector('#t2jTorrServerStatusBadge');
+        if (badge) {
+            badge.className = 'inline-flex items-center gap-1.5 text-xs font-medium ' + (running ? 'text-emerald-400' : 'text-rose-400');
+            badge.innerHTML = '<span class="w-2 h-2 rounded-full ' + (running ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500') + '"></span><span id="t2jTorrServerStatusText">' + escapeHtml(text) + '</span>';
+        }
+
+        var wrap = page.querySelector('#dashDaemonEngineWrap');
+        if (wrap) wrap.className = 'text-xl font-bold mt-2 flex items-center space-x-2 ' + (running ? 'text-emerald-400' : 'text-rose-400');
+        var dot = page.querySelector('#dashDaemonEngineDot');
+        if (dot) dot.className = 'w-2.5 h-2.5 rounded-full ' + (running ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500');
+    }
 
     // Search results renderer
     function renderSearchResults() {
@@ -2231,6 +2247,23 @@
         }
     };
 
+    // Prefer a magnet that carries trackers, or the only link there is. A tracker-less magnet (built from the
+    // info-hash alone) must not beat the indexer's .torrent link: a private tracker's torrent never resolves
+    // without the announce URL that the .torrent file contains.
+    function pickResultLink(item) {
+        var magnet = item.MagnetUrl || item.magnetUrl || '';
+        var download = item.DownloadUrl || item.downloadUrl || '';
+        if (magnet && (!download || /[?&]tr(?:\.\d+)?=/i.test(magnet))) return magnet;
+        return download || magnet;
+    }
+
+    // POST Torrents and POST Torrents/{hash}/Recategorize answer 200 with Success=false when TorrServer has not
+    // loaded the torrent's file list yet: the torrent is added (category saved), the .strm files follow with the
+    // next sync. Every real failure is a non-2xx response.
+    function isSyncPending(data) {
+        return !!data && (data.Success === false || data.success === false);
+    }
+
     window.t2jAddResult = async function (btn) {
         if (!btn) return;
         var idx = parseInt(btn.getAttribute('data-index') || '0', 10);
@@ -2241,8 +2274,7 @@
         var category = catSelect ? catSelect.value : 'Movies';
 
         var title = item.Title || item.title || '';
-        // Prefer the magnet link; the indexer download URL is only a fallback.
-        var link = item.MagnetUrl || item.magnetUrl || item.DownloadUrl || item.downloadUrl || '';
+        var link = pickResultLink(item);
         if (!link) {
             alert('Torrent download link is empty.');
             return;
@@ -2267,8 +2299,10 @@
             });
 
             if (res.ok) {
+                var addData = await res.json().catch(function () { return null; });
+                var addLabel = isSyncPending(addData) ? I18N[getLang()].addedPending : I18N[getLang()].addedToLib;
                 btn.className = 't2j-add-row-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md transition-all flex items-center justify-center space-x-1.5 bg-emerald-600 text-white cursor-default';
-                btn.innerHTML = '<i class="fa-solid fa-check text-[10px]"></i> <span>' + escapeHtml(I18N[getLang()].addedToLib) + '</span>';
+                btn.innerHTML = '<i class="fa-solid fa-check text-[10px]"></i> <span>' + escapeHtml(addLabel) + '</span>';
                 checkStatus();
             } else {
                 var err = await res.json().catch(function () { return {}; });
@@ -2315,9 +2349,10 @@
             });
 
             if (res.ok) {
+                var directData = await res.json().catch(function () { return null; });
                 if (directLinkInput) directLinkInput.value = '';
                 if (directTitleInput) directTitleInput.value = '';
-                alert('✓ Torrent added successfully!');
+                alert(isSyncPending(directData) ? I18N[getLang()].addedPending : '✓ Torrent added successfully!');
                 checkStatus();
             } else {
                 var err = await res.json().catch(function () { return {}; });
@@ -2349,17 +2384,29 @@
             return;
         }
 
+        // The 5 s poll must not pile up requests while TorrServer is slow: a poll is skipped while the previous
+        // request is still pending. A forced refresh (after a delete, move or scan) always runs; only the newest
+        // response is rendered, so a slow older one can never overwrite it.
+        var st = window.t2jState;
+        if (!force && st.torrentsInFlight > 0) {
+            return;
+        }
+        var seq = st.torrentsSeq = (st.torrentsSeq || 0) + 1;
+        st.torrentsInFlight = (st.torrentsInFlight || 0) + 1;
+
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), { headers: getAuthHeaders() });
             if (!res.ok) {
                 // Show the server's error (e.g. TorrServer unreachable) instead of a misleading
                 // "No active torrents"; keep the counters untouched.
                 var loadErr = await readHttpError(res);
+                if (seq !== st.torrentsSeq) return;
                 if (torrentsEmptyNotice) torrentsEmptyNotice.classList.add('hidden');
                 if (torrentsListTable) torrentsListTable.innerHTML = '<div class="p-4 text-rose-400 text-xs">Error loading torrents: ' + escapeHtml(loadErr) + '</div>';
                 return;
             }
             var torrents = await res.json();
+            if (seq !== st.torrentsSeq) return;
             window.t2jState.torrents = Array.isArray(torrents) ? torrents : [];
 
             if (dashTorrentsCount) dashTorrentsCount.innerText = window.t2jState.torrents.length;
@@ -2421,8 +2468,11 @@
             }
             if (torrentsListTable) torrentsListTable.innerHTML = html;
         } catch (err) {
+            if (seq !== st.torrentsSeq) return;
             if (torrentsEmptyNotice) torrentsEmptyNotice.classList.add('hidden');
             if (torrentsListTable) torrentsListTable.innerHTML = '<div class="p-4 text-rose-400 text-xs">Error loading torrents: ' + escapeHtml(err.message) + '</div>';
+        } finally {
+            st.torrentsInFlight--;
         }
     }
     window.t2jLoadTorrents = loadTorrents;
@@ -2445,6 +2495,7 @@
                 body: JSON.stringify({ Category: newCat })
             });
             if (res.ok) {
+                var moveData = await res.json().catch(function () { return null; });
                 // Update local model immediately
                 var tObj = window.t2jState.torrents.find(function (t) { return (t.hash || t.Hash) === hash; });
                 if (tObj) {
@@ -2455,6 +2506,9 @@
                 setTimeout(function () {
                     loadTorrents(true);
                 }, 1000);
+                if (isSyncPending(moveData)) {
+                    alert((I18N[getLang()] || I18N.en).movedPending);
+                }
             } else {
                 alert('Failed to recategorize: ' + (await readHttpError(res)));
                 btn.disabled = false;
@@ -2936,7 +2990,6 @@
         var page = getPage();
         if (!page) return;
         var restartDaemonBtn = page.querySelector('#restartDaemonBtn');
-        var torrStatusBadge = page.querySelector('#t2jTorrServerStatusBadge');
         var t = I18N[getLang()] || I18N.en;
 
         if (restartDaemonBtn) {
@@ -2951,25 +3004,16 @@
                 restartDaemonBtn.disabled = false;
                 restartDaemonBtn.innerHTML = '<i class="fa-solid fa-plug text-cyan-400"></i> <span>' + escapeHtml(t.btnTestTorrServer) + '</span>';
             }
-            if (torrStatusBadge) {
-                if (res.ok) {
-                    torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400';
-                    torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>' + escapeHtml(data.status || 'Connected') + '</span>';
-                } else {
-                    torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-rose-400';
-                    torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span>Offline / Помилка</span>';
-                }
-            }
+            // 200 only means the plugin answered; "success" says whether TorrServer is really reachable.
+            var online = res.ok && (data.success === true || data.Success === true);
+            renderDaemonState(page, online, data.status || (online ? 'Connected' : 'Offline / Помилка'));
             checkStatus();
         } catch (e) {
             if (restartDaemonBtn) {
                 restartDaemonBtn.disabled = false;
                 restartDaemonBtn.innerHTML = '<i class="fa-solid fa-plug text-cyan-400"></i> <span>' + escapeHtml(t.btnTestTorrServer) + '</span>';
             }
-            if (torrStatusBadge) {
-                torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-rose-400';
-                torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span>' + escapeHtml(e.message) + '</span>';
-            }
+            renderDaemonState(page, false, e.message);
         }
     }
     window.t2jRestartDaemon = restartDaemon;

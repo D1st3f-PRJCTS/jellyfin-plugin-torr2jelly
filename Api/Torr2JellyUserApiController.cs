@@ -142,6 +142,7 @@ public class Torr2JellyUserApiController : ControllerBase
     [HttpPost("Torrents")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public async Task<ActionResult<StrmSyncResult>> AddTorrent(
         [FromBody] AddTorrentRequestDto req,
@@ -200,6 +201,16 @@ public class Torr2JellyUserApiController : ControllerBase
                     imdbId: imdbId,
                     forceCategory: category != null,
                     cancellationToken: cancellationToken);
+
+                // The torrent is in TorrServer, but without .strm files it is not in the library: that is a failure.
+                // "Metadata not ready" is the exception: the files follow with the next sync, so it stays a 200.
+                if (!syncResult.Success &&
+                    !string.Equals(syncResult.ErrorMessage, StrmEngine.MetadataNotReadyMessage, StringComparison.Ordinal))
+                {
+                    return StatusCode(
+                        StatusCodes.Status500InternalServerError,
+                        new { error = syncResult.ErrorMessage ?? "Failed to write the STRM files; see the Jellyfin log for details." });
+                }
 
                 return Ok(IsAdministrator ? syncResult : WithoutServerPaths(syncResult));
             }

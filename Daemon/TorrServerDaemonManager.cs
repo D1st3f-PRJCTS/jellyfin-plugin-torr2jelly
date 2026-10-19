@@ -256,22 +256,37 @@ public class TorrServerDaemonManager : IHostedService, IDisposable
         }
     }
 
-    private static async Task<int?> ReadForwardedPortAsync(string? path, CancellationToken cancellationToken)
+    // The setting may name several candidate files, separated by ';': the first one that exists and holds a valid
+    // port wins.
+    private static async Task<int?> ReadForwardedPortAsync(string? paths, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(path))
+        if (string.IsNullOrWhiteSpace(paths))
         {
             return null;
         }
 
+        foreach (var candidate in paths.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var port = await ReadPortFileAsync(candidate, cancellationToken);
+            if (port.HasValue)
+            {
+                return port;
+            }
+        }
+
+        return null;
+    }
+
+    private static async Task<int?> ReadPortFileAsync(string path, CancellationToken cancellationToken)
+    {
         try
         {
-            var trimmed = path.Trim();
-            if (!Path.IsPathRooted(trimmed))
+            if (!Path.IsPathRooted(path))
             {
                 return null;
             }
 
-            var info = new FileInfo(trimmed);
+            var info = new FileInfo(path);
             if (!info.Exists || info.Length > 64)
             {
                 return null;

@@ -390,11 +390,6 @@ public class TorznabSearchProvider : ITorrentSearchProvider
             infoHash = InfoHashHelper.FromMagnet(magnet);
         }
 
-        if (magnet.Length == 0 && infoHash.Length > 0)
-        {
-            magnet = InfoHashHelper.BuildMagnet(infoHash, title);
-        }
-
         // Download URL: never carries an apikey towards the browser.
         var httpDownload = string.Empty;
         foreach (var candidate in new[] { enclosureUrl, link })
@@ -404,6 +399,13 @@ public class TorznabSearchProvider : ITorrentSearchProvider
                 httpDownload = ProwlarrLinks.StripApiKey(candidate);
                 break;
             }
+        }
+
+        // A magnet built from the info-hash alone has no trackers, which a private tracker's torrent never
+        // resolves. It is only a last resort: when the indexer gave an http(s) .torrent link, that link wins.
+        if (magnet.Length == 0 && infoHash.Length > 0 && httpDownload.Length == 0)
+        {
+            magnet = InfoHashHelper.BuildMagnet(infoHash, title);
         }
 
         if (magnet.Length == 0 && httpDownload.Length == 0)

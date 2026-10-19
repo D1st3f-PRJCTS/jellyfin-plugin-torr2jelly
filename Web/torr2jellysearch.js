@@ -56,6 +56,7 @@
             adding: isUk ? 'Додаємо...' : 'Adding...',
             added: isUk ? '✓ Додано в медіатеку' : '✓ Added to library',
             addedToast: isUk ? 'успішно додано! Оновлюємо медіатеку...' : 'successfully added! Refreshing library...',
+            addedPendingToast: isUk ? 'додано! Файли з\'являться за кілька хвилин, щойно TorrServer завантажить метадані.' : 'added! The files will appear shortly, once TorrServer has loaded the torrent metadata.',
             serverError: isUk ? '⚠ Помилка сервера' : '⚠ Server Error',
             failedResponse: isUk ? 'Невдала відповідь' : 'Request failed',
             connError: isUk ? 'Помилка з\'єднання' : 'Connection error',
@@ -638,9 +639,26 @@
         return '../' + ep;
     }
 
-    // Prefer the magnet link; DownloadUrl (indexer proxy link) is only a fallback.
+    // Prefer a magnet that carries trackers, or the only link there is. A tracker-less magnet (built from the
+    // info-hash alone) must not beat the indexer's .torrent link: a private tracker's torrent never resolves
+    // without the tracker announce URL that the .torrent file contains.
     function pickLink(item) {
-        return (item && (item.MagnetUrl || item.DownloadUrl)) || '';
+        if (!item) return '';
+        var magnet = item.MagnetUrl || '';
+        var download = item.DownloadUrl || '';
+        if (magnet && (!download || /[?&]tr(?:\.\d+)?=/i.test(magnet))) return magnet;
+        return download || magnet;
+    }
+
+    // POST Torrents answers 200 with Success=false when the torrent was added but TorrServer has not loaded its
+    // file list yet: the .strm files follow with the next sync. Every other failure is a non-2xx response.
+    async function isAddedPending(res) {
+        try {
+            var data = await res.json();
+            return !!data && (data.Success === false || data.success === false);
+        } catch (e) {
+            return false;
+        }
     }
 
     // Series detection with word boundaries so tokens like "DTS5.1" or "1080x720" are not mistaken
@@ -1119,9 +1137,10 @@
                     });
 
                     if (res.ok) {
+                        var pending = await isAddedPending(res);
                         btn.className = 't2j-add-btn success';
                         btn.innerHTML = '<span>' + i18n.added + '</span>';
-                        showToast('✓ "' + itemTitle + '" ' + i18n.addedToast, true);
+                        showToast('✓ "' + itemTitle + '" ' + (pending ? i18n.addedPendingToast : i18n.addedToast), true);
 
                         // No separate library scan here: the add request above uses SyncNow, which already
                         // writes the .strm files and notifies Jellyfin about the changed path.

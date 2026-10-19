@@ -14,7 +14,8 @@ namespace Jellyfin.Plugin.Torr2Jelly;
 
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
-    // Port files of the original author's setup. Only the migration of an existing installation looks at them.
+    // Port files of the original author's setup. Only the migration of an existing installation uses them: it stores
+    // both, joined with ';', and the daemon reads the first one that exists.
     private static readonly string[] LegacyForwardedPortFiles =
     {
         "/mnt/sdb/AppFiles/torrserver/data/forwarded_port",
@@ -224,7 +225,9 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
             if (string.IsNullOrWhiteSpace(config.ForwardedPortFilePath))
             {
-                config.ForwardedPortFilePath = FindLegacyForwardedPortFile() ?? string.Empty;
+                // Whether the files exist right now is irrelevant: the VPN may create them later, and the daemon
+                // probes the candidates each cycle. Fresh installations keep the empty default.
+                config.ForwardedPortFilePath = string.Join(";", LegacyForwardedPortFiles);
             }
 
             // Without stored categories, earlier releases fell back to absolute default folders. Keep those folders:
@@ -239,26 +242,6 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         Log(
             LogLevel.Information,
             $"Torr2Jelly configuration migrated to version {PluginConfiguration.CurrentConfigVersion} ({(existingInstall ? "existing" : "new")} installation; manage TorrServer settings: {config.ManageTorrServerSettings})");
-    }
-
-    private static string? FindLegacyForwardedPortFile()
-    {
-        foreach (var path in LegacyForwardedPortFiles)
-        {
-            try
-            {
-                if (File.Exists(path))
-                {
-                    return path;
-                }
-            }
-            catch (Exception)
-            {
-                // an unreadable location counts as absent
-            }
-        }
-
-        return null;
     }
 
     public void SaveBackupConfig(PluginConfiguration? config)

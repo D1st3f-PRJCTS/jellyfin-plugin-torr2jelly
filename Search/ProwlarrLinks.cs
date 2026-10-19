@@ -5,20 +5,25 @@ using System.Text;
 namespace Jellyfin.Plugin.Torr2Jelly.Search;
 
 /// <summary>
-/// Helpers for Prowlarr download links. Prowlarr's <c>downloadUrl</c> embeds the instance API key
-/// (<c>?apikey=...</c>); that key must never reach the browser, so search results are stripped and
-/// the key is re-attached on the server right before the link is fetched.
+/// Helpers for Prowlarr / Jackett download links. Prowlarr's <c>downloadUrl</c> embeds the instance API key
+/// (<c>?apikey=...</c>) and Jackett's download links carry it as <c>?jackett_apikey=...</c>; that key must never
+/// reach the browser, so search results are stripped and the key is re-attached on the server right before the
+/// link is fetched.
 /// </summary>
 public static class ProwlarrLinks
 {
     private const string ApiKeyParam = "apikey";
+    private const string JackettApiKeyParam = "jackett_apikey";
+
+    // Query parameters that carry an indexer-proxy API key (Prowlarr, Jackett).
+    private static readonly string[] ApiKeyParams = { ApiKeyParam, JackettApiKeyParam };
 
     // Query parameters whose values are secrets and must not appear in logs.
-    private static readonly string[] SecretParams = { "apikey", "api_key", "passkey", "token", "key" };
+    private static readonly string[] SecretParams = { "apikey", "jackett_apikey", "api_key", "passkey", "token", "key" };
 
     /// <summary>
-    /// Removes the <c>apikey</c> query parameter (case-insensitive name) from <paramref name="url"/>.
-    /// Everything else (encoding, other parameters, fragment) is preserved byte-for-byte.
+    /// Removes the <c>apikey</c> and <c>jackett_apikey</c> query parameters (case-insensitive names) from
+    /// <paramref name="url"/>. Everything else (encoding, other parameters, fragment) is preserved byte-for-byte.
     /// Magnet links and URLs without such a parameter are returned unchanged.
     /// </summary>
     public static string StripApiKey(string url)
@@ -42,7 +47,7 @@ public static class ProwlarrLinks
                 continue;
             }
 
-            if (IsParam(part, ApiKeyParam))
+            if (IsApiKeyParam(part))
             {
                 removed = true;
                 continue;
@@ -62,10 +67,11 @@ public static class ProwlarrLinks
     }
 
     /// <summary>
-    /// Re-adds the Prowlarr API key to <paramref name="url"/>, but only when the URL points at the
-    /// configured Prowlarr instance (same scheme, host and port as <paramref name="prowlarrBaseUrl"/>)
-    /// and carries no <c>apikey</c> parameter yet. In every other case the URL is returned unchanged,
-    /// so the key can never be sent to a foreign host.
+    /// Re-adds the indexer API key to <paramref name="url"/>, but only when the URL points at the
+    /// configured Prowlarr / Jackett instance (same scheme, host and port as <paramref name="prowlarrBaseUrl"/>)
+    /// and carries neither an <c>apikey</c> nor a <c>jackett_apikey</c> parameter yet. Jackett's download path
+    /// (<c>/dl/</c>) gets <c>jackett_apikey</c>, everything else <c>apikey</c>. In every other case the URL is
+    /// returned unchanged, so the key can never be sent to a foreign host.
     /// </summary>
     public static string RestoreApiKey(string url, string? prowlarrBaseUrl, string? apiKey)
     {
@@ -109,12 +115,15 @@ public static class ProwlarrLinks
             sb.Append('&');
         }
 
-        sb.Append(ApiKeyParam).Append('=').Append(Uri.EscapeDataString(apiKey.Trim()));
+        var keyParam = target.AbsolutePath.IndexOf("/dl/", StringComparison.OrdinalIgnoreCase) >= 0
+            ? JackettApiKeyParam
+            : ApiKeyParam;
+        sb.Append(keyParam).Append('=').Append(Uri.EscapeDataString(apiKey.Trim()));
         sb.Append(fragment);
         return sb.ToString();
     }
 
-    /// <summary>True when the URL's query already contains an <c>apikey</c> parameter.</summary>
+    /// <summary>True when the URL's query already contains an <c>apikey</c> or <c>jackett_apikey</c> parameter.</summary>
     internal static bool HasApiKey(string url)
     {
         if (string.IsNullOrEmpty(url) || !TrySplit(url, out _, out var query, out _))
@@ -124,7 +133,7 @@ public static class ProwlarrLinks
 
         foreach (var part in query.Split('&'))
         {
-            if (IsParam(part, ApiKeyParam))
+            if (IsApiKeyParam(part))
             {
                 return true;
             }
@@ -158,6 +167,19 @@ public static class ProwlarrLinks
         }
 
         return changed ? prefix + "?" + string.Join("&", parts) + fragment : url;
+    }
+
+    private static bool IsApiKeyParam(string part)
+    {
+        foreach (var name in ApiKeyParams)
+        {
+            if (IsParam(part, name))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsHttp(Uri uri) =>

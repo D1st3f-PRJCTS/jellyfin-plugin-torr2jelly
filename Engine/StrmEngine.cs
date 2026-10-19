@@ -99,6 +99,14 @@ public class StrmEngine
         "movie.nfo", "tvshow.nfo", "season.nfo"
     };
 
+    // Name given to the roots built from Jellyfin library locations (see GetLibraryRoots).
+    private const string LibraryRootName = "(library)";
+
+    /// <summary>
+    /// A canonical directory the engine may work inside. Normally a category folder; roots built from Jellyfin
+    /// library locations reuse the record with <see cref="LibraryRootName"/> and are only ever combined with the
+    /// category roots for explicit, hash-targeted operations (see GetManagedRoots).
+    /// </summary>
     private sealed record CategoryRoot(string Name, string Dir);
 
     private readonly ILogger<StrmEngine> _logger;
@@ -324,6 +332,106 @@ public class StrmEngine
         }
     }
 
+    /// <summary>
+    /// The locations of all Jellyfin libraries, exactly as Jellyfin reports them (not yet validated).
+    /// Any failure counts as "no libraries".
+    /// </summary>
+    private List<string> GetLibraryLocations()
+    {
+        var locations = new List<string>();
+        try
+        {
+            var folders = _libraryManager.GetVirtualFolders();
+            if (folders != null)
+            {
+                foreach (var folder in folders)
+                {
+                    foreach (var location in folder?.Locations ?? Array.Empty<string>())
+                    {
+                        if (!string.IsNullOrWhiteSpace(location))
+                        {
+                            locations.Add(location);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not read the Jellyfin library locations");
+            return new List<string>();
+        }
+
+        return locations;
+    }
+
+    /// <summary>
+    /// The canonical locations of all Jellyfin libraries, passed through the same safety filter as the category
+    /// roots (rooted, no '..' segments, not a filesystem root, not containing Jellyfin's own directories) and
+    /// deduplicated. These are used IN ADDITION to the category roots only for explicit, hash-targeted operations
+    /// (delete one stream, delete one torrent's files, validate a target path); sync, orphan purge and the
+    /// per-torrent duplicate cleanup never touch them.
+    /// </summary>
+    private List<CategoryRoot> GetLibraryRoots()
+    {
+        var roots = new List<CategoryRoot>();
+
+        foreach (var location in GetLibraryLocations())
+        {
+            try
+            {
+                if (!Path.IsPathRooted(location) || location.Split('/', '\\').Any(segment => segment == ".."))
+                {
+                    WarnRootOnce("library|" + location, "Library location '{Location}' is not an absolute path without '..' segments; it is ignored", location);
+                    continue;
+                }
+
+                var canonical = Canonicalize(location);
+                if (canonical == null)
+                {
+                    continue;
+                }
+
+                var unsafeReason = GetUnsafeRootReason(canonical);
+                if (unsafeReason != null)
+                {
+                    WarnRootOnce("library|" + canonical, "Library location '{Location}' is not allowed as a root for deleting streams ({Reason}); it is ignored", canonical, unsafeReason);
+                    continue;
+                }
+
+                if (!roots.Any(r => PathEquals(r.Dir, canonical)))
+                {
+                    roots.Add(new CategoryRoot(LibraryRootName, canonical));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not resolve the Jellyfin library location {Location}", location);
+            }
+        }
+
+        return roots;
+    }
+
+    /// <summary>
+    /// Category roots plus library roots (a library root equal to a category root is listed once, as the category).
+    /// Only for explicit, hash-targeted operations on a specific torrent or item directory; bulk operations must keep
+    /// using <see cref="GetCategoryRoots"/>.
+    /// </summary>
+    private List<CategoryRoot> GetManagedRoots(IReadOnlyList<CategoryRoot>? categoryRoots = null)
+    {
+        var roots = new List<CategoryRoot>(categoryRoots ?? GetCategoryRoots());
+        foreach (var libraryRoot in GetLibraryRoots())
+        {
+            if (!roots.Any(r => PathEquals(r.Dir, libraryRoot.Dir)))
+            {
+                roots.Add(libraryRoot);
+            }
+        }
+
+        return roots;
+    }
+
     private void WarnRootOnce(string key, string message, params object[] args)
     {
         if (_warnedRoots.TryAdd(key, 0))
@@ -443,7 +551,10 @@ public class StrmEngine
         return canonical == null ? null : FindContainingRoot(roots, canonical)?.Name;
     }
 
-    /// <summary>True when <paramref name="path"/> is a category root or lies inside one (after canonicalisation).</summary>
+    /// <summary>
+    /// True when <paramref name="path"/> is a category root or a Jellyfin library root, or lies inside one (after
+    /// canonicalisation). Used to validate explicit, user-chosen targets; it is not a licence for bulk operations.
+    /// </summary>
     public bool IsPathInsideManagedRoots(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path))
@@ -451,7 +562,7 @@ public class StrmEngine
             return false;
         }
 
-        return IsInsideAnyRoot(GetCategoryRoots(), path);
+        return IsInsideAnyRoot(GetManagedRoots(), path);
     }
 
     /// <summary>Category roots to enumerate: distinct, with roots nested inside another root left out.</summary>
@@ -1448,9 +1559,11 @@ public class StrmEngine
     }
 
     /// <summary>
-    /// Deletes every .strm whose parsed hash equals <paramref name="hash"/> in all category roots, plus its sidecar
-    /// .nfo (never movie.nfo / tvshow.nfo / season.nfo), prunes the directories this empties, and forgets the
-    /// alternate-stream entry. Returns the number of .strm files deleted; an invalid hash deletes nothing.
+    /// Deletes every .strm whose parsed hash equals <paramref name="hash"/> in all category roots and Jellyfin
+    /// library roots (an explicit, hash-targeted action, so files outside the category folders go too), plus its
+    /// sidecar .nfo (never movie.nfo / tvshow.nfo / season.nfo), prunes the directories this empties (never the
+    /// containing root itself or anything above it), and forgets the alternate-stream entry. Returns the number of
+    /// .strm files deleted; an invalid hash deletes nothing.
     /// </summary>
     public async Task<int> DeleteTorrentFilesAsync(string hash, CancellationToken ct = default)
     {
@@ -1464,7 +1577,7 @@ public class StrmEngine
         await _lock.WaitAsync(ct);
         try
         {
-            var roots = GetCategoryRoots();
+            var roots = GetManagedRoots();
             var index = BuildStrmIndexCore(roots);
             var deleted = 0;
             var affectedDirs = new HashSet<string>(PathComparer);
@@ -1579,9 +1692,9 @@ public class StrmEngine
 
     /// <summary>
     /// Walks upward from <paramref name="startDir"/> and deletes directories that hold nothing but disposable
-    /// metadata. Stops at, and never deletes, the category root containing <paramref name="startDir"/>; outside every
-    /// category root it does nothing. Any file that is not disposable (video, audio, subtitles, .strm, anything
-    /// unknown) keeps its directory and ends the walk.
+    /// metadata. Stops at, and never deletes, the root (category or library root, whichever the caller passed)
+    /// containing <paramref name="startDir"/>; outside every given root it does nothing. Any file that is not
+    /// disposable (video, audio, subtitles, .strm, anything unknown) keeps its directory and ends the walk.
     /// </summary>
     private bool PruneEmptyDirectories(string startDir, IReadOnlyList<CategoryRoot>? roots = null)
     {
@@ -1611,7 +1724,7 @@ public class StrmEngine
             var candidate = current;
             if (Directory.Exists(candidate))
             {
-                // Never delete a directory that is, or contains, a category root.
+                // Never delete a directory that is, or contains, a root.
                 if (roots.Any(r => IsInsideOrEqual(candidate, r.Dir)))
                 {
                     break;
@@ -1896,7 +2009,7 @@ public class StrmEngine
     /// <summary>
     /// Deletes the .strm files of torrent <paramref name="hash"/> that sit directly in <paramref name="targetDir"/>
     /// (matched by the parsed hash, not by substring), plus their sidecar .nfo. The directory must lie inside a
-    /// category root. Returns true when at least one file was deleted.
+    /// category root or a Jellyfin library root. Returns true when at least one file was deleted.
     /// </summary>
     public async Task<bool> DeleteStreamByHashAsync(string targetDir, string hash, CancellationToken cancellationToken = default)
     {
@@ -1910,7 +2023,7 @@ public class StrmEngine
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            return DeleteStreamByHashCore(targetDir, normalized, GetCategoryRoots(), cancellationToken);
+            return DeleteStreamByHashCore(targetDir, normalized, GetManagedRoots(), cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -1927,7 +2040,7 @@ public class StrmEngine
         }
     }
 
-    // Callers hold the engine lock and pass a valid, normalised hash.
+    // Callers hold the engine lock and pass a valid, normalised hash and the managed roots (category + library roots).
     private bool DeleteStreamByHashCore(string targetDir, string hash, IReadOnlyList<CategoryRoot> roots, CancellationToken ct)
     {
         var dir = Canonicalize(targetDir);
@@ -1938,7 +2051,7 @@ public class StrmEngine
 
         if (FindContainingRoot(roots, dir) == null)
         {
-            _logger.LogWarning("Refusing to delete streams in {Dir}: it is not inside a configured category folder", dir);
+            _logger.LogWarning("Refusing to delete streams in {Dir}: it is not inside a configured category folder or a Jellyfin library", dir);
             return false;
         }
 
@@ -1980,27 +2093,15 @@ public class StrmEngine
             return true;
         }
 
-        try
+        // Deliberately the unfiltered locations: an item folder must never be any library location, even one the
+        // safety filter of GetLibraryRoots would not accept as a deletion root.
+        foreach (var location in GetLibraryLocations())
         {
-            var folders = _libraryManager.GetVirtualFolders();
-            if (folders != null)
+            var canonical = Canonicalize(location);
+            if (canonical != null && PathEquals(canonical, canonicalDir))
             {
-                foreach (var folder in folders)
-                {
-                    foreach (var location in folder.Locations ?? Array.Empty<string>())
-                    {
-                        var canonical = Canonicalize(location);
-                        if (canonical != null && PathEquals(canonical, canonicalDir))
-                        {
-                            return true;
-                        }
-                    }
-                }
+                return true;
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Could not compare {Dir} with the Jellyfin library locations", canonicalDir);
         }
 
         return false;
@@ -2046,7 +2147,9 @@ public class StrmEngine
                 return result;
             }
 
-            var insideManagedRoots = FindContainingRoot(roots, dir) != null;
+            // Category roots only: this decides whether the folder is ours to (re)write metadata in. Library roots
+            // are used further down solely to drop the replaced version.
+            var insideCategoryRoots = FindContainingRoot(roots, dir) != null;
 
             var files = torrent.GetEffectiveFiles();
             var videoFiles = files.Where(f => EpisodeMatcher.IsVideoFile(f.Path)).ToList();
@@ -2128,7 +2231,7 @@ public class StrmEngine
             var origToUse = !string.IsNullOrWhiteSpace(request.OriginalTitle) ? request.OriginalTitle : origTitle;
             var yearToUse = request.Year ?? year;
 
-            changed |= await WriteMovieNfoAsync(dir, baseFolderName, titleToUse, origToUse, yearToUse, request.TmdbId, request.ImdbId, createOnly: !insideManagedRoots, cancellationToken);
+            changed |= await WriteMovieNfoAsync(dir, baseFolderName, titleToUse, origToUse, yearToUse, request.TmdbId, request.ImdbId, createOnly: !insideCategoryRoots, cancellationToken);
 
             // Remember it, so syncing never turns this alternate into a standalone item.
             _altStore.Register(hash, dir, request.TargetItemId, strmPath);
@@ -2136,7 +2239,7 @@ public class StrmEngine
             // Drop the replaced version only after the new one is safely on disk.
             if (oldHash != null)
             {
-                changed |= DeleteStreamByHashCore(dir, oldHash, roots, cancellationToken);
+                changed |= DeleteStreamByHashCore(dir, oldHash, GetManagedRoots(roots), cancellationToken);
             }
 
             if (changed)

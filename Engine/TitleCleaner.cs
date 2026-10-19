@@ -260,23 +260,19 @@ public static partial class TitleCleaner
         }
 
         var matches = NoiseTokensRegex().Matches(rawTitle);
-        if (matches.Count == 0)
-        {
-            return "1080p";
-        }
 
         var res = string.Empty;
         var hasRemux = false;
         var hasHdr = false;
         var hasDv = false;
         var is4K = false;
+        var hasWebDl = false;
 
         foreach (Match m in matches)
         {
             var val = m.Value.ToLowerInvariant();
-            if (val is "2160p" or "4k" or "uhd")
+            if (val is "2160p" or "4k" or "uhd" or "uhdremux")
             {
-                res = "2160p";
                 is4K = true;
             }
             else if (string.IsNullOrEmpty(res) && val is "1080p" or "1080i")
@@ -300,29 +296,42 @@ public static partial class TitleCleaner
             {
                 hasDv = true;
             }
+            if (val is "web-dl" or "webdl" or "web-dlrip" or "webrip")
+            {
+                hasWebDl = true;
+            }
         }
 
-        if (string.IsNullOrEmpty(res))
-        {
-            res = "1080p";
-        }
-
-        var parts = new List<string> { res };
-        if (is4K && !parts.Contains("4K"))
+        var parts = new List<string>();
+        if (is4K)
         {
             parts.Add("4K");
         }
+        else if (!string.IsNullOrEmpty(res))
+        {
+            parts.Add(res);
+        }
+        else
+        {
+            parts.Add("1080p");
+        }
+
         if (hasDv)
         {
             parts.Add("DV");
         }
-        if (hasHdr && !hasDv)
+        else if (hasHdr)
         {
             parts.Add("HDR");
         }
+
         if (hasRemux)
         {
             parts.Add("Remux");
+        }
+        else if (hasWebDl)
+        {
+            parts.Add("WEB-DL");
         }
 
         return string.Join(" ", parts);

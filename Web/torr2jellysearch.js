@@ -1317,6 +1317,7 @@
                             Link: link,
                             Tracker: tracker,
                             Seeders: seeds,
+                            TorrentTitle: title,
                             ReplaceExisting: false
                         };
 
@@ -1376,6 +1377,7 @@
                             Link: link,
                             Tracker: tracker,
                             Seeders: seeds,
+                            TorrentTitle: title,
                             ReplaceExisting: true,
                             OldTorrentHash: oldHash
                         };

@@ -65,6 +65,7 @@ public class AddAlternateStreamRequestDto
     public int? Year { get; set; }
     public int? TmdbId { get; set; }
     public string? ImdbId { get; set; }
+    public string? TorrentTitle { get; set; }
 }
 
 public class AlternateStreamResultDto

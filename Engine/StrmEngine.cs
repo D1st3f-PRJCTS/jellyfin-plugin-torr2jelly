@@ -54,6 +54,24 @@ public class StrmEngine
         _httpClient.Timeout = TimeSpan.FromSeconds(15);
     }
 
+    public static string FormatFileSize(long bytes)
+    {
+        if (bytes <= 0) return string.Empty;
+        const double gb = 1024.0 * 1024.0 * 1024.0;
+        const double mb = 1024.0 * 1024.0;
+        if (bytes >= 1024L * 1024L * 1024L)
+        {
+            var val = bytes / gb;
+            return $"{val:0.#} GB";
+        }
+        if (bytes >= 1024L * 1024L)
+        {
+            var val = bytes / mb;
+            return $"{val:0.#} MB";
+        }
+        return $"{bytes / 1024.0:0.#} KB";
+    }
+
     public static string FormatTemplate(string template, Dictionary<string, string> tokens)
     {
         if (string.IsNullOrWhiteSpace(template))
@@ -705,23 +723,23 @@ public class StrmEngine
                 }
                 catch { }
 
-                var versionLabel = "Default / Primary";
-                var bracketMatch = Regex.Match(baseName, @"\[([^\]]+)\]");
-                if (bracketMatch.Success)
+                var isPrimary = (!string.IsNullOrWhiteSpace(activeItemPath) && strmFile.Equals(activeItemPath, StringComparison.OrdinalIgnoreCase))
+                    || !baseName.Contains(" - ", StringComparison.Ordinal);
+
+                var versionLabel = isPrimary ? "Основна версія" : "Версія";
+                var dashIdx = baseName.IndexOf(" - ", StringComparison.Ordinal);
+                if (dashIdx >= 0 && dashIdx + 3 < baseName.Length)
                 {
-                    versionLabel = bracketMatch.Groups[1].Value;
+                    versionLabel = baseName.Substring(dashIdx + 3).Trim();
                 }
                 else
                 {
-                    var dashIdx = baseName.IndexOf(" - ", StringComparison.Ordinal);
-                    if (dashIdx >= 0 && dashIdx + 3 < baseName.Length)
+                    var bracketMatch = Regex.Match(baseName, @"\[([^\]]+)\]");
+                    if (bracketMatch.Success)
                     {
-                        versionLabel = baseName.Substring(dashIdx + 3).Trim();
+                        versionLabel = bracketMatch.Groups[1].Value;
                     }
                 }
-
-                var isPrimary = (!string.IsNullOrWhiteSpace(activeItemPath) && strmFile.Equals(activeItemPath, StringComparison.OrdinalIgnoreCase))
-                    || !baseName.Contains(" - ", StringComparison.Ordinal);
 
                 result.Add(new MovieStreamInfoDto
                 {
@@ -821,23 +839,39 @@ public class StrmEngine
                 await DeleteStreamByHashAsync(targetDir, request.OldTorrentHash, cancellationToken);
             }
 
+            var sizeBytes = mainFile.Length > 0 ? mainFile.Length : torrent.TorrentSize;
+            var sizeFormatted = FormatFileSize(sizeBytes);
+
+            var titleForQuality = !string.IsNullOrWhiteSpace(request.TorrentTitle)
+                ? request.TorrentTitle
+                : torrent.Title;
+
             var quality = !string.IsNullOrWhiteSpace(request.QualityTag)
                 ? request.QualityTag
-                : TitleCleaner.ExtractQualityTag(torrent.Title);
+                : TitleCleaner.ExtractQualityTag(titleForQuality);
 
-            var shortHash = torrent.Hash.Length >= 8 ? torrent.Hash[..8] : torrent.Hash;
-            var labelParts = new List<string>();
+            var versionParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(quality))
+            {
+                versionParts.Add(quality);
+            }
+            if (!string.IsNullOrWhiteSpace(sizeFormatted))
+            {
+                versionParts.Add($"({sizeFormatted})");
+            }
 
-            if (!string.IsNullOrWhiteSpace(quality)) labelParts.Add(quality);
-            if (!string.IsNullOrWhiteSpace(request.Tracker)) labelParts.Add(request.Tracker);
-            if (request.Seeders.HasValue && request.Seeders.Value > 0) labelParts.Add($"{request.Seeders.Value}s");
-            labelParts.Add(shortHash);
-
-            var versionLabel = string.Join(" ", labelParts);
+            var versionLabel = versionParts.Count > 0 ? string.Join(" ", versionParts) : "Alternate";
 
             var baseFolderName = Path.GetFileName(targetDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            var strmFileName = TitleCleaner.SanitizeFilename($"{baseFolderName} - [{versionLabel}].strm");
+            var strmFileName = TitleCleaner.SanitizeFilename($"{baseFolderName} - {versionLabel}.strm");
             var strmPath = Path.Combine(targetDir, strmFileName);
+
+            if (File.Exists(strmPath))
+            {
+                var shortHash = torrent.Hash.Length >= 8 ? torrent.Hash[..8] : torrent.Hash;
+                strmFileName = TitleCleaner.SanitizeFilename($"{baseFolderName} - {versionLabel} [{shortHash}].strm");
+                strmPath = Path.Combine(targetDir, strmFileName);
+            }
 
             var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream?link={torrent.Hash}&index={mainFile.Id}&play\n";
             await File.WriteAllTextAsync(strmPath, streamUrl, Encoding.UTF8, cancellationToken);

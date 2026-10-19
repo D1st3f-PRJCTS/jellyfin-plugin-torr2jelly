@@ -10,9 +10,33 @@
     var debounceTimer = null;
     var abortController = null;
     var isSearching = false;
+    var searchRequestId = 0; // only the latest search request may render
 
+    // Language: explicit override (set on the Torr2Jelly admin page) wins; otherwise default to
+    // Ukrainian when the Jellyfin UI language or the browser language is Ukrainian, else English.
     function getLang() {
-        return (localStorage.getItem('torr2jelly_lang') || 'en').toLowerCase();
+        try {
+            var stored = localStorage.getItem('torr2jelly_lang');
+            if (stored) return String(stored).toLowerCase();
+        } catch (e) { }
+
+        var candidates = [];
+        try {
+            if (window.Globalize && typeof window.Globalize.getCurrentLocale === 'function') {
+                candidates.push(window.Globalize.getCurrentLocale());
+            }
+        } catch (e) { }
+        try { candidates.push(document.documentElement.getAttribute('lang')); } catch (e) { }
+        try {
+            candidates.push(navigator.language);
+            if (navigator.languages && navigator.languages.length) candidates.push(navigator.languages[0]);
+        } catch (e) { }
+
+        for (var i = 0; i < candidates.length; i++) {
+            var c = candidates[i];
+            if (c && String(c).toLowerCase().indexOf('uk') === 0) return 'uk';
+        }
+        return 'en';
     }
 
     function getI18n() {
@@ -48,7 +72,22 @@
             noStreamsFound: isUk ? 'Не знайдено активних .strm файлів' : 'No active .strm files found',
             refreshingMedia: isUk ? 'Оновлюємо сторінку...' : 'Refreshing media...',
             streamAddedSuccess: isUk ? 'Роздачу успішно додано як версію стріму!' : 'Release successfully added to item!',
-            streamDeletedSuccess: isUk ? 'Стрім успішно видалено' : 'Stream deleted successfully'
+            streamDeletedSuccess: isUk ? 'Стрім успішно видалено' : 'Stream deleted successfully',
+            seriesBadge: isUk ? '📺 Серіал' : '📺 Series',
+            silverBadge: isUk ? '🥈 Срібна' : '🥈 Silver',
+            bronzeBadge: isUk ? '🥉 Бронзова' : '🥉 Bronze',
+            authorBadge: isUk ? '💎 Авторський' : '💎 Author',
+            exclusiveBadge: isUk ? '🔥 Ексклюзив' : '🔥 Exclusive',
+            noStreamsHint: isUk ? 'Перейдіть на вкладку "Пошук роздач", щоб знайти та додати версію.' : 'Switch to the "Find Releases" tab to find and add a version.',
+            deleteStreamTitle: isUk ? 'Видалити цей стрім' : 'Delete this stream',
+            searchPlaceholder: isUk ? 'Введіть назву для пошуку...' : 'Enter a title to search...',
+            findBtn: isUk ? '🔍 Знайти' : '🔍 Search',
+            nothingFound: isUk ? 'Нічого не знайдено' : 'Nothing found',
+            nothingFoundHint: isUk ? 'Спробуйте змінити пошуковий запит вище.' : 'Try changing the search query above.',
+            alreadyInLibrary: isUk ? '✓ ВЖЕ В МЕДІАТЕЦІ' : '✓ ALREADY IN LIBRARY',
+            unauthorized: isUk ? 'Потрібно знову увійти в обліковий запис Jellyfin.' : 'Please sign in to Jellyfin again.',
+            forbidden: isUk ? 'Недостатньо прав для цієї дії.' : 'You do not have permission to do this.',
+            searchFailed: isUk ? 'Не вдалося виконати пошук' : 'Search failed'
         };
     }
 
@@ -586,10 +625,130 @@
     }
 
     function getApiUrl(endpoint) {
+        var ep = String(endpoint || '').replace(/^\/+/, '');
         if (window.ApiClient && typeof window.ApiClient.getUrl === 'function') {
-            return window.ApiClient.getUrl(endpoint);
+            return window.ApiClient.getUrl(ep);
         }
-        return '/' + endpoint.replace(/^\/+/, '');
+        // Base-URL-safe fallbacks: never assume the server lives at the host root.
+        if (window.ApiClient && typeof window.ApiClient.serverAddress === 'function') {
+            var base = String(window.ApiClient.serverAddress() || '').replace(/\/+$/, '');
+            if (base) return base + '/' + ep;
+        }
+        // The web client is served from {BaseUrl}/web/index.html, so ../ lands on {BaseUrl}/.
+        return '../' + ep;
+    }
+
+    // Prefer the magnet link; DownloadUrl (indexer proxy link) is only a fallback.
+    function pickLink(item) {
+        return (item && (item.MagnetUrl || item.DownloadUrl)) || '';
+    }
+
+    // Series detection with word boundaries so tokens like "DTS5.1" or "1080x720" are not mistaken
+    // for season/episode markers. (\b is ASCII-only in JS, so the Cyrillic alternatives stay unbounded.)
+    var SHOW_TITLE_REGEX = /(?:\bS\d{1,2}(?:E\d+)?\b|\bseasons?\b(?![\s._-]+of\b)|сезон|\b\d{1,2}x\d{1,2}\b|серій|серії|серії|\bep\d{1,3}\b)/i;
+    function isShowTitle(title) {
+        return SHOW_TITLE_REGEX.test(title || '');
+    }
+
+    // Friendly message for auth failures; null for everything else.
+    function authErrorMessage(status, i18n) {
+        if (status === 401) return i18n.unauthorized;
+        if (status === 403) return i18n.forbidden;
+        return null;
+    }
+
+    // Best human-readable error for a failed response (friendly for 401/403, server "error" field otherwise).
+    async function readErrorMessage(res, i18n) {
+        var friendly = authErrorMessage(res.status, i18n);
+        if (friendly) return friendly;
+        var errData = await res.json().catch(function () { return {}; });
+        return (errData && errData.error) ? String(errData.error) : (i18n.failedResponse + ' (' + res.status + ')');
+    }
+
+    // Cached "is the current user a Jellyfin administrator" lookup (per user id). Failures are retried
+    // at most every 30 s so the 400 ms page watcher can't hammer the server.
+    var _adminState = { userId: null, value: null, pending: false, failedAt: 0 };
+    function getCurrentUserIdSafe() {
+        try {
+            if (window.ApiClient && typeof window.ApiClient.getCurrentUserId === 'function') {
+                return window.ApiClient.getCurrentUserId() || null;
+            }
+        } catch (e) { }
+        return null;
+    }
+
+    // Returns true / false when known, null while the lookup is in flight.
+    function getIsAdminCached() {
+        var userId = getCurrentUserIdSafe();
+        if (!userId || !window.ApiClient || typeof window.ApiClient.getCurrentUser !== 'function') return false;
+
+        if (_adminState.userId !== userId) {
+            _adminState = { userId: userId, value: null, pending: false, failedAt: 0 };
+        }
+        if (_adminState.value !== null) return _adminState.value;
+        if (_adminState.pending) return null;
+        if (_adminState.failedAt && (Date.now() - _adminState.failedAt) < 30000) return false;
+
+        _adminState.pending = true;
+        var requestedFor = userId;
+        var finish = function (value, failed) {
+            if (_adminState.userId !== requestedFor) return;
+            _adminState.pending = false;
+            if (failed) {
+                _adminState.failedAt = Date.now();
+            } else {
+                _adminState.value = value;
+            }
+        };
+        try {
+            Promise.resolve(window.ApiClient.getCurrentUser()).then(function (user) {
+                finish(!!(user && user.Policy && user.Policy.IsAdministrator), false);
+            }).catch(function () { finish(false, true); });
+        } catch (e) {
+            finish(false, true);
+        }
+        return null;
+    }
+
+    // Cached item type lookup so the Streams button only shows on Movie items.
+    var _itemTypeCache = {}; // itemId -> { type: string|null, pending: bool, failedAt: number }
+    function getItemTypeCached(itemId) {
+        var entry = _itemTypeCache[itemId];
+        if (entry && entry.type) return entry.type;
+        if (entry && entry.pending) return null;
+        if (entry && entry.failedAt && (Date.now() - entry.failedAt) < 30000) return '';
+        if (!window.ApiClient || typeof window.ApiClient.getItem !== 'function') return '';
+        var userId = getCurrentUserIdSafe();
+        if (!userId) return '';
+
+        entry = _itemTypeCache[itemId] = { type: null, pending: true, failedAt: 0 };
+        try {
+            Promise.resolve(window.ApiClient.getItem(userId, itemId)).then(function (item) {
+                entry.pending = false;
+                if (item && item.Type) {
+                    entry.type = String(item.Type);
+                } else {
+                    entry.failedAt = Date.now();
+                }
+            }).catch(function () {
+                entry.pending = false;
+                entry.failedAt = Date.now();
+            });
+        } catch (e) {
+            entry.pending = false;
+            entry.failedAt = Date.now();
+        }
+        return null;
+    }
+
+    // true = show the Streams button, false = never for this item/user, null = still resolving.
+    function isStreamsButtonEligible(itemId) {
+        var isAdmin = getIsAdminCached();
+        if (isAdmin === false) return false;
+        if (isAdmin === null) return null;
+        var type = getItemTypeCached(itemId);
+        if (type === null) return null;
+        return type === 'Movie';
     }
 
     function getAuthHeaders() {
@@ -604,17 +763,40 @@
         return headers;
     }
 
+    // Cancels any in-flight search and invalidates its request id so a late response can never render.
+    function cancelPendingSearch() {
+        clearTimeout(debounceTimer);
+        searchRequestId++;
+        if (abortController) {
+            try { abortController.abort(); } catch (e) { }
+            abortController = null;
+        }
+        isSearching = false;
+    }
+
+    // Forget everything about the previous search (used when the user leaves the search page).
+    function resetSearchState() {
+        cancelPendingSearch();
+        currentQuery = '';
+        window._t2jLastQuery = '';
+        window._t2jLastResults = [];
+        removeResultsContainer();
+    }
+
     async function performSearch(query) {
         query = (query || '').trim();
         if (query.length < 2) {
+            cancelPendingSearch();
             removeResultsContainer();
             return;
         }
 
         if (abortController) {
-            abortController.abort();
+            try { abortController.abort(); } catch (e) { }
         }
-        abortController = new AbortController();
+        var myAbort = new AbortController();
+        abortController = myAbort;
+        var myRequestId = ++searchRequestId;
 
         isSearching = true;
         renderLoadingIndicator(query);
@@ -622,23 +804,30 @@
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Search?query=' + encodeURIComponent(query)), {
                 headers: getAuthHeaders(),
-                signal: abortController.signal
+                signal: myAbort.signal
             });
+            if (myRequestId !== searchRequestId) return;
 
             if (!res.ok) {
                 removeResultsContainer();
+                var authMsg = authErrorMessage(res.status, getI18n());
+                if (authMsg) showToast(authMsg, false);
                 return;
             }
 
             var results = await res.json();
-            await renderSearchResults(query, results || []);
+            if (myRequestId !== searchRequestId) return;
+            await renderSearchResults(query, results || [], myRequestId);
         } catch (err) {
-            if (err.name !== 'AbortError') {
+            if (err.name !== 'AbortError' && myRequestId === searchRequestId) {
                 console.error('[Torr2Jelly] Search error:', err);
                 removeResultsContainer();
             }
         } finally {
-            isSearching = false;
+            // A stale request finishing late must not clear the "searching" flag of the newer one.
+            if (myRequestId === searchRequestId) {
+                isSearching = false;
+            }
         }
     }
 
@@ -717,8 +906,9 @@
         ];
     }
 
-    async function renderSearchResults(query, results) {
+    async function renderSearchResults(query, results, requestId) {
         var i18n = getI18n();
+        if (requestId !== undefined && requestId !== searchRequestId) return;
         if (!results || results.length === 0) {
             var target = getSearchTargetContainer();
             if (target && target.mode === 'empty') {
@@ -788,6 +978,8 @@
         `;
 
         var libs = await getAvailableLibraries();
+        // A newer search (or leaving the page) may have happened while the library list was loading.
+        if (requestId !== undefined && requestId !== searchRequestId) return;
         var showLib = libs.find(function (l) {
             var n = (l.Name || '').toLowerCase();
             var t = (l.Type || '').toLowerCase();
@@ -801,13 +993,13 @@
 
         var cardsHtml = '<div class="t2j-cards-grid">';
         displayResults.forEach(function (item, idx) {
-            var rawLink = item.DownloadUrl || item.MagnetUrl || '';
+            var rawLink = pickLink(item);
             var title = item.Title || '';
             var size = item.SizeFormatted || '';
-            var seeds = item.Seeders || 0;
+            var seeds = parseInt(item.Seeders, 10) || 0;
             var tracker = item.Indexer || 'Torrent';
             var isGold = !!(item.IsGold || item.isGold);
-            var isShow = /(?:s\d{1,2}|season|сезон|\d{1,2}x\d{1,2}|серій|сері\u0457|серії|ep\d{1,3})/i.test(title);
+            var isShow = isShowTitle(title);
 
             var rawTags = (item.Tags || item.tags || []).slice();
             var hasFreeleech = isGold || rawTags.some(function (tg) { return /freeleech|gold/i.test(tg); });
@@ -815,7 +1007,7 @@
             var hasBronze = !hasFreeleech && !hasHalfleech && rawTags.some(function (tg) { return /bronze/i.test(tg); });
 
             rawTags = rawTags.filter(function (tg) {
-                return !/^(freeleech|gold|halfleech|silver|bronze)$/i.test(tg.trim());
+                return !/^(freeleech|gold|halfleech|silver|bronze)$/i.test(String(tg || '').trim());
             });
 
             if (hasFreeleech) {
@@ -827,19 +1019,18 @@
             }
 
             var tagBadgesHtml = '';
-            var isUk = getLang() === 'uk';
             rawTags.forEach(function (tg) {
-                var ltg = tg.toLowerCase();
+                var ltg = String(tg || '').toLowerCase();
                 if (ltg === 'freeleech' || ltg === 'gold') {
                     tagBadgesHtml += '<span class="t2j-badge t2j-badge-gold">' + i18n.goldBadge + '</span>';
                 } else if (ltg === 'halfleech' || ltg === 'silver') {
-                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-silver">🥈 ' + (isUk ? 'Срібна' : 'Silver') + '</span>';
+                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-silver">' + i18n.silverBadge + '</span>';
                 } else if (ltg === 'bronze') {
-                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-bronze">🥉 ' + (isUk ? 'Бронзова' : 'Bronze') + '</span>';
+                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-bronze">' + i18n.bronzeBadge + '</span>';
                 } else if (ltg === 'internal' || ltg === 'author' || ltg.indexOf('автор') !== -1) {
-                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-author">💎 ' + (isUk ? 'Авторський' : 'Author') + '</span>';
+                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-author">' + i18n.authorBadge + '</span>';
                 } else if (ltg === 'exclusive' || ltg.indexOf('ексклюзив') !== -1) {
-                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-exclusive">🔥 ' + (isUk ? 'Ексклюзив' : 'Exclusive') + '</span>';
+                    tagBadgesHtml += '<span class="t2j-badge t2j-badge-exclusive">' + i18n.exclusiveBadge + '</span>';
                 } else if (ltg === 'doubleupload' || ltg === '2xupload') {
                     tagBadgesHtml += '<span class="t2j-badge t2j-badge-double">🚀 2x</span>';
                 }
@@ -869,7 +1060,7 @@
                             ${tagBadgesHtml}
                             <span class="t2j-badge t2j-badge-seeders">▲ ${seeds}</span>
                             <span class="t2j-badge t2j-badge-size">${escapeHtml(size)}</span>
-                            ${isShow ? '<span class="t2j-badge t2j-badge-tracker" style="color: #67e8f9; border-color: rgba(6, 182, 212, 0.4);">📺 Series</span>' : ''}
+                            ${isShow ? '<span class="t2j-badge t2j-badge-tracker" style="color: #67e8f9; border-color: rgba(6, 182, 212, 0.4);">' + escapeHtml(i18n.seriesBadge) + '</span>' : ''}
                         </div>
                         <div class="t2j-card-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
                     </div>
@@ -880,7 +1071,7 @@
                                 ${catOptionsHtml}
                             </select>
                         </div>
-                        <button type="button" class="t2j-add-btn" data-cat-id="${cardCatId}" data-link="${encodeURIComponent(rawLink)}" data-title="${encodeURIComponent(title)}" data-poster="${encodeURIComponent(item.PosterUrl || '')}" data-tmdb="${item.TmdbId || 0}">
+                        <button type="button" class="t2j-add-btn" data-cat-id="${cardCatId}" data-link="${encodeURIComponent(rawLink)}" data-title="${encodeURIComponent(title)}" data-poster="${encodeURIComponent(item.PosterUrl || '')}" data-tmdb="${parseInt(item.TmdbId, 10) || 0}">
                             <span>${i18n.addBtn}</span>
                         </button>
                     </div>
@@ -905,7 +1096,7 @@
                 if (!link) return;
 
                 // Pick selected category from dropdown, fallback to auto-detection
-                var isShow = /(?:s\d{1,2}|season|сезон|\d{1,2}x\d{1,2}|серій|сері\u0457|серії|ep\d{1,3})/i.test(itemTitle);
+                var isShow = isShowTitle(itemTitle);
                 var category = (catSelect && catSelect.value) ? catSelect.value : (isShow ? 'Shows' : 'Movies');
 
                 btn.disabled = true;
@@ -932,11 +1123,8 @@
                         btn.innerHTML = '<span>' + i18n.added + '</span>';
                         showToast('✓ "' + itemTitle + '" ' + i18n.addedToast, true);
 
-                        // Trigger fast scan
-                        fetch(getApiUrl('Plugins/Torr2Jelly/Library/Scan'), {
-                            method: 'POST',
-                            headers: getAuthHeaders()
-                        }).catch(function () {});
+                        // No separate library scan here: the add request above uses SyncNow, which already
+                        // writes the .strm files and notifies Jellyfin about the changed path.
 
                         // After 2.5 seconds, refresh page or re-trigger search
                         setTimeout(function () {
@@ -948,10 +1136,10 @@
                             }
                         }, 2500);
                     } else {
-                        var errData = await res.json().catch(function () { return {}; });
+                        var errMsg = await readErrorMessage(res, i18n);
                         btn.disabled = false;
                         btn.innerHTML = '<span>' + i18n.serverError + '</span>';
-                        showToast(i18n.failedResponse + ': ' + (errData.error || i18n.failedResponse), false);
+                        showToast(authErrorMessage(res.status, i18n) ? errMsg : (i18n.failedResponse + ': ' + errMsg), false);
                     }
                 } catch (e) {
                     btn.disabled = false;
@@ -965,17 +1153,26 @@
     window._t2jSetFilter = function (filterMode) {
         window._t2jCurrentFilter = filterMode;
         if (window._t2jLastQuery && window._t2jLastResults) {
-            renderSearchResults(window._t2jLastQuery, window._t2jLastResults);
+            renderSearchResults(window._t2jLastQuery, window._t2jLastResults, searchRequestId);
         }
     };
 
     // Observer and query sync
+    var _onSearchPage = false;
     function checkSearchPage() {
         var searchPage = document.getElementById('searchPage') || document.querySelector('.searchPage');
-        if (!searchPage) {
-            removeResultsContainer();
+        var onSearchRoute = (window.location.hash || '').indexOf('/search') !== -1;
+        if (!searchPage || searchPage.classList.contains('hide') || !onSearchRoute) {
+            // Left the search page (SPA navigation): drop the old query, in-flight request and results.
+            if (_onSearchPage) {
+                _onSearchPage = false;
+                resetSearchState();
+            } else {
+                removeResultsContainer();
+            }
             return;
         }
+        _onSearchPage = true;
 
         var searchInput = searchPage.querySelector('input.emby-input') ||
                           searchPage.querySelector('input[type="search"]') ||
@@ -986,28 +1183,47 @@
         if (!searchInput._t2jBound) {
             searchInput._t2jBound = true;
             searchInput.addEventListener('input', function () {
+                searchInput._t2jTyped = true;
                 var val = (searchInput.value || '').trim();
-                if (val !== currentQuery) {
-                    currentQuery = val;
-                    clearTimeout(debounceTimer);
-                    debounceTimer = setTimeout(function () {
-                        performSearch(currentQuery);
-                    }, 450);
+                if (val === currentQuery) return;
+                currentQuery = val;
+                if (val.length < 2) {
+                    // Box cleared (or too short): stop the running search and drop its results.
+                    cancelPendingSearch();
+                    removeResultsContainer();
+                    return;
                 }
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(function () {
+                    performSearch(currentQuery);
+                }, 450);
             });
         }
 
         var hash = window.location.hash || '';
         var queryMatch = hash.match(/[?&]query=([^&]+)/);
-        var urlQuery = queryMatch ? decodeURIComponent(queryMatch[1]).trim() : '';
-        var effectiveQuery = (searchInput.value || urlQuery || '').trim();
+        var urlQuery = '';
+        if (queryMatch) {
+            try { urlQuery = decodeURIComponent(queryMatch[1]).trim(); } catch (e) { urlQuery = ''; }
+        }
+        // Once the user has typed in the box, the box is the source of truth; the URL query is only a
+        // starting value (otherwise clearing the box would resurrect the old query from the URL).
+        var rawEffective = searchInput._t2jTyped ? (searchInput.value || '') : (searchInput.value || urlQuery || '');
+        var effectiveQuery = rawEffective.trim();
 
-        if (effectiveQuery && effectiveQuery !== currentQuery && !isSearching) {
-            currentQuery = effectiveQuery;
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(function () {
-                performSearch(currentQuery);
-            }, 450);
+        if (effectiveQuery !== currentQuery) {
+            if (effectiveQuery.length < 2) {
+                // Cleared programmatically (no input event fired)
+                cancelPendingSearch();
+                currentQuery = effectiveQuery;
+                removeResultsContainer();
+            } else if (!isSearching) {
+                currentQuery = effectiveQuery;
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(function () {
+                    performSearch(currentQuery);
+                }, 450);
+            }
         }
     }
 
@@ -1018,10 +1234,20 @@
     var _drawerData = null;
     var _activeDrawerTab = 'streams'; // 'streams' or 'search'
     var _drawerSearchFilter = 'all';
+    var _drawerToken = 0;        // bumped every time a drawer is opened or closed
+    var _drawerItemId = null;    // item the current drawer belongs to
 
     async function openStreamsDrawer(itemId) {
         var existing = document.getElementById('t2j-drawer-root');
         if (existing) existing.remove();
+
+        // Fresh drawer state for every open, so data/tab/filter of a previous item can never leak into
+        // this one, and responses that arrive for a previous open are ignored.
+        var myToken = ++_drawerToken;
+        _drawerItemId = itemId;
+        _drawerData = null;
+        _activeDrawerTab = 'streams';
+        _drawerSearchFilter = 'all';
 
         var root = document.createElement('div');
         root.id = 't2j-drawer-root';
@@ -1030,6 +1256,11 @@
         backdrop.className = 't2j-drawer-backdrop';
         function closeDrawer() {
             root.remove();
+            if (_drawerToken === myToken) {
+                _drawerToken++;
+                _drawerItemId = null;
+                _drawerData = null;
+            }
             refreshStreamsButtonCount(itemId);
         }
         backdrop.onclick = closeDrawer;
@@ -1084,9 +1315,12 @@
 
         // Fetch alternatives and current streams
         try {
-            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + itemId + '/Alternatives'), { headers: getAuthHeaders() });
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + encodeURIComponent(itemId) + '/Alternatives'), { headers: getAuthHeaders() });
+            if (myToken !== _drawerToken) return;
             if (res.ok) {
-                _drawerData = await res.json();
+                var loaded = await res.json();
+                if (myToken !== _drawerToken) return;
+                _drawerData = loaded;
                 var titleEl = document.getElementById('t2j-drawer-item-title');
                 if (titleEl) {
                     titleEl.textContent = _drawerData.Title + (_drawerData.Year ? ' (' + _drawerData.Year + ')' : '');
@@ -1098,22 +1332,25 @@
 
                 renderDrawerContent(itemId);
             } else {
-                var body = document.getElementById('t2j-drawer-body');
-                if (body) {
-                    body.innerHTML = '<div style="color: #ef4444; padding: 20px;">' + i18n.failedResponse + '</div>';
+                var failBody = document.getElementById('t2j-drawer-body');
+                var failMsg = authErrorMessage(res.status, i18n) || i18n.failedResponse;
+                if (failBody) {
+                    failBody.innerHTML = '<div style="color: #ef4444; padding: 20px;">' + escapeHtml(failMsg) + '</div>';
                 }
+                if (authErrorMessage(res.status, i18n)) showToast(failMsg, false);
             }
         } catch (e) {
-            var body = document.getElementById('t2j-drawer-body');
-            if (body) {
-                body.innerHTML = '<div style="color: #ef4444; padding: 20px;">' + i18n.connError + ': ' + e.message + '</div>';
+            if (myToken !== _drawerToken) return;
+            var errBody = document.getElementById('t2j-drawer-body');
+            if (errBody) {
+                errBody.innerHTML = '<div style="color: #ef4444; padding: 20px;">' + escapeHtml(i18n.connError + ': ' + (e && e.message ? e.message : e)) + '</div>';
             }
         }
     }
 
     function renderDrawerContent(itemId) {
         var body = document.getElementById('t2j-drawer-body');
-        if (!body || !_drawerData) return;
+        if (!body || !_drawerData || _drawerItemId !== itemId) return;
 
         var i18n = getI18n();
 
@@ -1124,7 +1361,7 @@
                     <div style="text-align: center; padding: 40px 20px; color: #94a3b8;">
                         <div style="font-size: 32px; margin-bottom: 10px;">📂</div>
                         <div style="font-size: 1.1em; font-weight: 600; color: #cbd5e1;">${i18n.noStreamsFound}</div>
-                        <div style="font-size: 0.85em; margin-top: 6px;">Перейдіть на вкладку "Пошук роздач", щоб знайти та додати версію.</div>
+                        <div style="font-size: 0.85em; margin-top: 6px;">${escapeHtml(i18n.noStreamsHint)}</div>
                     </div>
                 `;
                 return;
@@ -1142,7 +1379,7 @@
                                 <span class="t2j-badge ${isPrimary ? 't2j-badge-tracker' : 't2j-badge-silver'}" style="${isPrimary ? 'background: #059669; color: #fff;' : ''}">
                                     ${isPrimary ? i18n.currentBadge : i18n.versionBadge}
                                 </span>
-                                ${shortHash ? `<span class="t2j-badge t2j-badge-tracker" style="font-family: monospace;">#${shortHash}</span>` : ''}
+                                ${shortHash ? `<span class="t2j-badge t2j-badge-tracker" style="font-family: monospace;">#${escapeHtml(shortHash)}</span>` : ''}
                             </div>
                             <div class="t2j-stream-label">${escapeHtml(s.VersionLabel || s.Name)}</div>
                             <div class="t2j-stream-sub">
@@ -1150,7 +1387,7 @@
                             </div>
                         </div>
                         ${s.TorrentHash ? `
-                            <button type="button" class="t2j-stream-del-btn" title="Видалити цей стрім" data-hash="${s.TorrentHash}" data-name="${escapeHtml(s.VersionLabel || s.Name)}">
+                            <button type="button" class="t2j-stream-del-btn" title="${escapeHtml(i18n.deleteStreamTitle)}" data-hash="${escapeHtml(s.TorrentHash)}" data-name="${escapeHtml(s.VersionLabel || s.Name)}">
                                 🗑️
                             </button>
                         ` : ''}
@@ -1171,18 +1408,18 @@
                     btn.innerHTML = '<span class="t2j-status-spinner"></span>';
 
                     try {
-                        var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + itemId + '/Streams/' + hash), {
+                        var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + encodeURIComponent(itemId) + '/Streams/' + encodeURIComponent(hash)), {
                             method: 'DELETE',
                             headers: getAuthHeaders()
                         });
                         if (res.ok) {
                             showToast('✓ ' + i18n.streamDeletedSuccess, true);
-                            openStreamsDrawer(itemId);
+                            if (_drawerItemId === itemId) openStreamsDrawer(itemId);
                             refreshStreamsButtonCount(itemId);
                         } else {
                             btn.disabled = false;
                             btn.innerHTML = '🗑️';
-                            showToast(i18n.serverError, false);
+                            showToast(authErrorMessage(res.status, i18n) || i18n.serverError, false);
                         }
                     } catch (e) {
                         btn.disabled = false;
@@ -1204,8 +1441,8 @@
 
             var html = `
                 <div class="t2j-drawer-search-bar">
-                    <input type="text" class="t2j-drawer-input" id="t2j-drawer-search-input" value="${escapeHtml(queryVal)}" placeholder="Введіть назву для пошуку..." />
-                    <button type="button" class="t2j-drawer-search-btn" id="t2j-drawer-search-btn">🔍 Знайти</button>
+                    <input type="text" class="t2j-drawer-input" id="t2j-drawer-search-input" value="${escapeHtml(queryVal)}" placeholder="${escapeHtml(i18n.searchPlaceholder)}" />
+                    <button type="button" class="t2j-drawer-search-btn" id="t2j-drawer-search-btn">${escapeHtml(i18n.findBtn)}</button>
                 </div>
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                     <div class="t2j-filter-chips">
@@ -1220,8 +1457,8 @@
                 html += `
                     <div style="text-align: center; padding: 40px 20px; color: #94a3b8;">
                         <div style="font-size: 32px; margin-bottom: 10px;">🔍</div>
-                        <div style="font-size: 1.05em; font-weight: 600; color: #cbd5e1;">Нічого не знайдено</div>
-                        <div style="font-size: 0.85em; margin-top: 6px;">Спробуйте змінити пошуковий запит вище.</div>
+                        <div style="font-size: 1.05em; font-weight: 600; color: #cbd5e1;">${escapeHtml(i18n.nothingFound)}</div>
+                        <div style="font-size: 0.85em; margin-top: 6px;">${escapeHtml(i18n.nothingFoundHint)}</div>
                     </div>
                 `;
             } else {
@@ -1231,9 +1468,9 @@
 
                 activeList.forEach(function (item, idx) {
                     var title = item.Title || '';
-                    var rawLink = item.DownloadUrl || item.MagnetUrl || '';
+                    var rawLink = pickLink(item);
                     var size = item.SizeFormatted || '';
-                    var seeds = item.Seeders || 0;
+                    var seeds = parseInt(item.Seeders, 10) || 0;
                     var tracker = item.Indexer || 'Torrent';
                     var isGold = !!(item.IsGold || item.isGold);
 
@@ -1257,7 +1494,7 @@
                                     ${tagBadgesHtml}
                                     <span class="t2j-badge t2j-badge-seeders">▲ ${seeds}</span>
                                     <span class="t2j-badge t2j-badge-size">${escapeHtml(size)}</span>
-                                    ${isAdded ? '<span class="t2j-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">✓ ВЖЕ В МЕДІАТЕЦІ</span>' : ''}
+                                    ${isAdded ? '<span class="t2j-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">' + escapeHtml(i18n.alreadyInLibrary) + '</span>' : ''}
                                 </div>
                                 <div class="t2j-card-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
                             </div>
@@ -1266,7 +1503,7 @@
                                     <span>${i18n.addAsVersionBtn}</span>
                                 </button>
                                 ${primaryStream && primaryStream.TorrentHash ? `
-                                    <button type="button" class="t2j-btn-secondary t2j-btn-replace" data-idx="${idx}" data-link="${encodeURIComponent(rawLink)}" data-title="${encodeURIComponent(title)}" data-tracker="${escapeHtml(tracker)}" data-seeds="${seeds}" data-oldhash="${primaryStream.TorrentHash}">
+                                    <button type="button" class="t2j-btn-secondary t2j-btn-replace" data-idx="${idx}" data-link="${encodeURIComponent(rawLink)}" data-title="${encodeURIComponent(title)}" data-tracker="${escapeHtml(tracker)}" data-seeds="${seeds}" data-oldhash="${escapeHtml(primaryStream.TorrentHash)}">
                                         <span>${i18n.replaceStreamBtn}</span>
                                     </button>
                                 ` : ''}
@@ -1281,6 +1518,7 @@
 
             var inputEl = document.getElementById('t2j-drawer-search-input');
             var searchBtn = document.getElementById('t2j-drawer-search-btn');
+            var drawerTokenAtRender = _drawerToken;
             async function triggerDrawerSearch() {
                 var q = (inputEl.value || '').trim();
                 if (!q) return;
@@ -1288,19 +1526,24 @@
                 searchBtn.innerHTML = '<span class="t2j-status-spinner"></span>';
                 try {
                     var sres = await fetch(getApiUrl('Plugins/Torr2Jelly/Search?query=' + encodeURIComponent(q)), { headers: getAuthHeaders() });
+                    // The drawer was closed or re-opened for another item while we waited: drop the response.
+                    if (drawerTokenAtRender !== _drawerToken || !_drawerData) return;
                     if (sres.ok) {
                         var alts = await sres.json();
+                        if (drawerTokenAtRender !== _drawerToken || !_drawerData) return;
                         _drawerData.Alternatives = alts || [];
                         _drawerData.SearchQuery = q;
                         var tabSearch = document.getElementById('t2j-tab-search');
                         if (tabSearch) tabSearch.textContent = i18n.searchAlternativesTab + ' (' + _drawerData.Alternatives.length + ')';
                         renderDrawerContent(itemId);
+                    } else {
+                        showToast(authErrorMessage(sres.status, i18n) || i18n.searchFailed, false);
                     }
                 } catch (e) {
                     showToast(i18n.connError, false);
                 } finally {
                     searchBtn.disabled = false;
-                    searchBtn.innerHTML = '🔍 Знайти';
+                    searchBtn.innerHTML = escapeHtml(i18n.findBtn);
                 }
             }
 
@@ -1346,7 +1589,7 @@
                             ReplaceExisting: false
                         };
 
-                        var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + itemId + '/AlternateStream'), {
+                        var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + encodeURIComponent(itemId) + '/AlternateStream'), {
                             method: 'POST',
                             headers: getAuthHeaders(),
                             body: JSON.stringify(payload)
@@ -1357,9 +1600,9 @@
                             btn.innerHTML = '<span>' + i18n.added + '</span>';
                             showToast('✓ ' + i18n.streamAddedSuccess, true);
 
+                            // Reopen the drawer only if it is still showing this same item.
                             setTimeout(function () {
-                                _activeDrawerTab = 'streams';
-                                openStreamsDrawer(itemId);
+                                if (_drawerItemId === itemId) openStreamsDrawer(itemId);
                             }, 1200);
                             refreshStreamsButtonCount(itemId);
 
@@ -1371,10 +1614,10 @@
                                 }).catch(function () {});
                             }
                         } else {
-                            var errData = await res.json().catch(function () { return {}; });
+                            var errMsg = await readErrorMessage(res, i18n);
                             btn.disabled = false;
                             btn.innerHTML = '<span>' + i18n.serverError + '</span>';
-                            showToast(i18n.failedResponse + ': ' + (errData.error || i18n.failedResponse), false);
+                            showToast(authErrorMessage(res.status, i18n) ? errMsg : (i18n.failedResponse + ': ' + errMsg), false);
                         }
                     } catch (e) {
                         btn.disabled = false;
@@ -1408,7 +1651,7 @@
                             OldTorrentHash: oldHash
                         };
 
-                        var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + itemId + '/AlternateStream'), {
+                        var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + encodeURIComponent(itemId) + '/AlternateStream'), {
                             method: 'POST',
                             headers: getAuthHeaders(),
                             body: JSON.stringify(payload)
@@ -1419,9 +1662,9 @@
                             btn.innerHTML = '<span>' + i18n.added + '</span>';
                             showToast('✓ ' + i18n.streamAddedSuccess, true);
 
+                            // Reopen the drawer only if it is still showing this same item.
                             setTimeout(function () {
-                                _activeDrawerTab = 'streams';
-                                openStreamsDrawer(itemId);
+                                if (_drawerItemId === itemId) openStreamsDrawer(itemId);
                             }, 1200);
                             refreshStreamsButtonCount(itemId);
 
@@ -1433,10 +1676,10 @@
                                 }).catch(function () {});
                             }
                         } else {
-                            var errData = await res.json().catch(function () { return {}; });
+                            var errMsg = await readErrorMessage(res, i18n);
                             btn.disabled = false;
                             btn.innerHTML = '<span>' + i18n.serverError + '</span>';
-                            showToast(i18n.failedResponse + ': ' + (errData.error || i18n.failedResponse), false);
+                            showToast(authErrorMessage(res.status, i18n) ? errMsg : (i18n.failedResponse + ': ' + errMsg), false);
                         }
                     } catch (e) {
                         btn.disabled = false;
@@ -1501,7 +1744,7 @@
         if (!btn || !itemId) return;
         var countEl = btn.querySelector('.t2j-stream-count');
         try {
-            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + itemId + '/Streams'), { headers: getAuthHeaders() });
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + encodeURIComponent(itemId) + '/Streams'), { headers: getAuthHeaders() });
             if (res.ok) {
                 var streams = await res.json();
                 var i18n = getI18n();
@@ -1564,7 +1807,8 @@
                 if (!currentPage) return;
                 var currentId = getActiveItemId(currentPage);
                 var curContainer = currentPage.querySelector('.mainDetailButtons');
-                if (curContainer && currentId && !curContainer.querySelector('.t2j-item-streams-btn')) {
+                if (curContainer && currentId && !curContainer.querySelector('.t2j-item-streams-btn')
+                    && isStreamsButtonEligible(currentId) === true) {
                     injectStreamsButton(currentPage, curContainer, currentId);
                 }
             });
@@ -1581,6 +1825,15 @@
 
         var allContainers = page.querySelectorAll('.mainDetailButtons');
         if (allContainers.length === 0) return;
+
+        // Streams management is admin-only on the server and only meaningful for movies, so only
+        // admins get the button and only on Movie items. null = still resolving (admin/type lookup).
+        var eligible = isStreamsButtonEligible(itemId);
+        if (eligible === null) return;
+        if (eligible === false) {
+            page.querySelectorAll('.t2j-item-streams-btn').forEach(function (b) { b.remove(); });
+            return;
+        }
 
         allContainers.forEach(function (container) {
             ensureButtonInContainer(page, container, itemId);
@@ -1622,12 +1875,16 @@
     document.addEventListener('viewshow', checkAllPages);
     document.addEventListener('pageshow', checkAllPages);
     window.addEventListener('hashchange', function () {
+        // Navigating away from the search route: forget the previous query/results immediately.
+        if ((window.location.hash || '').indexOf('/search') === -1) {
+            resetSearchState();
+        }
         setTimeout(checkAllPages, 50);
         setTimeout(checkAllPages, 250);
         setTimeout(checkAllPages, 600);
     });
     window.addEventListener('popstate', checkAllPages);
-    setInterval(checkAllPages, 400);
+    setInterval(function () { if (!document.hidden) checkAllPages(); }, 400);
     setTimeout(checkAllPages, 100);
     setTimeout(checkAllPages, 500);
 })();

@@ -64,6 +64,37 @@ public class Torr2JellyUserApiController : ControllerBase
 
     private bool IsAdministrator => User.IsInRole(ApiPolicies.AdministratorRole);
 
+    private static bool IsAllowedForRegularUser(string? link, PluginConfiguration config)
+    {
+        if (!TorrentLinkResolver.TryNormalize(link, out var normalized, out var isHttp, out _))
+        {
+            return true; // invalid links are rejected by the resolver with a proper message
+        }
+
+        if (!isHttp)
+        {
+            return true;
+        }
+
+        if (!Uri.TryCreate(normalized, UriKind.Absolute, out var target))
+        {
+            return false;
+        }
+
+        foreach (var baseUrl in new[] { config.EnableProwlarr ? config.ProwlarrUrl : null, config.EnableTorznab ? config.TorznabUrl : null })
+        {
+            if (!string.IsNullOrWhiteSpace(baseUrl)
+                && Uri.TryCreate(baseUrl.Trim(), UriKind.Absolute, out var indexer)
+                && string.Equals(indexer.Host, target.Host, StringComparison.OrdinalIgnoreCase)
+                && indexer.Port == target.Port)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     [HttpGet("Search")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult<List<TorrentSearchResult>>> Search(
@@ -148,13 +179,21 @@ public class Torr2JellyUserApiController : ControllerBase
         [FromBody] AddTorrentRequestDto req,
         CancellationToken cancellationToken)
     {
+        var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        var isAdmin = IsAdministrator;
+
+        // The server fetches http(s) links itself (to follow redirects to magnet links), so a regular user may only
+        // hand it links of the configured indexers; magnet links and bare hashes involve no request.
+        if (!isAdmin && !IsAllowedForRegularUser(req.Link, config))
+        {
+            return BadRequest(new { error = "Only magnet links, info-hashes or links from the configured indexers can be added." });
+        }
+
         var resolution = await _linkResolver.ResolveAsync(req.Link, cancellationToken);
         if (!resolution.Success)
         {
             return BadRequest(new { error = resolution.Error });
         }
-
-        var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
 
         // Only a configured category is passed on; anything else lets the engine route by what the release is.
         var category = config.Categories
@@ -166,7 +205,8 @@ public class Torr2JellyUserApiController : ControllerBase
             title = title.Substring(0, MaxTitleLength);
         }
 
-        var posterUrl = TorrentLinkResolver.SanitizePosterUrl(req.PosterUrl);
+        // Posters are downloaded by the server too; Jellyfin fetches artwork from its metadata providers anyway.
+        var posterUrl = isAdmin ? TorrentLinkResolver.SanitizePosterUrl(req.PosterUrl) : null;
         var tmdbId = req.TmdbId > 0 ? req.TmdbId : null;
         var imdbId = !string.IsNullOrWhiteSpace(req.ImdbId) && ImdbIdRegex.IsMatch(req.ImdbId.Trim()) ? req.ImdbId.Trim() : null;
 

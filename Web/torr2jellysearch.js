@@ -35,7 +35,7 @@
             serverError: isUk ? '⚠ Помилка сервера' : '⚠ Server Error',
             failedResponse: isUk ? 'Невдала відповідь' : 'Request failed',
             connError: isUk ? 'Помилка з\'єднання' : 'Connection error',
-            streamsBtn: isUk ? '⚡ Стріми' : '⚡ Streams',
+            streamsBtn: isUk ? 'Стріми' : 'Streams',
             drawerTitle: isUk ? 'Керування торрент-стрімами' : 'Manage Torrent Streams',
             activeStreamsTab: isUk ? 'Активні версії' : 'Active Versions',
             searchAlternativesTab: isUk ? 'Пошук роздач' : 'Find Releases',
@@ -1443,12 +1443,17 @@
     async function injectStreamsButton(page, buttonsContainer, itemId) {
         var i18n = getI18n();
         var btn = document.createElement('button');
+        btn.setAttribute('is', 'emby-button');
         btn.type = 'button';
-        btn.className = 'emby-button detailButton detailButton-primary t2j-item-streams-btn';
-        btn.setAttribute('title', 'Альтернативні стріми та версії (Torr2Jelly)');
-        btn.style.cssText = 'background: linear-gradient(135deg, #10b981, #059669); border: 1px solid #34d399; color: #fff; font-weight: 600; margin-left: 8px; padding: 0 14px; height: 42px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);';
+        btn.className = 'button-flat detailButton emby-button t2j-item-streams-btn';
+        btn.setAttribute('title', i18n.drawerTitle);
 
-        btn.innerHTML = '<span style="font-size: 16px;">⚡</span> <span class="t2j-btn-label">' + i18n.streamsBtn + '</span>';
+        btn.innerHTML = `
+            <div class="detailButton-content">
+                <span class="material-icons detailButton-icon" aria-hidden="true" style="color: #10b981;">bolt</span>
+                <span class="detailButton-text t2j-btn-label">${i18n.streamsBtn}</span>
+            </div>
+        `;
 
         btn.onclick = function (e) {
             e.preventDefault();
@@ -1456,12 +1461,7 @@
             openStreamsDrawer(itemId);
         };
 
-        var playBtn = buttonsContainer.querySelector('.btnPlay') || buttonsContainer.firstElementChild;
-        if (playBtn && playBtn.nextSibling) {
-            buttonsContainer.insertBefore(btn, playBtn.nextSibling);
-        } else {
-            buttonsContainer.appendChild(btn);
-        }
+        buttonsContainer.appendChild(btn);
 
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + itemId + '/Streams'), { headers: getAuthHeaders() });

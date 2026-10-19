@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace Jellyfin.Plugin.Torr2Jelly.Search.Models;
 
@@ -12,8 +13,14 @@ public class TorrentSearchResult
     public int Seeders { get; set; }
     public int Peers { get; set; }
     public string Indexer { get; set; } = string.Empty;
+
+    /// <summary>Download link for the browser. Never contains an <c>apikey</c> parameter (see <see cref="ProwlarrLinks.StripApiKey"/>).</summary>
     public string DownloadUrl { get; set; } = string.Empty;
+
+    /// <summary>Magnet link. Synthesised from <see cref="InfoHash"/> when the indexer supplied none.</summary>
     public string MagnetUrl { get; set; } = string.Empty;
+
+    /// <summary>Lowercase hex info-hash, or empty when unknown.</summary>
     public string InfoHash { get; set; } = string.Empty;
     public bool IsFreeleech { get; set; }
     public bool IsGold { get; set; }
@@ -24,16 +31,24 @@ public class TorrentSearchResult
     public string? ImdbId { get; set; }
     public int? TmdbId { get; set; }
 
+    private static readonly string[] SizeSuffixes = { "B", "KB", "MB", "GB", "TB", "PB", "EB" };
+
     public static string FormatBytes(long bytes)
     {
-        string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
+        if (bytes < 0)
+        {
+            bytes = 0;
+        }
+
         int counter = 0;
         decimal number = bytes;
-        while (Math.Round(number / 1024) >= 1)
+        // The suffix index is clamped so a huge value can never run past the array.
+        while (number >= 1024m && counter < SizeSuffixes.Length - 1)
         {
             number /= 1024;
             counter++;
         }
-        return $"{number:n1} {suffixes[counter]}";
+
+        return string.Format(CultureInfo.InvariantCulture, "{0:0.0} {1}", number, SizeSuffixes[counter]);
     }
 }

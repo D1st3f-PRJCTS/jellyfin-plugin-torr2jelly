@@ -36,7 +36,7 @@ public class TorrentSearchService
     public async Task<List<IndexerStatusDto>> GetAvailableIndexersAsync(CancellationToken cancellationToken = default)
     {
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
-        var disabled = new HashSet<string>(config.DisabledTrackers ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+        var policy = TrackerPolicy.FromConfig(config);
 
         var list = new List<IndexerStatusDto>();
         if (config.EnableProwlarr)
@@ -44,22 +44,12 @@ public class TorrentSearchService
             var prowlarrIndexers = await _prowlarr.GetIndexersAsync(cancellationToken);
             foreach (var idx in prowlarrIndexers)
             {
-                var isExplicitlyDisabled = disabled.Contains(idx.Name);
-                if (!isExplicitlyDisabled && config.TrackerRules != null)
-                {
-                    var rule = config.TrackerRules.FirstOrDefault(r => r.Tracker.Equals(idx.Name, StringComparison.OrdinalIgnoreCase));
-                    if (rule != null && !rule.Enabled)
-                    {
-                        isExplicitlyDisabled = true;
-                    }
-                }
-
                 list.Add(new IndexerStatusDto
                 {
                     Id = idx.Id,
                     Name = idx.Name,
                     EnabledInProwlarr = idx.Enable,
-                    DisabledInPlugin = isExplicitlyDisabled
+                    DisabledInPlugin = policy.IsDisabled(idx.Name)
                 });
             }
         }
@@ -75,78 +65,43 @@ public class TorrentSearchService
         CancellationToken cancellationToken = default)
     {
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
-        var results = new List<TorrentSearchResult>();
 
         // Determine category IDs
         List<int>? categoryIds = null;
-        if (!string.IsNullOrWhiteSpace(category))
+        if (!string.IsNullOrWhiteSpace(category) && config.Categories != null)
         {
-            var cat = config.Categories.FirstOrDefault(c => c.Name.Equals(category, StringComparison.OrdinalIgnoreCase));
-            if (cat != null && cat.ProwlarrCategories.Any())
+            var cat = config.Categories.FirstOrDefault(c =>
+                c != null && c.Name != null && c.Name.Equals(category, StringComparison.OrdinalIgnoreCase));
+            if (cat != null && cat.ProwlarrCategories != null && cat.ProwlarrCategories.Any())
             {
                 categoryIds = cat.ProwlarrCategories;
             }
         }
 
-        // Execute searches
+        // Providers run in parallel; a failing provider only loses its own results.
+        var searches = new List<Task<List<TorrentSearchResult>>>();
         if (config.EnableProwlarr)
         {
-            var prowlarrResults = await _prowlarr.SearchAsync(query, categoryIds, cancellationToken);
-            results.AddRange(prowlarrResults);
+            searches.Add(SearchProviderAsync(_prowlarr, query, categoryIds, cancellationToken));
         }
 
         if (config.EnableTorznab)
         {
-            var torznabResults = await _torznab.SearchAsync(query, categoryIds, cancellationToken);
-            results.AddRange(torznabResults);
+            searches.Add(SearchProviderAsync(_torznab, query, categoryIds, cancellationToken));
         }
 
-        // Filter by TrackerRules (enabled status + allowed tags per tracker)
-        if (config.TrackerRules != null && config.TrackerRules.Count > 0)
+        var perProvider = await Task.WhenAll(searches);
+        var results = perProvider
+            .SelectMany(r => r)
+            .Where(r => r != null)
+            .ToList();
+
+        // Filter by TrackerRules (enabled status + allowed tags per tracker) and DisabledTrackers.
+        // The same policy backs GetAvailableIndexersAsync, so what the UI shows as disabled is what is filtered here.
+        var policy = TrackerPolicy.FromConfig(config);
+        if (policy.HasAnyRestriction)
         {
-            var ruleMap = config.TrackerRules
-                .Where(r => !string.IsNullOrWhiteSpace(r.Tracker))
-                .ToDictionary(r => r.Tracker.Trim(), r => r, StringComparer.OrdinalIgnoreCase);
-
-            results = results.Where(r =>
-            {
-                var indexer = r.Indexer?.Trim() ?? string.Empty;
-                if (ruleMap.TryGetValue(indexer, out var rule))
-                {
-                    if (!rule.Enabled)
-                    {
-                        return false;
-                    }
-
-                    if (rule.AllowedTags != null && rule.AllowedTags.Count > 0)
-                    {
-                        var releaseTags = r.Tags ?? new List<string>();
-                        var hasTags = releaseTags.Count > 0;
-
-                        if (!hasTags)
-                        {
-                            return rule.AllowedTags.Any(t => t.Equals("regular", StringComparison.OrdinalIgnoreCase) ||
-                                                             t.Equals("untagged", StringComparison.OrdinalIgnoreCase));
-                        }
-
-                        return releaseTags.Any(t => rule.AllowedTags.Any(at => at.Equals(t, StringComparison.OrdinalIgnoreCase)));
-                    }
-
-                    return true;
-                }
-
-                if (config.DisabledTrackers != null && config.DisabledTrackers.Contains(indexer, StringComparer.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-
-                return true;
-            }).ToList();
-        }
-        else if (config.DisabledTrackers != null && config.DisabledTrackers.Count > 0)
-        {
-            var disabled = new HashSet<string>(config.DisabledTrackers, StringComparer.OrdinalIgnoreCase);
-            results = results.Where(r => !disabled.Contains(r.Indexer)).ToList();
+            results = results.Where(r => policy.Allows(r)).ToList();
         }
 
         // Filter by Gold/Tags according to user parameter or plugin configuration
@@ -161,23 +116,7 @@ public class TorrentSearchService
             results = results.Where(r => r.IsGold || (r.Tags != null && r.Tags.Count > 0)).ToList();
         }
 
-        // Deduplicate by InfoHash if present, otherwise by Title
-        var seenHashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var deduped = new List<TorrentSearchResult>();
-        foreach (var r in results)
-        {
-            if (!string.IsNullOrWhiteSpace(r.InfoHash))
-            {
-                if (seenHashes.Add(r.InfoHash))
-                {
-                    deduped.Add(r);
-                }
-            }
-            else
-            {
-                deduped.Add(r);
-            }
-        }
+        var deduped = DeduplicateByHash(results);
 
         if (shouldFilterGold)
         {
@@ -208,5 +147,201 @@ public class TorrentSearchService
         }
 
         return status;
+    }
+
+    /// <summary>
+    /// Runs one provider. Only the caller cancelling the request propagates (as <see cref="OperationCanceledException"/>,
+    /// which is not an error); any other failure, including a provider timeout, yields an empty list.
+    /// </summary>
+    private async Task<List<TorrentSearchResult>> SearchProviderAsync(
+        ITorrentSearchProvider provider,
+        string query,
+        IEnumerable<int>? categoryIds,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await provider.SearchAsync(query, categoryIds, cancellationToken) ?? new List<TorrentSearchResult>();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Search provider {Provider} timed out", provider.Name);
+            return new List<TorrentSearchResult>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Search provider {Provider} failed", provider.Name);
+            return new List<TorrentSearchResult>();
+        }
+    }
+
+    /// <summary>
+    /// Collapses results that share an info-hash (e.g. the same release via Prowlarr and Torznab, or via two
+    /// indexers), keeping the best copy: freeleech/gold first, then more seeders. Results without a hash are kept as-is.
+    /// </summary>
+    private static List<TorrentSearchResult> DeduplicateByHash(List<TorrentSearchResult> results)
+    {
+        var best = new Dictionary<string, TorrentSearchResult>(StringComparer.OrdinalIgnoreCase);
+        var order = new List<string>();
+        var deduped = new List<TorrentSearchResult>();
+
+        foreach (var r in results)
+        {
+            var hash = InfoHashHelper.Normalize(r.InfoHash);
+            if (hash.Length == 0)
+            {
+                deduped.Add(r);
+                continue;
+            }
+
+            if (!best.TryGetValue(hash, out var current))
+            {
+                best[hash] = r;
+                order.Add(hash);
+            }
+            else if (IsBetterCopy(r, current))
+            {
+                best[hash] = r;
+            }
+        }
+
+        foreach (var hash in order)
+        {
+            deduped.Add(best[hash]);
+        }
+
+        return deduped;
+    }
+
+    private static bool IsBetterCopy(TorrentSearchResult candidate, TorrentSearchResult current)
+    {
+        if (candidate.IsGold != current.IsGold)
+        {
+            return candidate.IsGold;
+        }
+
+        return candidate.Seeders > current.Seeders;
+    }
+
+    /// <summary>
+    /// A snapshot of DisabledTrackers + TrackerRules. Every lookup is built with GroupBy(...).First(), so duplicate
+    /// or null rules in a hand-edited config cannot throw.
+    /// </summary>
+    private sealed class TrackerPolicy
+    {
+        private sealed class RuleEntry
+        {
+            public bool Enabled { get; init; }
+
+            /// <summary>Canonical allowed tags; null means "no restriction".</summary>
+            public HashSet<string>? Allowed { get; init; }
+        }
+
+        private readonly HashSet<string> _disabled;
+        private readonly Dictionary<string, RuleEntry> _rules;
+
+        private TrackerPolicy(HashSet<string> disabled, Dictionary<string, RuleEntry> rules)
+        {
+            _disabled = disabled;
+            _rules = rules;
+        }
+
+        public bool HasAnyRestriction => _disabled.Count > 0 || _rules.Count > 0;
+
+        public static TrackerPolicy FromConfig(PluginConfiguration config)
+        {
+            var disabled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (config.DisabledTrackers != null)
+            {
+                foreach (var name in config.DisabledTrackers)
+                {
+                    if (!string.IsNullOrWhiteSpace(name))
+                    {
+                        disabled.Add(name.Trim());
+                    }
+                }
+            }
+
+            var rules = (config.TrackerRules ?? new List<TrackerRule>())
+                .Where(r => r != null && !string.IsNullOrWhiteSpace(r.Tracker))
+                .GroupBy(r => r.Tracker.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    g => g.Key,
+                    g => ToEntry(g.First()),
+                    StringComparer.OrdinalIgnoreCase);
+
+            return new TrackerPolicy(disabled, rules);
+        }
+
+        private static RuleEntry ToEntry(TrackerRule rule)
+        {
+            HashSet<string>? allowed = null;
+            if (rule.AllowedTags != null && rule.AllowedTags.Count > 0)
+            {
+                var set = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var tag in rule.AllowedTags)
+                {
+                    if (TorrentTags.TryCanonicalize(tag, out var canonical))
+                    {
+                        set.Add(canonical);
+                    }
+                }
+
+                // A rule that only lists tags this plugin does not know would otherwise hide everything
+                // from that tracker; treat it as "no restriction" instead.
+                allowed = set.Count > 0 ? set : null;
+            }
+
+            return new RuleEntry { Enabled = rule.Enabled, Allowed = allowed };
+        }
+
+        /// <summary>Same test <see cref="TorrentSearchService.GetAvailableIndexersAsync"/> reports as "disabled in plugin".</summary>
+        public bool IsDisabled(string? indexer)
+        {
+            var name = indexer?.Trim() ?? string.Empty;
+            if (_disabled.Contains(name))
+            {
+                return true;
+            }
+
+            return _rules.TryGetValue(name, out var rule) && !rule.Enabled;
+        }
+
+        public bool Allows(TorrentSearchResult result)
+        {
+            var indexer = result.Indexer?.Trim() ?? string.Empty;
+            if (IsDisabled(indexer))
+            {
+                return false;
+            }
+
+            if (!_rules.TryGetValue(indexer, out var rule) || rule.Allowed == null)
+            {
+                return true;
+            }
+
+            // "regular" means the release carries no known discount/special tag.
+            var hasKnownTag = false;
+            if (result.Tags != null)
+            {
+                foreach (var tag in result.Tags)
+                {
+                    if (TorrentTags.TryCanonicalize(tag, out var canonical) && canonical != TorrentTags.Regular)
+                    {
+                        hasKnownTag = true;
+                        if (rule.Allowed.Contains(canonical))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return !hasKnownTag && rule.Allowed.Contains(TorrentTags.Regular);
+        }
     }
 }

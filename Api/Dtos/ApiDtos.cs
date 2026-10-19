@@ -60,6 +60,11 @@ public class AddAlternateStreamRequestDto
     public string? Tracker { get; set; }
     public bool ReplaceExisting { get; set; } = false;
     public string? OldTorrentHash { get; set; }
+    public string? LocalizedTitle { get; set; }
+    public string? OriginalTitle { get; set; }
+    public int? Year { get; set; }
+    public int? TmdbId { get; set; }
+    public string? ImdbId { get; set; }
 }
 
 public class AlternateStreamResultDto

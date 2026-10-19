@@ -842,13 +842,14 @@ public class StrmEngine
             var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream?link={torrent.Hash}&index={mainFile.Id}&play\n";
             await File.WriteAllTextAsync(strmPath, streamUrl, Encoding.UTF8, cancellationToken);
 
-            // Ensure movie.nfo exists so Jellyfin keeps item metadata intact
-            var movieNfo = Path.Combine(targetDir, "movie.nfo");
-            if (!File.Exists(movieNfo))
-            {
-                var (cleanTitle, origTitle, year) = TitleCleaner.CleanTitleAndExtractYear(baseFolderName);
-                await WriteMovieNfoAsync(targetDir, baseFolderName, cleanTitle, origTitle, year, null, null, cancellationToken);
-            }
+            // Ensure movie.nfo exists and locks localized Ukrainian title so Jellyfin preserves Ukrainian metadata
+            var itemTitle = !string.IsNullOrWhiteSpace(request.LocalizedTitle) ? request.LocalizedTitle : baseFolderName;
+            var (cleanTitle, origTitle, year) = TitleCleaner.CleanTitleAndExtractYear(itemTitle);
+            var titleToUse = !string.IsNullOrWhiteSpace(request.LocalizedTitle) ? request.LocalizedTitle : cleanTitle;
+            var origToUse = !string.IsNullOrWhiteSpace(request.OriginalTitle) ? request.OriginalTitle : origTitle;
+            var yearToUse = request.Year ?? year;
+
+            await WriteMovieNfoAsync(targetDir, baseFolderName, titleToUse, origToUse, yearToUse, request.TmdbId, request.ImdbId, cancellationToken);
 
             NotifyPathChanged(targetDir);
 
@@ -949,21 +950,19 @@ public class StrmEngine
         // - If title contains Cyrillic (e.g. Ukrainian), write <title> since it is already localized.
         // - If title is Latin/English, do NOT write <title> (only write <originaltitle>), so Jellyfin matches
         //   against TMDB and populates the localized (Ukrainian) title rather than locking in English.
-        if (!hasId)
+        var hasCyrillic = title.Any(c => (c >= 0x0400 && c <= 0x04FF) || (c >= 0x0500 && c <= 0x052F));
+        if (hasCyrillic)
         {
-            var hasCyrillic = title.Any(c => (c >= 0x0400 && c <= 0x04FF) || (c >= 0x0500 && c <= 0x052F));
-            if (hasCyrillic)
-            {
-                sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
-            }
-            if (!string.IsNullOrWhiteSpace(originalTitle) && !originalTitle.Equals(title, StringComparison.OrdinalIgnoreCase))
-            {
-                sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(originalTitle)}</originaltitle>");
-            }
-            else if (!hasCyrillic && !string.IsNullOrWhiteSpace(title))
-            {
-                sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(title)}</originaltitle>");
-            }
+            sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
+        }
+        else if (!hasId && !string.IsNullOrWhiteSpace(title))
+        {
+            sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(title)}</originaltitle>");
+        }
+
+        if (!string.IsNullOrWhiteSpace(originalTitle) && !originalTitle.Equals(title, StringComparison.OrdinalIgnoreCase))
+        {
+            sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(originalTitle)}</originaltitle>");
         }
         if (year.HasValue)
         {
@@ -1010,21 +1009,19 @@ public class StrmEngine
             // - If title contains Cyrillic (e.g. Ukrainian), write <title> since it is already localized.
             // - If title is Latin/English, do NOT write <title> (only write <originaltitle>), so Jellyfin matches
             //   against TMDB and populates the localized (Ukrainian) title rather than locking in English.
-            if (!hasId)
+            var hasCyrillic = title.Any(c => (c >= 0x0400 && c <= 0x04FF) || (c >= 0x0500 && c <= 0x052F));
+            if (hasCyrillic)
             {
-                var hasCyrillic = title.Any(c => (c >= 0x0400 && c <= 0x04FF) || (c >= 0x0500 && c <= 0x052F));
-                if (hasCyrillic)
-                {
-                    sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
-                }
-                if (!string.IsNullOrWhiteSpace(originalTitle) && !originalTitle.Equals(title, StringComparison.OrdinalIgnoreCase))
-                {
-                    sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(originalTitle)}</originaltitle>");
-                }
-                else if (!hasCyrillic && !string.IsNullOrWhiteSpace(title))
-                {
-                    sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(title)}</originaltitle>");
-                }
+                sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
+            }
+            else if (!hasId && !string.IsNullOrWhiteSpace(title))
+            {
+                sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(title)}</originaltitle>");
+            }
+
+            if (!string.IsNullOrWhiteSpace(originalTitle) && !originalTitle.Equals(title, StringComparison.OrdinalIgnoreCase))
+            {
+                sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(originalTitle)}</originaltitle>");
             }
             if (year.HasValue)
             {

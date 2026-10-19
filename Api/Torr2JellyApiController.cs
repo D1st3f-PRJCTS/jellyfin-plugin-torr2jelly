@@ -575,6 +575,12 @@ public class Torr2JellyApiController : ControllerBase
 
         req.TargetItemId = itemId;
         req.TargetFolderPath = targetDir;
+        req.LocalizedTitle = item.Name;
+        req.OriginalTitle = item.OriginalTitle;
+        req.Year = item.ProductionYear;
+        var tmdbStr = item.GetProviderId(MediaBrowser.Model.Entities.MetadataProvider.Tmdb);
+        req.TmdbId = int.TryParse(tmdbStr, out var tid) ? tid : null;
+        req.ImdbId = item.GetProviderId(MediaBrowser.Model.Entities.MetadataProvider.Imdb);
 
         // Add torrent to TorrServer
         var torrent = await _torrClient.AddTorrentAsync(

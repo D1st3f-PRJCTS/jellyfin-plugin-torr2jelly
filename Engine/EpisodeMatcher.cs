@@ -13,6 +13,12 @@ public class EpisodeInfo
     public int? EndEpisodeNumber { get; set; }
     public bool IsMatched { get; set; }
 
+    /// <summary>True when the episode number was read from the path (S01E02, 1x02, "Episode 5"), not guessed.</summary>
+    public bool HasEpisodeNumber { get; set; }
+
+    /// <summary>True when the season was read from the file name or from a season directory (not defaulted / "Specials").</summary>
+    public bool HasSeason { get; set; }
+
     public string FormatEpisodeTag()
     {
         if (EndEpisodeNumber.HasValue && EndEpisodeNumber.Value > EpisodeNumber)
@@ -41,14 +47,21 @@ public static partial class EpisodeMatcher
         ".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm", ".ts", ".wmv", ".iso"
     };
 
-    [GeneratedRegex(@"(?i)[sS](\d{1,2})[eE](\d{1,3})(?:[\-–eE]+(\d{1,3}))?", RegexOptions.Compiled)]
+    // S01E02, S01E02E03, S01E02-E03, S01E02-03. The optional end episode must not be followed by a digit or by a
+    // resolution marker, so "S01E01-720p" / "S01E01-1080p" / "S01E01-4K" stay a single episode (E01).
+    [GeneratedRegex(@"(?i)S(\d{1,2})E(\d{1,3})(?:(?:[\-–]E?|E)(\d{1,3})(?![\dpik]))?", RegexOptions.Compiled)]
     private static partial Regex StandardSeasonEpisodeRegex();
 
     [GeneratedRegex(@"(?i)\b(\d{1,2})x(\d{1,3})\b", RegexOptions.Compiled)]
     private static partial Regex XSeasonEpisodeRegex();
 
-    [GeneratedRegex(@"(?i)\b(?:Season|Сезон)\s*(\d{1,2})\b", RegexOptions.Compiled)]
+    // "Season 2", "Season.2", "Season_2", "Season02", "Сезон 2" (in a single directory name).
+    [GeneratedRegex(@"(?i)(?<![\p{L}\d])(?:Season|Сезон)[\s._\-]*(\d{1,2})(?!\d)", RegexOptions.Compiled)]
     private static partial Regex SeasonFolderRegex();
+
+    // A bare season token inside a directory name: "S02", "Show.Name.S02.1080p". Not "DTS5.1" and not "S02E01".
+    [GeneratedRegex(@"(?i)(?<![\p{L}\d])S(\d{1,2})(?![\p{L}\d])", RegexOptions.Compiled)]
+    private static partial Regex SeasonTokenRegex();
 
     [GeneratedRegex(@"(?i)\b(?:e|ep|episode|серія|серия)\s*(\d{1,3})\b", RegexOptions.Compiled)]
     private static partial Regex PlainEpisodeRegex();
@@ -56,7 +69,9 @@ public static partial class EpisodeMatcher
     [GeneratedRegex(@"(?i)\b(?:Special|Specials|OVA|SP)\b", RegexOptions.Compiled)]
     private static partial Regex SpecialsRegex();
 
-    [GeneratedRegex(@"(?i)\b(?:s\d{1,2}|season|\u0441\u0435\u0437\u043e\u043d|\d{1,2}x\d{1,2}|e\d{1,3}|ep\d{1,3}|\u0441\u0435\u0440\u0456\u0457|\u0441\u0435\u0440\u0438\u0438|\u0441\u0435\u0440\u0456\u044f|\u0441\u0435\u0440\u0438\u044f|\u0432\u0441\u0456\s+\u0441\u0435\u0440\u0456\u0457)\b", RegexOptions.Compiled)]
+    // Title-level hints that a release is a TV show. "season"/"сезон" only count when followed by a number, so
+    // "Season of the Witch" or "Сезон дощів" are not shows.
+    [GeneratedRegex(@"(?i)\b(?:s\d{1,2}(?:e\d{1,3})?|(?:seasons?|сезон(?:и|а|у|ів)?)[\s._\-]*\d{1,2}|\d{1,2}x\d{1,2}|e\d{1,3}|ep\d{1,3}|серії|серии|серія|серия|всі\s+серії)\b", RegexOptions.Compiled)]
     private static partial Regex ShowTitleKeywordsRegex();
 
     public static bool IsVideoFile(string filename)
@@ -92,10 +107,14 @@ public static partial class EpisodeMatcher
 
         if (filePaths != null)
         {
-            var videoFiles = filePaths.Where(IsVideoFile).ToList();
-            if (videoFiles.Any(f => ParseEpisodeInfo(f).IsMatched))
+            foreach (var file in filePaths.Where(IsVideoFile))
             {
-                return true;
+                // A "Special"/"OVA" word in a file name alone does not make a release a show.
+                var info = ParseEpisodeInfo(file);
+                if (info.HasEpisodeNumber || info.HasSeason)
+                {
+                    return true;
+                }
             }
         }
 
@@ -111,8 +130,10 @@ public static partial class EpisodeMatcher
             IsMatched = false
         };
 
-        var fileName = Path.GetFileName(relativeFilePath);
-        var dirName = Path.GetDirectoryName(relativeFilePath) ?? string.Empty;
+        var normalizedPath = (relativeFilePath ?? string.Empty).Replace('\\', '/');
+        var slashIdx = normalizedPath.LastIndexOf('/');
+        var fileName = slashIdx >= 0 ? normalizedPath[(slashIdx + 1)..] : normalizedPath;
+        var dirName = slashIdx >= 0 ? normalizedPath[..slashIdx] : string.Empty;
 
         // Check standard S01E02 or S01E01-E02 in filename
         var match = StandardSeasonEpisodeRegex().Match(fileName);
@@ -125,6 +146,8 @@ public static partial class EpisodeMatcher
                 result.EndEpisodeNumber = endEp;
             }
             result.IsMatched = true;
+            result.HasSeason = true;
+            result.HasEpisodeNumber = true;
             return result;
         }
 
@@ -135,15 +158,18 @@ public static partial class EpisodeMatcher
             result.SeasonNumber = int.Parse(match.Groups[1].Value);
             result.EpisodeNumber = int.Parse(match.Groups[2].Value);
             result.IsMatched = true;
+            result.HasSeason = true;
+            result.HasEpisodeNumber = true;
             return result;
         }
 
-        // Check season from directory path
-        var seasonMatch = SeasonFolderRegex().Match(dirName);
-        if (seasonMatch.Success)
+        // Season from the directory path: the deepest directory that names a season wins.
+        var directorySeason = FindSeasonInDirectories(dirName);
+        if (directorySeason.HasValue)
         {
-            result.SeasonNumber = int.Parse(seasonMatch.Groups[1].Value);
+            result.SeasonNumber = directorySeason.Value;
             result.IsMatched = true;
+            result.HasSeason = true;
         }
         else if (SpecialsRegex().IsMatch(dirName) || SpecialsRegex().IsMatch(fileName))
         {
@@ -157,8 +183,79 @@ public static partial class EpisodeMatcher
         {
             result.EpisodeNumber = int.Parse(epMatch.Groups[1].Value);
             result.IsMatched = true;
+            result.HasEpisodeNumber = true;
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Gives every file that has no explicit episode number the next free number of its own season
+    /// (1, 2, 3 ... per season, in the given order), skipping numbers that explicit episodes already use.
+    /// </summary>
+    public static void AssignFallbackEpisodeNumbers(IReadOnlyList<EpisodeInfo> infos)
+    {
+        var used = new Dictionary<int, HashSet<int>>();
+        foreach (var info in infos.Where(i => i.HasEpisodeNumber))
+        {
+            if (!used.TryGetValue(info.SeasonNumber, out var set))
+            {
+                used[info.SeasonNumber] = set = new HashSet<int>();
+            }
+
+            set.Add(info.EpisodeNumber);
+        }
+
+        var lastAssigned = new Dictionary<int, int>();
+        foreach (var info in infos)
+        {
+            if (info.HasEpisodeNumber)
+            {
+                continue;
+            }
+
+            if (!used.TryGetValue(info.SeasonNumber, out var set))
+            {
+                used[info.SeasonNumber] = set = new HashSet<int>();
+            }
+
+            lastAssigned.TryGetValue(info.SeasonNumber, out var last);
+            var next = last + 1;
+            while (set.Contains(next))
+            {
+                next++;
+            }
+
+            info.EpisodeNumber = next;
+            set.Add(next);
+            lastAssigned[info.SeasonNumber] = next;
+        }
+    }
+
+    private static int? FindSeasonInDirectories(string dirName)
+    {
+        if (string.IsNullOrEmpty(dirName))
+        {
+            return null;
+        }
+
+        var segments = dirName.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        for (var i = segments.Length - 1; i >= 0; i--)
+        {
+            var segment = segments[i];
+
+            var m = SeasonFolderRegex().Match(segment);
+            if (!m.Success)
+            {
+                m = SeasonTokenRegex().Match(segment);
+            }
+
+            if (m.Success && int.TryParse(m.Groups[1].Value, out var season))
+            {
+                return season;
+            }
+        }
+
+        return null;
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using MediaBrowser.Model.Plugins;
 
@@ -23,22 +24,37 @@ public class TrackerRule
 
 public class PluginConfiguration : BasePluginConfiguration
 {
+    /// <summary>
+    /// Version of the configuration layout. <c>Plugin</c> runs a one-time migration for every stored
+    /// configuration whose <see cref="ConfigVersion"/> is lower than this value.
+    /// </summary>
+    public const int CurrentConfigVersion = 2;
+
+    // Configuration layout version (0 = written by a release that had no migrations). Managed by the plugin only.
+    public int ConfigVersion { get; set; } = 0;
+
     // TorrServer Settings
     public string ExternalTorrServerUrl { get; set; } = "http://torrserver:8090";
     public string TorrServerStreamUrl { get; set; } = "http://torrserver:8090"; // URL written into .strm files for playback
 
     // Torrent Cache & Performance
+    // These are pushed to TorrServer only when ManageTorrServerSettings is on.
+    public bool ManageTorrServerSettings { get; set; } = false;
     public int CacheSizeMb { get; set; } = 102400; // 100 GB default
     public int PreloadCachePercent { get; set; } = 3; // 3% of CacheSize (~3 GB for 100GB cache, starts in 2s, provides ~150s buffer)
     public int ReaderReadAHeadPercent { get; set; } = 95; // 95% sliding read-ahead buffer (recommended)
     public int TorrentDisconnectTimeout { get; set; } = 86400; // 86400 seconds = 24 hours seeding duration after playback
     public bool UseDiskCache { get; set; } = true;
-    public string DiskCachePath { get; set; } = "/mnt/sdb/AppFiles/jellyfin/cache/torrserver";
+    public string DiskCachePath { get; set; } = string.Empty;
+
+    // Optional file holding the peer port forwarded by a VPN (e.g. Proton). When set and managing TorrServer
+    // settings, its content is pushed to TorrServer as PeersListenPort.
+    public string ForwardedPortFilePath { get; set; } = string.Empty;
 
     // Search Indexer (Prowlarr / Torznab)
     public bool EnableProwlarr { get; set; } = true;
-    public string ProwlarrUrl { get; set; } = "https://prowlarr.d1st3f.pp.ua";
-    public string ProwlarrApiKey { get; set; } = "dffa6bebf5b34909936a3ae0b4e9c612";
+    public string ProwlarrUrl { get; set; } = string.Empty;
+    public string ProwlarrApiKey { get; set; } = string.Empty;
 
     public bool EnableTorznab { get; set; } = false;
     public string TorznabUrl { get; set; } = string.Empty;
@@ -70,7 +86,23 @@ public class PluginConfiguration : BasePluginConfiguration
     // Categories (initialized empty to prevent XmlSerializer from appending to defaults upon deserialization)
     public List<CategoryMapping> Categories { get; set; } = new();
 
+    /// <summary>
+    /// Default categories of a fresh installation. The folders are relative: they are resolved under
+    /// <see cref="MediaRootPath"/> (or the Jellyfin library root when that folder does not exist).
+    /// </summary>
     public static List<CategoryMapping> GetDefaultCategories() => new()
+    {
+        new CategoryMapping("Movies", "movies", "movie", new List<int> { 2000, 2010, 2020, 2030, 2040, 2045, 2050, 2060, 2070 }, true),
+        new CategoryMapping("Shows", "shows", "show", new List<int> { 5000, 5010, 5020, 5030, 5040, 5045, 5050, 5060 }, true),
+        new CategoryMapping("Cartoons", "cartoons", "movie", new List<int> { 2000, 5000 }, false),
+        new CategoryMapping("Anime", "anime", "show", new List<int> { 5070 }, false)
+    };
+
+    /// <summary>
+    /// The absolute default categories that releases up to 1.0.18 used when none were stored. Only the one-time
+    /// migration of an existing installation uses them, so its .strm files keep resolving to the same folders.
+    /// </summary>
+    public static List<CategoryMapping> GetLegacyDefaultCategories() => new()
     {
         new CategoryMapping("Movies", "/mnt/sdb/media/movies", "movie", new List<int> { 2000, 2010, 2020, 2030, 2040, 2045, 2050, 2060, 2070 }, true),
         new CategoryMapping("Shows", "/mnt/sdb/media/shows", "show", new List<int> { 5000, 5010, 5020, 5030, 5040, 5045, 5050, 5060 }, true),
@@ -90,13 +122,13 @@ public class PluginConfiguration : BasePluginConfiguration
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var cat in Categories)
         {
-            if (string.IsNullOrWhiteSpace(cat.Name)) continue;
+            if (cat == null || string.IsNullOrWhiteSpace(cat.Name)) continue;
             if (seenNames.Add(cat.Name.Trim()))
             {
                 unique.Add(cat);
             }
         }
-        Categories = unique;
+        Categories = unique.Count > 0 ? unique : GetDefaultCategories();
     }
 
     public void NormalizeTrackerRules()
@@ -110,6 +142,7 @@ public class PluginConfiguration : BasePluginConfiguration
         var allKnown = new List<string> { "freeleech", "halfleech", "bronze", "internal", "exclusive", "doubleupload", "regular" };
         foreach (var rule in TrackerRules)
         {
+            if (rule == null) continue;
             if (rule.AllowedTags == null || rule.AllowedTags.Count == 0)
             {
                 rule.AllowedTags = new List<string>(allKnown);

@@ -398,10 +398,61 @@ public class Torr2JellyApiController : ControllerBase
 
     [HttpPost("Library/Scan")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public ActionResult TriggerScan()
+    public async Task<ActionResult> TriggerScan(CancellationToken cancellationToken)
     {
+        try
+        {
+            var torrents = await _torrClient.ListTorrentsAsync(cancellationToken);
+            var activeHashes = new HashSet<string>(torrents.Select(t => t.Hash), StringComparer.OrdinalIgnoreCase);
+
+            // Sync all active torrents and clean obsolete/duplicate files
+            foreach (var torrent in torrents)
+            {
+                await _strmEngine.SyncTorrentAsync(torrent, cancellationToken: cancellationToken);
+            }
+
+            // Clean any orphaned .strm files for deleted torrents
+            var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+            foreach (var cat in config.Categories)
+            {
+                var catFolder = _strmEngine.ResolveMediaRoot(cat.Folder);
+                if (!Directory.Exists(catFolder)) continue;
+
+                var strmFiles = Directory.GetFiles(catFolder, "*.strm", SearchOption.AllDirectories);
+                foreach (var strmFile in strmFiles)
+                {
+                    try
+                    {
+                        var text = await System.IO.File.ReadAllTextAsync(strmFile, cancellationToken);
+                        var match = System.Text.RegularExpressions.Regex.Match(text, @"link=([a-f0-9]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        if (match.Success)
+                        {
+                            var hash = match.Groups[1].Value;
+                            if (!activeHashes.Contains(hash))
+                            {
+                                System.IO.File.Delete(strmFile);
+                                var nfo = Path.ChangeExtension(strmFile, ".nfo");
+                                if (System.IO.File.Exists(nfo)) System.IO.File.Delete(nfo);
+                                _logger.LogInformation("Purged orphaned .strm file for deleted torrent {Hash}: {File}", hash, strmFile);
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                foreach (var subDir in Directory.GetDirectories(catFolder))
+                {
+                    _strmEngine.CleanEmptyDirectory(subDir);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error during full library sync");
+        }
+
         _strmEngine.TriggerLibraryScan();
-        return Ok(new { success = true, message = "Library scan triggered." });
+        return Ok(new { success = true, message = "Library scan triggered and duplicates cleaned." });
     }
 
     [HttpPost("Library/ScanTargeted")]

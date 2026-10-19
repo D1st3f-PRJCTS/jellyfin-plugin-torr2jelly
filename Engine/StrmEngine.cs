@@ -455,6 +455,10 @@ public class StrmEngine
 
             result.Success = true;
             _logger.LogInformation("Successfully generated {Count} .strm files for '{Title}' in {Dir}", result.CreatedStrmFiles.Count, cleanTitle, result.FolderPath);
+
+            // Automatically clean up any obsolete/legacy .strm duplicate files and empty directories for this torrent
+            await CleanupObsoleteFilesForTorrentAsync(torrent.Hash, result.CreatedStrmFiles, cancellationToken);
+
             return result;
         }
         catch (Exception ex)
@@ -463,6 +467,125 @@ public class StrmEngine
             result.Success = false;
             result.ErrorMessage = ex.Message;
             return result;
+        }
+    }
+
+    public async Task CleanupObsoleteFilesForTorrentAsync(
+        string torrentHash,
+        List<string> activeStrmFiles,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+            var activeSet = new HashSet<string>(activeStrmFiles, StringComparer.OrdinalIgnoreCase);
+            var affectedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var cat in config.Categories)
+            {
+                var catFolder = ResolveMediaRoot(cat.Folder);
+                if (!Directory.Exists(catFolder)) continue;
+
+                var strmFiles = Directory.GetFiles(catFolder, "*.strm", SearchOption.AllDirectories);
+                foreach (var strmFile in strmFiles)
+                {
+                    if (activeSet.Contains(strmFile)) continue;
+
+                    bool belongsToTorrent = false;
+                    try
+                    {
+                        var text = await File.ReadAllTextAsync(strmFile, cancellationToken);
+                        if (text.Contains(torrentHash, StringComparison.OrdinalIgnoreCase))
+                        {
+                            belongsToTorrent = true;
+                        }
+                    }
+                    catch
+                    {
+                        // File read error or lock
+                    }
+
+                    if (belongsToTorrent)
+                    {
+                        try
+                        {
+                            _logger.LogInformation("Deleting obsolete .strm duplicate for torrent {Hash}: {File}", torrentHash, strmFile);
+                            File.Delete(strmFile);
+
+                            var nfoFile = Path.ChangeExtension(strmFile, ".nfo");
+                            if (File.Exists(nfoFile))
+                            {
+                                File.Delete(nfoFile);
+                            }
+
+                            var parentDir = Path.GetDirectoryName(strmFile);
+                            if (!string.IsNullOrWhiteSpace(parentDir))
+                            {
+                                affectedDirs.Add(parentDir);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to delete obsolete strm file {File}", strmFile);
+                        }
+                    }
+                }
+            }
+
+            // Clean up empty directories left behind
+            foreach (var dir in affectedDirs)
+            {
+                CleanEmptyDirectory(dir);
+            }
+
+            // Notify Jellyfin
+            foreach (var dir in affectedDirs)
+            {
+                if (Directory.Exists(dir))
+                {
+                    NotifyPathChanged(dir);
+                }
+                else
+                {
+                    var parent = Path.GetDirectoryName(dir);
+                    if (!string.IsNullOrWhiteSpace(parent) && Directory.Exists(parent))
+                    {
+                        NotifyPathChanged(parent);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error while cleaning up obsolete files for torrent {Hash}", torrentHash);
+        }
+    }
+
+    public void CleanEmptyDirectory(string dirPath)
+    {
+        try
+        {
+            if (!Directory.Exists(dirPath)) return;
+
+            // Check if there are any .strm or video files in this directory or subdirectories
+            var hasMediaFiles = Directory.EnumerateFiles(dirPath, "*.*", SearchOption.AllDirectories)
+                .Any(f => f.EndsWith(".strm", StringComparison.OrdinalIgnoreCase) || EpisodeMatcher.IsVideoFile(f));
+
+            if (!hasMediaFiles)
+            {
+                _logger.LogInformation("Deleting empty/orphaned directory: {Dir}", dirPath);
+                Directory.Delete(dirPath, recursive: true);
+
+                var parent = Path.GetDirectoryName(dirPath);
+                if (!string.IsNullOrWhiteSpace(parent) && Directory.Exists(parent))
+                {
+                    CleanEmptyDirectory(parent);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not delete empty dir {Dir}", dirPath);
         }
     }
 

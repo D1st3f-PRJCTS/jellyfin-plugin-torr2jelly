@@ -11,10 +11,10 @@ public static partial class TitleCleaner
     [GeneratedRegex(@"\b(19\d\d|20\d\d)\b", RegexOptions.Compiled)]
     private static partial Regex YearRegex();
 
-    [GeneratedRegex(@"(?i)\(?\b(19\d\d|20\d\d)\s*[-–—]\s*(19\d\d|20\d\d)\b\)?", RegexOptions.Compiled)]
+    [GeneratedRegex(@"(?i)\(?\b(19\d\d|20\d\d)\s*[-\–—]\s*(19\d\d|20\d\d)\b\)?", RegexOptions.Compiled)]
     private static partial Regex YearRangeRegex();
 
-    [GeneratedRegex(@"(?i)\(?\b(сезон[иа]?|seasons?)\s*[\d\-\s,+–—]+\)?", RegexOptions.Compiled)]
+    [GeneratedRegex(@"(?i)\(?\b(сезон[иа]?|seasons?)\s*[\d\-\s,+–—]+\)?|\(?\bS\d+(?:\s*[-\–—]\s*(?:S)?\d+)?\)?", RegexOptions.Compiled)]
     private static partial Regex SeasonNoiseRegex();
 
     [GeneratedRegex(@"(?i)\b(2160p|1080p|1080i|720p|480p|4k|uhd|x264|x265|h264|h265|hevc|avc|xvid|divx|10bit|hdr|hdr10\+?|dv|dovi|remux|bluray|blu-ray|web-?dl|webrip|hdtv|bdrip|dvdrip|proper|repack|imax|ddp?5\.1|dd5\.1|ac3|dts(-hd)?|truehd|atmos|aac\d?|flac|mp3)\b", RegexOptions.Compiled)]
@@ -144,7 +144,7 @@ public static partial class TitleCleaner
             }
         }
 
-        // 5. Remove Season markers e.g. (Сезон 1-8), (Season 1-3)
+        // 5. Remove Season markers e.g. (Сезон 1-8), (Season 1-3), (S1-8)
         text = SeasonNoiseRegex().Replace(text, string.Empty);
 
         // 6. Remove audio language tags e.g. 4xUkr/Eng
@@ -181,6 +181,11 @@ public static partial class TitleCleaner
         // Replace dots and underscores with space
         text = DotsAndUnderscoresRegex().Replace(text, " ");
 
+        // Clean empty or unmatched parentheses / brackets
+        text = Regex.Replace(text, @"\(\s*\)|\[\s*\]", "");
+        if (text.Count(c => c == '(') > text.Count(c => c == ')')) text = text.Replace("(", "");
+        if (text.Count(c => c == ')') > text.Count(c => c == '(')) text = text.Replace(")", "");
+
         // Clean edge punctuation
         text = text.Trim(' ', '-', '_', '.', '/', '\\', '(', ')', ':');
         text = MultipleSpacesRegex().Replace(text, " ").Trim();
@@ -198,15 +203,15 @@ public static partial class TitleCleaner
 
             if (!string.IsNullOrWhiteSpace(p0) && !string.IsNullOrWhiteSpace(p1))
             {
-                var hasCyrillic0 = p0.Any(c => c >= 0x0400 && c <= 0x04FF);
-                var hasCyrillic1 = p1.Any(c => c >= 0x0400 && c <= 0x04FF);
+                var p0HasCyr = p0.Any(c => c >= 0x0400 && c <= 0x04FF);
+                var p1HasCyr = p1.Any(c => c >= 0x0400 && c <= 0x04FF);
 
-                if (hasCyrillic0 && !hasCyrillic1)
+                if (p0HasCyr && !p1HasCyr)
                 {
                     cleanTitle = p0;
                     originalTitle = p1;
                 }
-                else if (!hasCyrillic0 && hasCyrillic1)
+                else if (!p0HasCyr && p1HasCyr)
                 {
                     cleanTitle = p1;
                     originalTitle = p0;
@@ -219,16 +224,16 @@ public static partial class TitleCleaner
             }
         }
 
-        if (string.IsNullOrWhiteSpace(cleanTitle))
-        {
-            cleanTitle = SanitizeFilename(rawTitle.Trim());
-        }
-
         return (cleanTitle, originalTitle, extractedYear);
     }
 
     public static string FormatFolderTitle(string cleanTitle, int? year)
     {
+        if (string.IsNullOrWhiteSpace(cleanTitle))
+        {
+            return year.HasValue ? $"({year.Value})" : string.Empty;
+        }
+
         if (year.HasValue && !cleanTitle.Contains(year.Value.ToString(), StringComparison.Ordinal))
         {
             return $"{cleanTitle} ({year.Value})";
@@ -239,16 +244,26 @@ public static partial class TitleCleaner
 
     public static string SanitizeFilename(string name)
     {
-        var invalidChars = System.IO.Path.GetInvalidFileNameChars();
-        var chars = name.ToCharArray();
-        for (var i = 0; i < chars.Length; i++)
+        if (string.IsNullOrWhiteSpace(name))
         {
-            if (Array.IndexOf(invalidChars, chars[i]) >= 0 || chars[i] == ':' || chars[i] == '?' || chars[i] == '*' || chars[i] == '"' || chars[i] == '<' || chars[i] == '>' || chars[i] == '|')
+            return string.Empty;
+        }
+
+        var invalidChars = System.IO.Path.GetInvalidFileNameChars();
+        var sb = new StringBuilder(name.Length);
+
+        foreach (var c in name)
+        {
+            if (c == ':' || c == '/' || c == '\\' || c == '|' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>')
             {
-                chars[i] = ' ';
+                sb.Append(' ');
+            }
+            else if (!invalidChars.Contains(c))
+            {
+                sb.Append(c);
             }
         }
 
-        return MultipleSpacesRegex().Replace(new string(chars), " ").Trim();
+        return MultipleSpacesRegex().Replace(sb.ToString(), " ").Trim(' ', '.', '-');
     }
 }

@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/main/logo.png",
     "versions": [
       {
-        "version": "1.0.16.1",
-        "changelog": "Optimized cache and seeding settings: reduced PreloadCache default to 3% (~3 GB for 100 GB cache) to prevent server lags/freezes on 100 GB releases, increased post-playback seeding duration (TorrentDisconnectTimeout) to 24 hours (86400s), ensured RemoveCacheOnDrop is false, and added UI controls and presets in Settings tab.",
+        "version": "1.0.17.0",
+        "changelog": "Automatic library deduplication and obsolete file/folder purge: StrmEngine automatically detects and deletes duplicate legacy .strm files and .nfo sidecars when naming schemes/templates change, cleans up empty directories, purges deleted torrent orphans on library sync, and improves multi-season parsing in TitleCleaner.",
         "targetAbi": "10.9.0.0",
-        "sourceUrl": "https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/releases/download/v1.0.16.1/Torr2Jelly_1.0.16.1.zip",
-        "checksum": "536c97e1edadd030c13b5dcc271cc80e",
-        "timestamp": "2026-10-19T02:15:00Z"
+        "sourceUrl": "https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/releases/download/v1.0.17.0/Torr2Jelly_1.0.17.0.zip",
+        "checksum": "2f893200439bbe94d448ea463d4dde7c",
+        "timestamp": "2026-10-19T10:45:00Z"
       }
     ]
   }

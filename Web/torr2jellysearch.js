@@ -771,12 +771,20 @@
 
     function getAuthHeaders() {
         var headers = { 'Accept': 'application/json', 'Content-Type': 'application/json' };
-        if (window.ApiClient && typeof window.ApiClient.accessToken === 'function') {
-            var token = window.ApiClient.accessToken();
-            if (token) {
-                headers['X-Emby-Token'] = token;
+        var client = window.ApiClient;
+        if (!client) {
+            return headers;
+        }
+        // Prefer the full "MediaBrowser Client=..., Token=..." header ApiClient builds itself.
+        if (typeof client.setRequestHeaders === 'function') {
+            try { client.setRequestHeaders(headers); } catch (e) { }
+        }
+        var token = typeof client.accessToken === 'function' ? client.accessToken() : null;
+        if (token) {
+            if (!headers['Authorization']) {
                 headers['Authorization'] = 'MediaBrowser Token="' + token + '"';
             }
+            headers['X-Emby-Token'] = token;
         }
         return headers;
     }

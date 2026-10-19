@@ -1587,10 +1587,23 @@
     }
     window.getApiUrl = getApiUrl;
 
+    // Newer Jellyfin servers disable legacy auth (X-Emby-Token), so always send the
+    // "Authorization: MediaBrowser ..." header; prefer the one ApiClient builds itself.
     function getAuthHeaders() {
         var headers = { 'Content-Type': 'application/json' };
-        if (window.ApiClient && typeof window.ApiClient.accessToken === 'function') {
-            headers['X-Emby-Token'] = window.ApiClient.accessToken();
+        var client = window.ApiClient;
+        if (!client) {
+            return headers;
+        }
+        if (typeof client.setRequestHeaders === 'function') {
+            try { client.setRequestHeaders(headers); } catch (e) { }
+        }
+        var token = typeof client.accessToken === 'function' ? client.accessToken() : null;
+        if (token) {
+            if (!headers['Authorization']) {
+                headers['Authorization'] = 'MediaBrowser Token="' + token + '"';
+            }
+            headers['X-Emby-Token'] = token;
         }
         return headers;
     }

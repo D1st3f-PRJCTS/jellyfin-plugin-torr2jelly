@@ -11,13 +11,13 @@ public static partial class TitleCleaner
     [GeneratedRegex(@"\b(19\d\d|20\d\d)\b", RegexOptions.Compiled)]
     private static partial Regex YearRegex();
 
-    [GeneratedRegex(@"(?i)\(?\b(19\d\d|20\d\d)\s*[-\–—]\s*(19\d\d|20\d\d)\b\)?", RegexOptions.Compiled)]
+    [GeneratedRegex(@"(?i)\(?\b(19\d\d|20\d\d)\s*[-–—]\s*(19\d\d|20\d\d)\b\)?", RegexOptions.Compiled)]
     private static partial Regex YearRangeRegex();
 
-    [GeneratedRegex(@"(?i)\(?\b(сезон[иа]?|seasons?)\s*[\d\-\s,+–—]+\)?|\(?\bS\d+(?:\s*[-\–—]\s*(?:S)?\d+)?\)?", RegexOptions.Compiled)]
+    [GeneratedRegex(@"(?i)\(?\b(сезон[иа]?|seasons?)\s*[\d\-\s,+–—]+\)?|\(?\bS\d+(?:\s*[-–—]\s*(?:S)?\d+)?\)?", RegexOptions.Compiled)]
     private static partial Regex SeasonNoiseRegex();
 
-    [GeneratedRegex(@"(?i)\b(2160p|1080p|1080i|720p|480p|4k|uhd|x264|x265|h264|h265|hevc|avc|xvid|divx|10bit|hdr|hdr10\+?|dv|dovi|remux|bluray|blu-ray|web-?dl|webrip|hdtv|bdrip|dvdrip|proper|repack|imax|ddp?5\.1|dd5\.1|ac3|dts(-hd)?|truehd|atmos|aac\d?|flac|mp3)\b", RegexOptions.Compiled)]
+    [GeneratedRegex(@"(?i)\b(2160p|1080p|1080i|720p|576p|480p|4k|uhd|8k|bdremux|uhdremux|remux|bluray(-?remux)?|blu-ray(-?remux)?|bdrip|brrip|dvdrip|web-?dlrip|web-?rip|web-?dl|hdtvrip|hdtv|tvrip|satrip|camrip|telesync|x264|x265|h264|h265|hevc|avc|av1|xvid|divx|10bit|hdr|hdr10\+?|dv|dovi|dolby\s*vision|proper|repack|rerip|imax|ddp?5\.1|dd5\.1|ac3|dts(-hd)?|truehd|atmos|aac\d?|flac|mp3)\b", RegexOptions.Compiled)]
     private static partial Regex NoiseTokensRegex();
 
     [GeneratedRegex(@"\[[^\]]*\]", RegexOptions.Compiled)]
@@ -123,34 +123,7 @@ public static partial class TitleCleaner
             text = text.Remove(yearRangeMatch.Index, yearRangeMatch.Length);
         }
 
-        // 2. Cut off everything from first quality / release noise token
-        var noiseMatch = NoiseTokensRegex().Match(text);
-        if (noiseMatch.Success && noiseMatch.Index > 2)
-        {
-            text = text.Substring(0, noiseMatch.Index);
-        }
-
-        // 3. Remove subtitle suffix e.g. "| Sub Ukr/Eng"
-        text = SubtitleSuffixRegex().Replace(text, string.Empty);
-
-        // 4. Remove square bracket content (tracker tags, groups, audio tags like [Hurtom], [3xUKR_ENG])
-        var bracketMatches = SquareBracketContentRegex().Matches(text);
-        if (bracketMatches.Count > 0)
-        {
-            var stripped = SquareBracketContentRegex().Replace(text, " ");
-            if (stripped.Trim().Length >= 2)
-            {
-                text = stripped;
-            }
-        }
-
-        // 5. Remove Season markers e.g. (Сезон 1-8), (Season 1-3), (S1-8)
-        text = SeasonNoiseRegex().Replace(text, string.Empty);
-
-        // 6. Remove audio language tags e.g. 4xUkr/Eng
-        text = AudioLangsRegex().Replace(text, string.Empty);
-
-        // 7. Find single year if not extracted from range
+        // 2. Pre-extract single year before noise cutoff so years after quality/noise tokens are captured
         if (!extractedYear.HasValue)
         {
             var yearMatches = YearRegex().Matches(text);
@@ -166,6 +139,33 @@ public static partial class TitleCleaner
                 }
             }
         }
+
+        // 3. Cut off everything from first quality / release noise token
+        var noiseMatch = NoiseTokensRegex().Match(text);
+        if (noiseMatch.Success && noiseMatch.Index > 2)
+        {
+            text = text.Substring(0, noiseMatch.Index);
+        }
+
+        // 4. Remove subtitle suffix e.g. "| Sub Ukr/Eng"
+        text = SubtitleSuffixRegex().Replace(text, string.Empty);
+
+        // 5. Remove square bracket content (tracker tags, groups, audio tags like [Hurtom], [3xUKR_ENG])
+        var bracketMatches = SquareBracketContentRegex().Matches(text);
+        if (bracketMatches.Count > 0)
+        {
+            var stripped = SquareBracketContentRegex().Replace(text, " ");
+            if (stripped.Trim().Length >= 2)
+            {
+                text = stripped;
+            }
+        }
+
+        // 6. Remove Season markers e.g. (Сезон 1-8), (Season 1-3), (S1-8)
+        text = SeasonNoiseRegex().Replace(text, string.Empty);
+
+        // 7. Remove audio language tags e.g. 4xUkr/Eng
+        text = AudioLangsRegex().Replace(text, string.Empty);
 
         // Remove extracted year string from title text
         if (extractedYear.HasValue)

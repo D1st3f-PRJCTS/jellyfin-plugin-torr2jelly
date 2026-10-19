@@ -727,13 +727,25 @@ public class StrmEngine
         var sb = new StringBuilder();
         sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>");
         sb.AppendLine("<movie>");
-        // If external IDs exist, omit title/originaltitle so Jellyfin fetches metadata in library's preferred language
+        // If external IDs exist, omit title/originaltitle so Jellyfin fetches metadata in library's preferred language.
+        // If no external ID exists:
+        // - If title contains Cyrillic (e.g. Ukrainian), write <title> since it is already localized.
+        // - If title is Latin/English, do NOT write <title> (only write <originaltitle>), so Jellyfin matches
+        //   against TMDB and populates the localized (Ukrainian) title rather than locking in English.
         if (!hasId)
         {
-            sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
+            var hasCyrillic = title.Any(c => (c >= 0x0400 && c <= 0x04FF) || (c >= 0x0500 && c <= 0x052F));
+            if (hasCyrillic)
+            {
+                sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
+            }
             if (!string.IsNullOrWhiteSpace(originalTitle) && !originalTitle.Equals(title, StringComparison.OrdinalIgnoreCase))
             {
                 sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(originalTitle)}</originaltitle>");
+            }
+            else if (!hasCyrillic && !string.IsNullOrWhiteSpace(title))
+            {
+                sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(title)}</originaltitle>");
             }
         }
         if (year.HasValue)
@@ -776,13 +788,25 @@ public class StrmEngine
             var sb = new StringBuilder();
             sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>");
             sb.AppendLine("<tvshow>");
-            // If external IDs exist, omit title/originaltitle so Jellyfin fetches metadata in library's preferred language
+            // If external IDs exist, omit title/originaltitle so Jellyfin fetches metadata in library's preferred language.
+            // If no external ID exists:
+            // - If title contains Cyrillic (e.g. Ukrainian), write <title> since it is already localized.
+            // - If title is Latin/English, do NOT write <title> (only write <originaltitle>), so Jellyfin matches
+            //   against TMDB and populates the localized (Ukrainian) title rather than locking in English.
             if (!hasId)
             {
-                sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
+                var hasCyrillic = title.Any(c => (c >= 0x0400 && c <= 0x04FF) || (c >= 0x0500 && c <= 0x052F));
+                if (hasCyrillic)
+                {
+                    sb.AppendLine($"  <title>{System.Security.SecurityElement.Escape(title)}</title>");
+                }
                 if (!string.IsNullOrWhiteSpace(originalTitle) && !originalTitle.Equals(title, StringComparison.OrdinalIgnoreCase))
                 {
                     sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(originalTitle)}</originaltitle>");
+                }
+                else if (!hasCyrillic && !string.IsNullOrWhiteSpace(title))
+                {
+                    sb.AppendLine($"  <originaltitle>{System.Security.SecurityElement.Escape(title)}</originaltitle>");
                 }
             }
             if (year.HasValue)

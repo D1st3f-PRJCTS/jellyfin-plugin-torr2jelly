@@ -177,8 +177,10 @@
         .t2j-tabs .emby-tab-button.emby-tab-button-active { border-bottom-color: var(--jf-palette-primary-main, #00a4dc); }
         .t2j-dialog-body { flex: 1 1 auto; min-height: 12em; overflow-y: auto; padding: 0.5em 1em 1em; }
         .t2j-series-bar { flex-shrink: 0; padding: 0.5em 1em 0; }
-        .t2j-find-bar { display: flex; align-items: flex-end; gap: 0.5em; }
-        .t2j-find-bar .inputContainer { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
+        .t2j-find-bar { margin-bottom: 0; }
+        .t2j-find-row { display: flex; align-items: stretch; gap: 0.5em; }
+        .t2j-find-row .emby-input { flex: 1 1 auto; min-width: 0; }
+        .t2j-find-row .t2j-find-btn { flex: 0 0 auto; margin: 0; padding-top: 0; padding-bottom: 0; }
         .t2j-filter-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.25em 1em; margin: 0.75em 0 0.25em; }
         @media (max-width: 50em) {
             .t2j-dialog { width: 100%; max-width: none; height: 100%; max-height: none; border-radius: 0; }
@@ -1227,11 +1229,16 @@
         } catch (e) { }
     }
 
-    // Search box + button of the "Find releases" tab and of the series dialog.
+    // Search box + button of the "Find releases" tab and of the series dialog. The label sits on its own line and
+    // the input and button share one row, so the button is exactly as tall as the input. The input is a plain
+    // element with the native class: an upgraded emby-input would insert its own label inside that row.
     function findBarHtml(inputId, buttonId, value, i18n) {
-        return '<div class="t2j-find-bar">'
-            + '<div class="inputContainer"><input is="emby-input" type="text" id="' + inputId + '" label="' + escapeHtml(i18n.searchLabel) + '" value="' + escapeHtml(value) + '" placeholder="' + escapeHtml(i18n.searchPlaceholder) + '"></div>'
-            + '<button is="emby-button" type="button" class="raised button-submit emby-button" id="' + buttonId + '"><span>' + escapeHtml(i18n.findBtn) + '</span></button>'
+        return '<div class="inputContainer t2j-find-bar">'
+            + '<label class="inputLabel" for="' + inputId + '">' + escapeHtml(i18n.searchLabel) + '</label>'
+            + '<div class="t2j-find-row">'
+            + '<input type="text" class="emby-input" id="' + inputId + '" value="' + escapeHtml(value) + '" placeholder="' + escapeHtml(i18n.searchPlaceholder) + '">'
+            + '<button is="emby-button" type="button" class="raised button-submit emby-button t2j-find-btn" id="' + buttonId + '"><span>' + escapeHtml(i18n.findBtn) + '</span></button>'
+            + '</div>'
             + '</div>';
     }
 

@@ -1420,24 +1420,104 @@
     }
 
     // ==========================================
-    // Item Details Page Button Watcher
+    // Resilient Item Details Page & Button Watcher
     // ==========================================
-    function checkItemDetailPage() {
-        var page = document.querySelector('.itemDetailPage') || document.getElementById('itemDetailPage');
-        if (!page) return;
+    function getActiveItemDetailPage() {
+        var pages = document.querySelectorAll('.itemDetailPage, #itemDetailPage');
+        if (pages.length === 0) return null;
 
-        var hash = window.location.hash || '';
-        var match = hash.match(/[?&]id=([a-f0-9\-]+)/i);
-        var itemId = page.getAttribute('data-itemid') || (match ? match[1] : null);
+        var fullUrl = window.location.href;
+        var match = fullUrl.match(/[?&]id=([a-f0-9\-]+)/i);
+        var urlId = match ? match[1] : null;
 
-        if (!itemId) return;
+        // 1. Look for non-hidden page matching current URL item ID
+        for (var i = 0; i < pages.length; i++) {
+            var p = pages[i];
+            if (p.classList.contains('hide') || p.style.display === 'none') continue;
+            var pid = p.getAttribute('data-itemid');
+            if (urlId && pid && pid.toLowerCase() === urlId.toLowerCase()) {
+                return p;
+            }
+        }
 
-        var buttonsContainer = page.querySelector('.mainDetailButtons');
+        // 2. Look for any active visible page
+        for (var j = pages.length - 1; j >= 0; j--) {
+            var pj = pages[j];
+            if (!pj.classList.contains('hide') && pj.style.display !== 'none') {
+                return pj;
+            }
+        }
+
+        // 3. Fallback: most recently created page matching URL
+        if (urlId) {
+            for (var k = pages.length - 1; k >= 0; k--) {
+                if (pages[k].getAttribute('data-itemid') === urlId) {
+                    return pages[k];
+                }
+            }
+        }
+
+        return pages[pages.length - 1];
+    }
+
+    function getActiveItemId(page) {
+        var fullUrl = window.location.href;
+        var match = fullUrl.match(/[?&]id=([a-f0-9\-]+)/i);
+        if (match && match[1]) return match[1];
+        if (page && page.getAttribute('data-itemid')) return page.getAttribute('data-itemid');
+        return null;
+    }
+
+    var _buttonsObserver = null;
+    function ensureButtonInContainer(page, buttonsContainer, itemId) {
         if (!buttonsContainer) return;
 
-        if (buttonsContainer.querySelector('.t2j-item-streams-btn')) return;
+        var existingBtn = buttonsContainer.querySelector('.t2j-item-streams-btn');
+        if (existingBtn) {
+            if (existingBtn._t2jItemId !== itemId) {
+                existingBtn._t2jItemId = itemId;
+                existingBtn.onclick = function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openStreamsDrawer(itemId);
+                };
+            }
+            return;
+        }
 
         injectStreamsButton(page, buttonsContainer, itemId);
+
+        if (!buttonsContainer._t2jObserverAttached) {
+            buttonsContainer._t2jObserverAttached = true;
+            if (_buttonsObserver) {
+                try { _buttonsObserver.disconnect(); } catch (e) {}
+            }
+            _buttonsObserver = new MutationObserver(function () {
+                var currentPage = getActiveItemDetailPage();
+                if (!currentPage) return;
+                var currentId = getActiveItemId(currentPage);
+                var curContainer = currentPage.querySelector('.mainDetailButtons');
+                if (curContainer && currentId && !curContainer.querySelector('.t2j-item-streams-btn')) {
+                    injectStreamsButton(currentPage, curContainer, currentId);
+                }
+            });
+            _buttonsObserver.observe(buttonsContainer, { childList: true });
+        }
+    }
+
+    function checkItemDetailPage() {
+        var page = getActiveItemDetailPage();
+        if (!page) return;
+
+        var itemId = getActiveItemId(page);
+        if (!itemId) return;
+
+        var allContainers = page.querySelectorAll('.mainDetailButtons');
+        if (allContainers.length === 0) return;
+
+        allContainers.forEach(function (container) {
+            ensureButtonInContainer(page, container, itemId);
+        });
     }
 
     async function injectStreamsButton(page, buttonsContainer, itemId) {
@@ -1447,6 +1527,7 @@
         btn.type = 'button';
         btn.className = 'button-flat detailButton emby-button t2j-item-streams-btn';
         btn.setAttribute('title', i18n.drawerTitle);
+        btn._t2jItemId = itemId;
 
         btn.innerHTML = `
             <div class="detailButton-content">
@@ -1458,7 +1539,7 @@
         btn.onclick = function (e) {
             e.preventDefault();
             e.stopPropagation();
-            openStreamsDrawer(itemId);
+            openStreamsDrawer(btn._t2jItemId || itemId);
         };
 
         buttonsContainer.appendChild(btn);
@@ -1482,8 +1563,14 @@
     }
 
     document.addEventListener('viewshow', checkAllPages);
-    window.addEventListener('hashchange', checkAllPages);
-    setInterval(checkAllPages, 600);
+    document.addEventListener('pageshow', checkAllPages);
+    window.addEventListener('hashchange', function () {
+        setTimeout(checkAllPages, 50);
+        setTimeout(checkAllPages, 250);
+        setTimeout(checkAllPages, 600);
+    });
+    window.addEventListener('popstate', checkAllPages);
+    setInterval(checkAllPages, 400);
+    setTimeout(checkAllPages, 100);
     setTimeout(checkAllPages, 500);
 })();
-

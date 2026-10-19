@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Web\**\*" />
+    <EmbeddedResource Include="Web\**\*.html;Web\**\*.js;Web\**\*.css" />
   </ItemGroup>
 
 </Project>

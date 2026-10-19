@@ -45,14 +45,15 @@ public class ProwlarrRawItem
     [JsonPropertyName("indexer")]
     public string? Indexer { get; set; }
 
+    // Seeders / leechers / size are absent or null for some indexers (public trackers, usenet).
     [JsonPropertyName("size")]
-    public long Size { get; set; }
+    public long? Size { get; set; }
 
     [JsonPropertyName("seeders")]
-    public int Seeders { get; set; }
+    public int? Seeders { get; set; }
 
     [JsonPropertyName("leechers")]
-    public int Leechers { get; set; }
+    public int? Leechers { get; set; }
 
     [JsonPropertyName("publishDate")]
     public DateTime? PublishDate { get; set; }
@@ -68,6 +69,10 @@ public class ProwlarrRawItem
 
     [JsonPropertyName("infoHash")]
     public string? InfoHash { get; set; }
+
+    /// <summary>"torrent" / "usenet". Kept as a raw JSON value so an unexpected shape cannot break deserialization.</summary>
+    [JsonPropertyName("protocol")]
+    public JsonElement? Protocol { get; set; }
 
     [JsonPropertyName("indexerFlags")]
     public List<string>? IndexerFlags { get; set; }
@@ -98,6 +103,11 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
 {
     public string Name => "Prowlarr";
 
+    private static readonly JsonSerializerOptions ItemJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        NumberHandling = JsonNumberHandling.AllowReadingFromString
+    };
+
     private readonly ILogger<ProwlarrSearchProvider> _logger;
     private readonly HttpClient _httpClient;
 
@@ -113,7 +123,7 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
     private (string Url, string ApiKey) GetConfig()
     {
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
-        return (config.ProwlarrUrl.TrimEnd('/'), config.ProwlarrApiKey.Trim());
+        return ((config.ProwlarrUrl ?? string.Empty).TrimEnd('/'), (config.ProwlarrApiKey ?? string.Empty).Trim());
     }
 
     public async Task<bool> TestConnectionAsync(CancellationToken cancellationToken = default)
@@ -130,6 +140,10 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
             req.Headers.Add("X-Api-Key", apiKey);
             using var res = await _httpClient.SendAsync(req, cancellationToken);
             return res.IsSuccessStatusCode;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -155,6 +169,10 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
 
             var indexers = await res.Content.ReadFromJsonAsync<List<ProwlarrIndexerDto>>(cancellationToken: cancellationToken);
             return indexers ?? new List<ProwlarrIndexerDto>();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -197,125 +215,169 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, fullUrl);
             req.Headers.Add("X-Api-Key", apiKey);
-            using var res = await _httpClient.SendAsync(req, cancellationToken);
+            using var res = await _httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             res.EnsureSuccessStatusCode();
 
-            var rawItems = await res.Content.ReadFromJsonAsync<List<ProwlarrRawItem>>(cancellationToken: cancellationToken);
-            if (rawItems == null)
+            await using var stream = await res.Content.ReadAsStreamAsync(cancellationToken);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
             {
+                _logger.LogWarning("Prowlarr search returned unexpected JSON ({Kind}), ignoring", doc.RootElement.ValueKind);
                 return new List<TorrentSearchResult>();
             }
 
             var results = new List<TorrentSearchResult>();
-            foreach (var item in rawItems)
+            var skippedBad = 0;
+            var skippedUsenet = 0;
+            foreach (var element in doc.RootElement.EnumerateArray())
             {
-                var link = item.MagnetUrl ?? item.DownloadUrl ?? item.InfoUrl;
-                if (string.IsNullOrWhiteSpace(link) || string.IsNullOrWhiteSpace(item.Title))
+                // One malformed item must cost only that item, never the whole response.
+                try
                 {
-                    continue;
-                }
-
-                var flags = item.IndexerFlags ?? new List<string>();
-                var tags = new List<string>();
-
-                foreach (var f in flags)
-                {
-                    if (!string.IsNullOrWhiteSpace(f) && !tags.Contains(f, StringComparer.OrdinalIgnoreCase))
+                    var item = element.Deserialize<ProwlarrRawItem>(ItemJsonOptions);
+                    if (item == null)
                     {
-                        tags.Add(f.Trim());
+                        continue;
+                    }
+
+                    if (IsUsenet(item.Protocol))
+                    {
+                        skippedUsenet++;
+                        continue;
+                    }
+
+                    var mapped = MapItem(item);
+                    if (mapped != null)
+                    {
+                        results.Add(mapped);
                     }
                 }
-
-                var isFreeleech = flags.Any(f => f.Equals("freeleech", StringComparison.OrdinalIgnoreCase)) ||
-                                  (item.DownloadVolumeFactor.HasValue && item.DownloadVolumeFactor.Value == 0);
-                var isHalfleech = flags.Any(f => f.Equals("halfleech", StringComparison.OrdinalIgnoreCase)) ||
-                                  (item.DownloadVolumeFactor.HasValue && item.DownloadVolumeFactor.Value == 0.5);
-                var isBronze = (item.DownloadVolumeFactor.HasValue && item.DownloadVolumeFactor.Value == 0.75) ||
-                               flags.Any(f => f.Equals("bronze", StringComparison.OrdinalIgnoreCase));
-
-                // Strict mutual exclusion for leech discount tags
-                if (isFreeleech)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    isHalfleech = false;
-                    isBronze = false;
-                    tags.RemoveAll(t => t.Equals("halfleech", StringComparison.OrdinalIgnoreCase) || t.Equals("bronze", StringComparison.OrdinalIgnoreCase));
-                    if (!tags.Contains("freeleech", StringComparer.OrdinalIgnoreCase))
-                    {
-                        tags.Add("freeleech");
-                    }
+                    skippedBad++;
+                    _logger.LogDebug(ex, "Skipping a malformed Prowlarr search item");
                 }
-                else if (isHalfleech)
-                {
-                    isBronze = false;
-                    tags.RemoveAll(t => t.Equals("freeleech", StringComparison.OrdinalIgnoreCase) || t.Equals("bronze", StringComparison.OrdinalIgnoreCase));
-                    if (!tags.Contains("halfleech", StringComparer.OrdinalIgnoreCase))
-                    {
-                        tags.Add("halfleech");
-                    }
-                }
-                else if (isBronze)
-                {
-                    tags.RemoveAll(t => t.Equals("freeleech", StringComparison.OrdinalIgnoreCase) || t.Equals("halfleech", StringComparison.OrdinalIgnoreCase));
-                    if (!tags.Contains("bronze", StringComparer.OrdinalIgnoreCase))
-                    {
-                        tags.Add("bronze");
-                    }
-                }
+            }
 
-                if (item.UploadVolumeFactor.HasValue && item.UploadVolumeFactor.Value > 1 && !tags.Contains("doubleupload", StringComparer.OrdinalIgnoreCase))
-                {
-                    tags.Add("doubleupload");
-                }
+            if (skippedBad > 0)
+            {
+                _logger.LogWarning("Prowlarr search: skipped {Count} malformed item(s)", skippedBad);
+            }
 
-                var rawTitle = item.Title ?? string.Empty;
-                if ((rawTitle.Contains("[Авторськ", StringComparison.OrdinalIgnoreCase) ||
-                     rawTitle.Contains("Авторський", StringComparison.OrdinalIgnoreCase) ||
-                     rawTitle.Contains("Власна роздача", StringComparison.OrdinalIgnoreCase)) &&
-                    !tags.Contains("internal", StringComparer.OrdinalIgnoreCase))
-                {
-                    tags.Add("internal");
-                }
-
-                if ((rawTitle.Contains("[Exclusive]", StringComparison.OrdinalIgnoreCase) ||
-                     rawTitle.Contains("Ексклюзив", StringComparison.OrdinalIgnoreCase)) &&
-                    !tags.Contains("exclusive", StringComparer.OrdinalIgnoreCase))
-                {
-                    tags.Add("exclusive");
-                }
-
-                var searchResult = new TorrentSearchResult
-                {
-                    Id = item.Guid ?? item.InfoHash ?? Guid.NewGuid().ToString("N"),
-                    Title = (item.Title ?? string.Empty).Trim(),
-                    Size = item.Size,
-                    SizeFormatted = TorrentSearchResult.FormatBytes(item.Size),
-                    Seeders = item.Seeders,
-                    Peers = item.Leechers,
-                    Indexer = item.Indexer ?? "Unknown",
-                    DownloadUrl = item.DownloadUrl ?? link,
-                    MagnetUrl = item.MagnetUrl ?? (link.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase) ? link : string.Empty),
-                    InfoHash = item.InfoHash ?? string.Empty,
-                    IsGold = isFreeleech,
-                    IsFreeleech = isFreeleech,
-                    Tags = tags,
-                    PublishDate = item.PublishDate,
-                    Categories = item.Categories?.Select(c => c.Id).ToList() ?? new List<int>(),
-                    PosterUrl = !string.IsNullOrWhiteSpace(item.PosterUrl) ? item.PosterUrl : null,
-                    ImdbId = item.ImdbId.HasValue && item.ImdbId.Value > 0 ? $"tt{item.ImdbId.Value:D7}" : null,
-                    TmdbId = item.TmdbId.HasValue && item.TmdbId.Value > 0 ? item.TmdbId.Value : null
-                };
-
-                results.Add(searchResult);
+            if (skippedUsenet > 0)
+            {
+                _logger.LogDebug("Prowlarr search: skipped {Count} usenet result(s)", skippedUsenet);
             }
 
             return results
                 .OrderByDescending(r => r.Seeders)
                 .ToList();
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Prowlarr search timed out at {Url}", fullUrl);
+            return new List<TorrentSearchResult>();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to search Prowlarr at {Url}", fullUrl);
             return new List<TorrentSearchResult>();
         }
+    }
+
+    private static bool IsUsenet(JsonElement? protocol) =>
+        protocol is { ValueKind: JsonValueKind.String } p &&
+        string.Equals(p.GetString()?.Trim(), "usenet", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsMagnet(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && value.TrimStart().StartsWith("magnet:", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Maps one Prowlarr result. Returns null when it cannot be added (no title, or no link and no info-hash).</summary>
+    private static TorrentSearchResult? MapItem(ProwlarrRawItem item)
+    {
+        var title = item.Title?.Trim();
+        if (string.IsNullOrEmpty(title))
+        {
+            return null;
+        }
+
+        // Magnet: the dedicated field, then a magnet used as guid / download url.
+        var magnet = string.Empty;
+        foreach (var candidate in new[] { item.MagnetUrl, item.Guid, item.DownloadUrl })
+        {
+            if (IsMagnet(candidate))
+            {
+                magnet = candidate!.Trim();
+                break;
+            }
+        }
+
+        var infoHash = InfoHashHelper.Normalize(item.InfoHash);
+        if (infoHash.Length == 0 && magnet.Length > 0)
+        {
+            infoHash = InfoHashHelper.FromMagnet(magnet);
+        }
+
+        // The browser never gets the Prowlarr API key; the server re-attaches it when adding the torrent.
+        var httpDownload = !string.IsNullOrWhiteSpace(item.DownloadUrl) && !IsMagnet(item.DownloadUrl)
+            ? ProwlarrLinks.StripApiKey(item.DownloadUrl.Trim())
+            : string.Empty;
+
+        // A magnet built from the info-hash alone has no trackers, which a private tracker's torrent never
+        // resolves. It is only a last resort: when the indexer gave an http(s) .torrent link, that link wins.
+        if (magnet.Length == 0 && infoHash.Length > 0 && httpDownload.Length == 0)
+        {
+            magnet = InfoHashHelper.BuildMagnet(infoHash, title);
+        }
+
+        if (magnet.Length == 0 && httpDownload.Length == 0)
+        {
+            // Nothing that could be added to TorrServer (an info page URL alone is not a torrent).
+            return null;
+        }
+
+        var tags = new TagCollector();
+        if (item.IndexerFlags != null)
+        {
+            foreach (var flag in item.IndexerFlags)
+            {
+                tags.AddRaw(flag);
+            }
+        }
+
+        tags.AddDownloadFactor(item.DownloadVolumeFactor);
+        tags.AddUploadFactor(item.UploadVolumeFactor);
+        tags.AddTitle(title);
+
+        var size = Math.Max(0, item.Size ?? 0);
+        var guid = !string.IsNullOrWhiteSpace(item.Guid) && !IsMagnet(item.Guid)
+            ? ProwlarrLinks.StripApiKey(item.Guid.Trim())
+            : null;
+
+        return new TorrentSearchResult
+        {
+            Id = guid ?? (infoHash.Length > 0 ? infoHash : Guid.NewGuid().ToString("N")),
+            Title = title,
+            Size = size,
+            SizeFormatted = TorrentSearchResult.FormatBytes(size),
+            Seeders = Math.Max(0, item.Seeders ?? 0),
+            Peers = Math.Max(0, item.Leechers ?? 0),
+            Indexer = string.IsNullOrWhiteSpace(item.Indexer) ? "Unknown" : item.Indexer.Trim(),
+            DownloadUrl = httpDownload.Length > 0 ? httpDownload : magnet,
+            MagnetUrl = magnet,
+            InfoHash = infoHash,
+            IsGold = tags.IsFreeleech,
+            IsFreeleech = tags.IsFreeleech,
+            Tags = tags.ToList(),
+            PublishDate = item.PublishDate,
+            Categories = item.Categories?.Where(c => c != null).Select(c => c.Id).ToList() ?? new List<int>(),
+            PosterUrl = !string.IsNullOrWhiteSpace(item.PosterUrl) ? ProwlarrLinks.StripApiKey(item.PosterUrl.Trim()) : null,
+            ImdbId = item.ImdbId.HasValue && item.ImdbId.Value > 0 ? $"tt{item.ImdbId.Value:D7}" : null,
+            TmdbId = item.TmdbId.HasValue && item.TmdbId.Value > 0 ? item.TmdbId.Value : null
+        };
     }
 }

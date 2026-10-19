@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,42 +22,6 @@ public class TorrTorrentFile
 
     [JsonPropertyName("length")]
     public long Length { get; set; }
-}
-
-public class TorrTorrentStat
-{
-    [JsonPropertyName("title")]
-    public string Title { get; set; } = string.Empty;
-
-    [JsonPropertyName("torrent_size")]
-    public long TorrentSize { get; set; }
-
-    [JsonPropertyName("loaded_size")]
-    public long LoadedSize { get; set; }
-
-    [JsonPropertyName("preload_size")]
-    public long PreloadSize { get; set; }
-
-    [JsonPropertyName("download_speed")]
-    public double DownloadSpeed { get; set; }
-
-    [JsonPropertyName("upload_speed")]
-    public double UploadSpeed { get; set; }
-
-    [JsonPropertyName("total_peers")]
-    public int TotalPeers { get; set; }
-
-    [JsonPropertyName("connected_seeders")]
-    public int ConnectedSeeders { get; set; }
-
-    [JsonPropertyName("active_peers")]
-    public int ActivePeers { get; set; }
-
-    [JsonPropertyName("stat")]
-    public int Stat { get; set; }
-
-    [JsonPropertyName("stat_string")]
-    public string StatString { get; set; } = string.Empty;
 }
 
 public class TorrTorrent
@@ -133,6 +98,16 @@ public class TorrTorrent
 
 public class TorrClientService
 {
+    // "add" may have to fetch a .torrent file or resolve a magnet; everything else is a quick local lookup.
+    private static readonly TimeSpan AddTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(15);
+
+    // Hard ceiling of the underlying client. The per-call timeouts above are enforced with a linked
+    // CancellationTokenSource, so this only has to be larger than the longest of them.
+    private static readonly TimeSpan ClientTimeout = TimeSpan.FromSeconds(75);
+
+    private static readonly JsonSerializerOptions ListJsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly ILogger<TorrClientService> _logger;
     private readonly HttpClient _httpClient;
     private readonly TorrServerDaemonManager _daemonManager;
@@ -144,7 +119,7 @@ public class TorrClientService
     {
         _logger = logger;
         _httpClient = httpClientFactory.CreateClient("TorrClient");
-        _httpClient.Timeout = TimeSpan.FromSeconds(15);
+        _httpClient.Timeout = ClientTimeout;
         _daemonManager = daemonManager;
     }
 
@@ -153,40 +128,87 @@ public class TorrClientService
         return _daemonManager.GetEffectiveUrl();
     }
 
-    public async Task<List<TorrTorrent>> ListTorrentsAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// POSTs a JSON payload to TorrServer. The call is cancelled after <paramref name="timeout"/>, or when
+    /// <paramref name="cancellationToken"/> is cancelled. Callers dispose the response.
+    /// </summary>
+    private async Task<HttpResponseMessage> PostAsync(string path, object payload, TimeSpan timeout, CancellationToken cancellationToken)
     {
-        var url = $"{GetBaseUrl()}/torrents";
-        var payload = new { action = "list" };
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(timeout);
 
         try
         {
-            var response = await _httpClient.PostAsJsonAsync(url, payload, cancellationToken);
+            return await _httpClient.PostAsJsonAsync($"{GetBaseUrl()}{path}", payload, cts.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Not the caller: the per-call timeout fired.
+            throw new TimeoutException($"TorrServer did not answer within {timeout.TotalSeconds:0} s.");
+        }
+    }
+
+    /// <summary>
+    /// Lists the torrents stored in TorrServer. Returns <c>null</c> on any failure (unreachable, timeout,
+    /// non-success status, unreadable body) so callers can tell "TorrServer has no torrents" (empty list) from
+    /// "TorrServer could not be asked" and never act on an empty list that is really an error.
+    /// </summary>
+    public async Task<List<TorrTorrent>?> ListTorrentsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await PostAsync("/torrents", new { action = "list" }, DefaultTimeout, cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            var list = await response.Content.ReadFromJsonAsync<List<TorrTorrent>>(cancellationToken: cancellationToken);
-            return list ?? new List<TorrTorrent>();
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                _logger.LogError("TorrServer returned an empty body for the torrent list");
+                return null;
+            }
+
+            // TorrServer is written in Go and encodes a nil slice as JSON null: that is the answer for "no torrents".
+            if (string.Equals(body.Trim(), "null", StringComparison.Ordinal))
+            {
+                return new List<TorrTorrent>();
+            }
+
+            var list = JsonSerializer.Deserialize<List<TorrTorrent>>(body, ListJsonOptions);
+            if (list == null)
+            {
+                _logger.LogError("TorrServer returned an unreadable torrent list");
+                return null;
+            }
+
+            list.RemoveAll(t => t == null);
+            return list;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to list torrents from TorrServer at {Url}", url);
-            return new List<TorrTorrent>();
+            _logger.LogError(ex, "Failed to list torrents from TorrServer at {Url}", GetBaseUrl());
+            return null;
         }
     }
 
     public async Task<TorrTorrent?> GetTorrentAsync(string hash, CancellationToken cancellationToken = default)
     {
-        var url = $"{GetBaseUrl()}/torrents";
-        var payload = new { action = "get", hash };
-
         try
         {
-            var response = await _httpClient.PostAsJsonAsync(url, payload, cancellationToken);
+            using var response = await PostAsync("/torrents", new { action = "get", hash }, DefaultTimeout, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 return null;
             }
 
             return await response.Content.ReadFromJsonAsync<TorrTorrent>(cancellationToken: cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -195,6 +217,10 @@ public class TorrClientService
         }
     }
 
+    /// <summary>
+    /// Adds a torrent (magnet, http(s) .torrent link or hash) to TorrServer. Returns <c>null</c> when TorrServer
+    /// could not be reached or did not accept the torrent; the cause is logged, never returned to the caller.
+    /// </summary>
     public async Task<TorrTorrent?> AddTorrentAsync(
         string link,
         string? title = null,
@@ -203,7 +229,6 @@ public class TorrClientService
         bool saveToDb = true,
         CancellationToken cancellationToken = default)
     {
-        var url = $"{GetBaseUrl()}/torrents";
         var payload = new
         {
             action = "add",
@@ -216,15 +241,23 @@ public class TorrClientService
 
         try
         {
-            var response = await _httpClient.PostAsJsonAsync(url, payload, cancellationToken);
-            response.EnsureSuccessStatusCode();
+            using var response = await PostAsync("/torrents", payload, AddTimeout, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("TorrServer rejected the torrent with HTTP {Status}", (int)response.StatusCode);
+                return null;
+            }
 
             return await response.Content.ReadFromJsonAsync<TorrTorrent>(cancellationToken: cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to add torrent to TorrServer");
-            throw;
+            return null;
         }
     }
 
@@ -235,7 +268,6 @@ public class TorrClientService
         string? poster = null,
         CancellationToken cancellationToken = default)
     {
-        var url = $"{GetBaseUrl()}/torrents";
         var payload = new
         {
             action = "set",
@@ -247,8 +279,12 @@ public class TorrClientService
 
         try
         {
-            var response = await _httpClient.PostAsJsonAsync(url, payload, cancellationToken);
+            using var response = await PostAsync("/torrents", payload, DefaultTimeout, cancellationToken);
             return response.IsSuccessStatusCode;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -259,40 +295,19 @@ public class TorrClientService
 
     public async Task<bool> RemoveTorrentAsync(string hash, CancellationToken cancellationToken = default)
     {
-        var url = $"{GetBaseUrl()}/torrents";
-        var payload = new { action = "rem", hash };
-
         try
         {
-            var response = await _httpClient.PostAsJsonAsync(url, payload, cancellationToken);
+            using var response = await PostAsync("/torrents", new { action = "rem", hash }, DefaultTimeout, cancellationToken);
             return response.IsSuccessStatusCode;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to remove torrent {Hash} from TorrServer", hash);
             return false;
-        }
-    }
-
-    public async Task<TorrTorrentStat?> GetTorrentStatAsync(string hash, CancellationToken cancellationToken = default)
-    {
-        var url = $"{GetBaseUrl()}/viewed";
-        var payload = new { action = "get", hash };
-
-        try
-        {
-            var response = await _httpClient.PostAsJsonAsync(url, payload, cancellationToken);
-            if (!response.IsSuccessStatusCode)
-            {
-                return null;
-            }
-
-            return await response.Content.ReadFromJsonAsync<TorrTorrentStat>(cancellationToken: cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get stats for torrent {Hash}", hash);
-            return null;
         }
     }
 }

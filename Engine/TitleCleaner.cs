@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -227,7 +228,27 @@ public static partial class TitleCleaner
         return cleanTitle;
     }
 
-    public static string SanitizeFilename(string name)
+    /// <summary>Longest allowed single path segment (file or directory name), measured in UTF-8 bytes.</summary>
+    public const int MaxSegmentBytes = 200;
+
+    [GeneratedRegex(@"^(?<stem>.*?)(?<ext>\.[A-Za-z][A-Za-z0-9]{0,7})$", RegexOptions.Singleline)]
+    private static partial Regex KnownExtensionRegex();
+
+    /// <summary>
+    /// Makes <paramref name="name"/> usable as exactly ONE path segment: path separators and reserved characters become
+    /// spaces, control characters are removed, leading/trailing dots, dashes and spaces are trimmed, and the result is
+    /// capped at <see cref="MaxSegmentBytes"/> UTF-8 bytes (a trailing extension such as ".strm" is kept).
+    /// Never returns an empty string: an unusable name becomes "Untitled", or "Untitled {first 8 hash chars}" when a
+    /// hash is supplied. Use <see cref="SanitizeFilenameOrEmpty"/> to chain several candidate names.
+    /// </summary>
+    public static string SanitizeFilename(string? name, string? hash = null)
+    {
+        var sanitized = SanitizeFilenameOrEmpty(name);
+        return sanitized.Length > 0 ? sanitized : FallbackName(hash);
+    }
+
+    /// <summary>Same as <see cref="SanitizeFilename"/> but returns an empty string when nothing usable is left.</summary>
+    public static string SanitizeFilenameOrEmpty(string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -243,13 +264,97 @@ public static partial class TitleCleaner
             {
                 sb.Append(' ');
             }
+            else if (char.IsControl(c))
+            {
+                // Tabs and line breaks keep neighbouring words apart; any other control character is dropped.
+                if (char.IsWhiteSpace(c))
+                {
+                    sb.Append(' ');
+                }
+            }
+            else if (char.GetUnicodeCategory(c) is UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator)
+            {
+                sb.Append(' ');
+            }
             else if (!invalidChars.Contains(c))
             {
                 sb.Append(c);
             }
         }
 
-        return MultipleSpacesRegex().Replace(sb.ToString(), " ").Trim(' ', '.', '-');
+        var text = TrimName(MultipleSpacesRegex().Replace(sb.ToString(), " "));
+        if (text.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return CapToByteLength(text, MaxSegmentBytes);
+    }
+
+    /// <summary>"Untitled", or "Untitled {first 8 chars}" when <paramref name="hash"/> is a usable hex string.</summary>
+    public static string FallbackName(string? hash)
+    {
+        var h = hash?.Trim();
+        if (!string.IsNullOrEmpty(h) && h.Length >= 8 && h[..8].All(Uri.IsHexDigit))
+        {
+            return $"Untitled {h[..8].ToLowerInvariant()}";
+        }
+
+        return "Untitled";
+    }
+
+    private static bool IsTrimChar(char c) => c == '.' || c == '-' || char.IsWhiteSpace(c);
+
+    private static string TrimName(string text)
+    {
+        var start = 0;
+        var end = text.Length;
+        while (start < end && IsTrimChar(text[start]))
+        {
+            start++;
+        }
+
+        while (end > start && IsTrimChar(text[end - 1]))
+        {
+            end--;
+        }
+
+        return text.Substring(start, end - start);
+    }
+
+    private static string CapToByteLength(string text, int maxBytes)
+    {
+        if (Encoding.UTF8.GetByteCount(text) <= maxBytes)
+        {
+            return text;
+        }
+
+        var stem = text;
+        var ext = string.Empty;
+        var m = KnownExtensionRegex().Match(text);
+        if (m.Success)
+        {
+            stem = m.Groups["stem"].Value;
+            ext = m.Groups["ext"].Value;
+        }
+
+        var budget = maxBytes - Encoding.UTF8.GetByteCount(ext);
+        var cut = new StringBuilder(stem.Length);
+        var used = 0;
+        foreach (var rune in stem.EnumerateRunes())
+        {
+            var len = rune.Utf8SequenceLength;
+            if (used + len > budget)
+            {
+                break;
+            }
+
+            cut.Append(rune.ToString());
+            used += len;
+        }
+
+        var trimmed = TrimName(cut.ToString());
+        return trimmed.Length == 0 ? string.Empty : trimmed + ext;
     }
 
     public static string ExtractQualityTag(string rawTitle)

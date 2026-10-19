@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/main/logo.png",
     "versions": [
       {
+        "version": "1.0.19.1",
+        "changelog": "Fix HTTP 401 on the Torr2Jelly settings page with newer Jellyfin servers that disable legacy authorization: the page now sends the standard Authorization header.",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/releases/download/v1.0.19.1/Torr2Jelly_1.0.19.1.zip",
+        "checksum": "91762efe578929306f8b2bc9be09f689",
+        "timestamp": "2026-10-19T21:18:33Z"
+      },
+      {
         "version": "1.0.19.0",
         "changelog": "Security & data-safety hardening: plugin API now requires Jellyfin login (admin for management), safe .strm cleanup that never deletes outside category folders or when TorrServer is unreachable, alternate versions survive sync, indexer API keys no longer exposed to clients, settings save merges instead of resetting fields, Jellyfin 10.11 scheduled-task compatibility, BaseUrl-safe search integration.",
         "targetAbi": "10.9.0.0",

@@ -4,10 +4,12 @@ using System.Net.Http;
 using MediaBrowser.Common;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Jellyfin.Plugin.Torr2Jelly.Daemon;
 using Jellyfin.Plugin.Torr2Jelly.Engine;
 using Jellyfin.Plugin.Torr2Jelly.Search;
+using Jellyfin.Plugin.Torr2Jelly.Web;
 
 namespace Jellyfin.Plugin.Torr2Jelly;
 
@@ -33,5 +35,9 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<ProwlarrSearchProvider>();
         serviceCollection.AddSingleton<TorznabSearchProvider>();
         serviceCollection.AddSingleton<TorrentSearchService>();
+
+        // Adds the search script to the web client's index.html while it is served. The web directory is read-only
+        // in the official Docker image and reset by every update, so the file itself cannot be patched there.
+        serviceCollection.AddTransient<IStartupFilter, WebIndexInjectionStartupFilter>();
     }
 }

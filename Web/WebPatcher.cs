@@ -17,7 +17,7 @@ public static class WebPatcher
     };
 
     // Every script tag an earlier release (or this one) injected, whatever its attributes or URL form.
-    private static readonly Regex ExistingScriptTag = new(
+    internal static readonly Regex ExistingScriptTag = new(
         @"<script\b[^>]*(?:/Plugins/Torr2Jelly/search\.js|torr2jellysearch)[^>]*>\s*</script>",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -128,7 +128,18 @@ public static class WebPatcher
                 return;
             }
 
-            File.WriteAllText(indexPath, patched);
+            try
+            {
+                File.WriteAllText(indexPath, patched);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+            {
+                // Expected on the official Docker image: the web directory is read-only and reset by every update.
+                // WebIndexInjectionMiddleware adds the script while the page is served, so this is not a problem.
+                logger.LogInformation("{Path} is read-only; the Torr2Jelly script is injected when the page is served instead", indexPath);
+                return;
+            }
+
             logger.LogInformation("Successfully injected Torr2Jelly search integration into {Path}", indexPath);
         }
         catch (Exception ex)

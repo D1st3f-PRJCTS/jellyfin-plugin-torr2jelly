@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.Torr2Jelly.Api.Dtos;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -650,6 +651,222 @@ public class StrmEngine
             _logger.LogWarning(ex, "Failed to queue library scan");
         }
     }
+
+
+    public string? ResolveItemDirectory(Guid itemId)
+    {
+        try
+        {
+            var item = _libraryManager.GetItemById(itemId);
+            if (item == null) return null;
+
+            if (!string.IsNullOrWhiteSpace(item.Path) && File.Exists(item.Path))
+            {
+                return Path.GetDirectoryName(item.Path);
+            }
+            if (!string.IsNullOrWhiteSpace(item.Path) && Directory.Exists(item.Path))
+            {
+                return item.Path;
+            }
+            if (!string.IsNullOrWhiteSpace(item.ContainingFolderPath) && Directory.Exists(item.ContainingFolderPath))
+            {
+                return item.ContainingFolderPath;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to resolve directory for item {Id}", itemId);
+        }
+        return null;
+    }
+
+    public List<MovieStreamInfoDto> GetStreamsForDirectory(string targetDir, string? activeItemPath = null)
+    {
+        var result = new List<MovieStreamInfoDto>();
+        try
+        {
+            if (!Directory.Exists(targetDir)) return result;
+
+            var strmFiles = Directory.GetFiles(targetDir, "*.strm", SearchOption.TopDirectoryOnly);
+            foreach (var strmFile in strmFiles)
+            {
+                var fileName = Path.GetFileName(strmFile);
+                var baseName = Path.GetFileNameWithoutExtension(strmFile);
+                string? hash = null;
+
+                try
+                {
+                    var text = File.ReadAllText(strmFile);
+                    var match = Regex.Match(text, @"link=([a-f0-9]+)", RegexOptions.IgnoreCase);
+                    if (match.Success)
+                    {
+                        hash = match.Groups[1].Value;
+                    }
+                }
+                catch { }
+
+                var versionLabel = "Default / Primary";
+                var bracketMatch = Regex.Match(baseName, @"\[([^\]]+)\]");
+                if (bracketMatch.Success)
+                {
+                    versionLabel = bracketMatch.Groups[1].Value;
+                }
+                else
+                {
+                    var dashIdx = baseName.IndexOf(" - ", StringComparison.Ordinal);
+                    if (dashIdx >= 0 && dashIdx + 3 < baseName.Length)
+                    {
+                        versionLabel = baseName.Substring(dashIdx + 3).Trim();
+                    }
+                }
+
+                var isPrimary = (!string.IsNullOrWhiteSpace(activeItemPath) && strmFile.Equals(activeItemPath, StringComparison.OrdinalIgnoreCase))
+                    || !baseName.Contains(" - ", StringComparison.Ordinal);
+
+                result.Add(new MovieStreamInfoDto
+                {
+                    Name = fileName,
+                    Path = strmFile,
+                    TorrentHash = hash,
+                    VersionLabel = versionLabel,
+                    IsPrimary = isPrimary
+                });
+            }
+
+            return result.OrderByDescending(s => s.IsPrimary).ThenBy(s => s.Name).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read streams for directory {Dir}", targetDir);
+            return result;
+        }
+    }
+
+    public async Task<bool> DeleteStreamByHashAsync(string targetDir, string hash, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (!Directory.Exists(targetDir)) return false;
+
+            var strmFiles = Directory.GetFiles(targetDir, "*.strm", SearchOption.TopDirectoryOnly);
+            var deletedAny = false;
+
+            foreach (var strmFile in strmFiles)
+            {
+                try
+                {
+                    var text = await File.ReadAllTextAsync(strmFile, cancellationToken);
+                    if (text.Contains(hash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        File.Delete(strmFile);
+                        var nfo = Path.ChangeExtension(strmFile, ".nfo");
+                        if (File.Exists(nfo) && !Path.GetFileName(nfo).Equals("movie.nfo", StringComparison.OrdinalIgnoreCase))
+                        {
+                            File.Delete(nfo);
+                        }
+                        deletedAny = true;
+                        _logger.LogInformation("Deleted stream {File} for hash {Hash}", strmFile, hash);
+                    }
+                }
+                catch { }
+            }
+
+            if (deletedAny)
+            {
+                NotifyPathChanged(targetDir);
+            }
+
+            return deletedAny;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete stream by hash {Hash} in {Dir}", hash, targetDir);
+            return false;
+        }
+    }
+
+    public async Task<AlternateStreamResultDto> AddAlternateStreamAsync(
+        string targetDir,
+        TorrTorrent torrent,
+        AddAlternateStreamRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var result = new AlternateStreamResultDto
+        {
+            TorrentHash = torrent.Hash
+        };
+
+        try
+        {
+            if (!Directory.Exists(targetDir))
+            {
+                Directory.CreateDirectory(targetDir);
+            }
+
+            var files = torrent.GetEffectiveFiles();
+            var videoFiles = files.Where(f => EpisodeMatcher.IsVideoFile(f.Path)).ToList();
+            if (videoFiles.Count == 0 && files.Count > 0)
+            {
+                videoFiles.Add(files[0]);
+            }
+            else if (videoFiles.Count == 0 && files.Count == 0)
+            {
+                videoFiles.Add(new TorrTorrentFile { Id = 1, Path = $"{Path.GetFileName(targetDir)}.mkv", Length = torrent.TorrentSize });
+            }
+
+            var mainFile = videoFiles.OrderByDescending(f => f.Length).FirstOrDefault() ?? videoFiles[0];
+
+            if (request.ReplaceExisting && !string.IsNullOrWhiteSpace(request.OldTorrentHash))
+            {
+                await DeleteStreamByHashAsync(targetDir, request.OldTorrentHash, cancellationToken);
+            }
+
+            var quality = !string.IsNullOrWhiteSpace(request.QualityTag)
+                ? request.QualityTag
+                : TitleCleaner.ExtractQualityTag(torrent.Title);
+
+            var shortHash = torrent.Hash.Length >= 8 ? torrent.Hash[..8] : torrent.Hash;
+            var labelParts = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(quality)) labelParts.Add(quality);
+            if (!string.IsNullOrWhiteSpace(request.Tracker)) labelParts.Add(request.Tracker);
+            if (request.Seeders.HasValue && request.Seeders.Value > 0) labelParts.Add($"{request.Seeders.Value}s");
+            labelParts.Add(shortHash);
+
+            var versionLabel = string.Join(" ", labelParts);
+
+            var baseFolderName = Path.GetFileName(targetDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var strmFileName = TitleCleaner.SanitizeFilename($"{baseFolderName} - [{versionLabel}].strm");
+            var strmPath = Path.Combine(targetDir, strmFileName);
+
+            var streamUrl = $"{_daemonManager.GetStreamBaseUrl()}/stream?link={torrent.Hash}&index={mainFile.Id}&play\n";
+            await File.WriteAllTextAsync(strmPath, streamUrl, Encoding.UTF8, cancellationToken);
+
+            // Ensure movie.nfo exists so Jellyfin keeps item metadata intact
+            var movieNfo = Path.Combine(targetDir, "movie.nfo");
+            if (!File.Exists(movieNfo))
+            {
+                var (cleanTitle, origTitle, year) = TitleCleaner.CleanTitleAndExtractYear(baseFolderName);
+                await WriteMovieNfoAsync(targetDir, baseFolderName, cleanTitle, origTitle, year, null, null, cancellationToken);
+            }
+
+            NotifyPathChanged(targetDir);
+
+            result.Success = true;
+            result.StrmFilePath = strmPath;
+            result.VersionLabel = versionLabel;
+            _logger.LogInformation("Added alternate stream version '{Version}' for '{Folder}' in {Path}", versionLabel, baseFolderName, strmPath);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add alternate stream for torrent {Hash}", torrent.Hash);
+            result.Success = false;
+            result.ErrorMessage = ex.Message;
+            return result;
+        }
+    }
+
 
     private async Task DownloadPosterAsync(string targetDir, string posterUrl, CancellationToken cancellationToken)
     {

@@ -34,7 +34,21 @@
             addedToast: isUk ? 'успішно додано! Оновлюємо медіатеку...' : 'successfully added! Refreshing library...',
             serverError: isUk ? '⚠ Помилка сервера' : '⚠ Server Error',
             failedResponse: isUk ? 'Невдала відповідь' : 'Request failed',
-            connError: isUk ? 'Помилка з\'єднання' : 'Connection error'
+            connError: isUk ? 'Помилка з\'єднання' : 'Connection error',
+            streamsBtn: isUk ? '⚡ Стріми' : '⚡ Streams',
+            drawerTitle: isUk ? 'Керування торрент-стрімами' : 'Manage Torrent Streams',
+            activeStreamsTab: isUk ? 'Активні версії' : 'Active Versions',
+            searchAlternativesTab: isUk ? 'Пошук роздач' : 'Find Releases',
+            currentBadge: isUk ? 'ОСНОВНА' : 'PRIMARY',
+            versionBadge: isUk ? 'ВЕРСІЯ' : 'VERSION',
+            deleteStreamConfirm: isUk ? 'Ви дійсно хочете видалити цей стрім та очистити торрент?' : 'Are you sure you want to delete this stream and remove the torrent?',
+            addAsVersionBtn: isUk ? '+ Додати як версію' : '+ Add as Version',
+            replaceStreamBtn: isUk ? '🔄 Замінити поточний' : '🔄 Replace Current',
+            replaceConfirm: isUk ? 'Замінити поточну версію цією роздачею?' : 'Replace current stream with this release?',
+            noStreamsFound: isUk ? 'Не знайдено активних .strm файлів' : 'No active .strm files found',
+            refreshingMedia: isUk ? 'Оновлюємо сторінку...' : 'Refreshing media...',
+            streamAddedSuccess: isUk ? 'Роздачу успішно додано як версію стріму!' : 'Release successfully added to item!',
+            streamDeletedSuccess: isUk ? 'Стрім успішно видалено' : 'Stream deleted successfully'
         };
     }
 
@@ -317,6 +331,208 @@
         @keyframes t2jSlideIn {
             from { transform: translateY(20px); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
+        }
+        /* Drawer & Modal Styles */
+        .t2j-drawer-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 99998;
+            animation: t2jFadeIn 0.2s ease;
+        }
+        .t2j-drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 580px;
+            max-width: 95vw;
+            background: #090d16;
+            border-left: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: -10px 0 35px rgba(0, 0, 0, 0.8);
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            animation: t2jDrawerSlide 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            color: #f1f5f9;
+            font-family: inherit;
+        }
+        @keyframes t2jDrawerSlide {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+        .t2j-drawer-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #0f172a;
+        }
+        .t2j-drawer-title {
+            font-size: 1.15em;
+            font-weight: 700;
+            color: #fff;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .t2j-drawer-subtitle {
+            font-size: 0.8em;
+            color: #94a3b8;
+            margin-top: 3px;
+        }
+        .t2j-drawer-close {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 22px;
+            cursor: pointer;
+            line-height: 1;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .t2j-drawer-close:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .t2j-drawer-tabs {
+            display: flex;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: #0b1120;
+            padding: 0 16px;
+        }
+        .t2j-drawer-tab {
+            padding: 12px 18px;
+            font-size: 0.88em;
+            font-weight: 600;
+            color: #94a3b8;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .t2j-drawer-tab:hover {
+            color: #f1f5f9;
+        }
+        .t2j-drawer-tab.active {
+            color: #10b981;
+            border-bottom-color: #10b981;
+        }
+        .t2j-drawer-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .t2j-stream-item {
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            transition: border-color 0.2s;
+        }
+        .t2j-stream-item.primary {
+            border-color: rgba(16, 185, 129, 0.4);
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), #1e293b);
+        }
+        .t2j-stream-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+            overflow: hidden;
+        }
+        .t2j-stream-label {
+            font-size: 0.92em;
+            font-weight: 700;
+            color: #f8fafc;
+            word-break: break-all;
+        }
+        .t2j-stream-sub {
+            font-size: 0.75em;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .t2j-stream-del-btn {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .t2j-stream-del-btn:hover {
+            background: #ef4444;
+            color: #fff;
+        }
+        .t2j-drawer-search-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .t2j-drawer-input {
+            flex: 1;
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            color: #fff;
+            padding: 8px 12px;
+            font-size: 0.88em;
+            outline: none;
+        }
+        .t2j-drawer-input:focus {
+            border-color: #10b981;
+        }
+        .t2j-drawer-search-btn {
+            background: #10b981;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0 16px;
+            font-weight: 600;
+            font-size: 0.85em;
+            cursor: pointer;
+        }
+        .t2j-card-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .t2j-btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #cbd5e1;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.78em;
+            font-weight: 600;
+            cursor: pointer;
+            flex: 1;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .t2j-btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.18);
+            color: #fff;
         }
     `;
     document.head.appendChild(style);
@@ -773,6 +989,501 @@
         }
     }
 
-    setInterval(checkSearchPage, 600);
-    setTimeout(checkSearchPage, 500);
+
+    // ==========================================
+    // Multi-Version & Alternate Streams Drawer UI
+    // ==========================================
+    var _drawerData = null;
+    var _activeDrawerTab = 'streams'; // 'streams' or 'search'
+    var _drawerSearchFilter = 'all';
+
+    async function openStreamsDrawer(itemId) {
+        var existing = document.getElementById('t2j-drawer-root');
+        if (existing) existing.remove();
+
+        var root = document.createElement('div');
+        root.id = 't2j-drawer-root';
+
+        var backdrop = document.createElement('div');
+        backdrop.className = 't2j-drawer-backdrop';
+        backdrop.onclick = function () { root.remove(); };
+
+        var drawer = document.createElement('div');
+        drawer.className = 't2j-drawer';
+
+        var i18n = getI18n();
+
+        drawer.innerHTML = `
+            <div class="t2j-drawer-header">
+                <div>
+                    <h3 class="t2j-drawer-title">⚡ ${i18n.drawerTitle}</h3>
+                    <div class="t2j-drawer-subtitle" id="t2j-drawer-item-title">${i18n.searching}...</div>
+                </div>
+                <button type="button" class="t2j-drawer-close" id="t2j-drawer-close-btn">&times;</button>
+            </div>
+            <div class="t2j-drawer-tabs">
+                <button type="button" class="t2j-drawer-tab active" id="t2j-tab-streams">${i18n.activeStreamsTab}</button>
+                <button type="button" class="t2j-drawer-tab" id="t2j-tab-search">${i18n.searchAlternativesTab}</button>
+            </div>
+            <div class="t2j-drawer-body" id="t2j-drawer-body">
+                <div style="text-align: center; padding: 40px 0; color: #94a3b8;">
+                    <div class="t2j-status-spinner" style="margin: 0 auto 12px; width: 24px; height: 24px;"></div>
+                    <div>${i18n.searching}...</div>
+                </div>
+            </div>
+        `;
+
+        root.appendChild(backdrop);
+        root.appendChild(drawer);
+        document.body.appendChild(root);
+
+        document.getElementById('t2j-drawer-close-btn').onclick = function () {
+            root.remove();
+        };
+
+        var tabStreams = document.getElementById('t2j-tab-streams');
+        var tabSearch = document.getElementById('t2j-tab-search');
+
+        tabStreams.onclick = function () {
+            _activeDrawerTab = 'streams';
+            tabStreams.className = 't2j-drawer-tab active';
+            tabSearch.className = 't2j-drawer-tab';
+            renderDrawerContent(itemId);
+        };
+
+        tabSearch.onclick = function () {
+            _activeDrawerTab = 'search';
+            tabSearch.className = 't2j-drawer-tab active';
+            tabStreams.className = 't2j-drawer-tab';
+            renderDrawerContent(itemId);
+        };
+
+        // Fetch alternatives and current streams
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + itemId + '/Alternatives'), { headers: getAuthHeaders() });
+            if (res.ok) {
+                _drawerData = await res.json();
+                var titleEl = document.getElementById('t2j-drawer-item-title');
+                if (titleEl) {
+                    titleEl.textContent = _drawerData.Title + (_drawerData.Year ? ' (' + _drawerData.Year + ')' : '');
+                }
+                var streamsCount = (_drawerData.ExistingStreams || []).length;
+                tabStreams.textContent = i18n.activeStreamsTab + ' (' + streamsCount + ')';
+                var altsCount = (_drawerData.Alternatives || []).length;
+                tabSearch.textContent = i18n.searchAlternativesTab + ' (' + altsCount + ')';
+
+                renderDrawerContent(itemId);
+            } else {
+                var body = document.getElementById('t2j-drawer-body');
+                if (body) {
+                    body.innerHTML = '<div style="color: #ef4444; padding: 20px;">' + i18n.failedResponse + '</div>';
+                }
+            }
+        } catch (e) {
+            var body = document.getElementById('t2j-drawer-body');
+            if (body) {
+                body.innerHTML = '<div style="color: #ef4444; padding: 20px;">' + i18n.connError + ': ' + e.message + '</div>';
+            }
+        }
+    }
+
+    function renderDrawerContent(itemId) {
+        var body = document.getElementById('t2j-drawer-body');
+        if (!body || !_drawerData) return;
+
+        var i18n = getI18n();
+
+        if (_activeDrawerTab === 'streams') {
+            var streams = _drawerData.ExistingStreams || [];
+            if (streams.length === 0) {
+                body.innerHTML = `
+                    <div style="text-align: center; padding: 40px 20px; color: #94a3b8;">
+                        <div style="font-size: 32px; margin-bottom: 10px;">📂</div>
+                        <div style="font-size: 1.1em; font-weight: 600; color: #cbd5e1;">${i18n.noStreamsFound}</div>
+                        <div style="font-size: 0.85em; margin-top: 6px;">Перейдіть на вкладку "Пошук роздач", щоб знайти та додати версію.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            var html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+            streams.forEach(function (s) {
+                var isPrimary = s.IsPrimary;
+                var shortHash = s.TorrentHash ? (s.TorrentHash.length > 8 ? s.TorrentHash.substring(0, 8) : s.TorrentHash) : '';
+
+                html += `
+                    <div class="t2j-stream-item ${isPrimary ? 'primary' : ''}">
+                        <div class="t2j-stream-info">
+                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                                <span class="t2j-badge ${isPrimary ? 't2j-badge-tracker' : 't2j-badge-silver'}" style="${isPrimary ? 'background: #059669; color: #fff;' : ''}">
+                                    ${isPrimary ? i18n.currentBadge : i18n.versionBadge}
+                                </span>
+                                ${shortHash ? `<span class="t2j-badge t2j-badge-tracker" style="font-family: monospace;">#${shortHash}</span>` : ''}
+                            </div>
+                            <div class="t2j-stream-label">${escapeHtml(s.VersionLabel || s.Name)}</div>
+                            <div class="t2j-stream-sub">
+                                <span title="${escapeHtml(s.Path)}">${escapeHtml(s.Name)}</span>
+                            </div>
+                        </div>
+                        ${s.TorrentHash ? `
+                            <button type="button" class="t2j-stream-del-btn" title="Видалити цей стрім" data-hash="${s.TorrentHash}" data-name="${escapeHtml(s.VersionLabel || s.Name)}">
+                                🗑️
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            html += '</div>';
+            body.innerHTML = html;
+
+            body.querySelectorAll('.t2j-stream-del-btn').forEach(function (btn) {
+                btn.onclick = async function () {
+                    var hash = btn.getAttribute('data-hash');
+                    var name = btn.getAttribute('data-name');
+                    if (!hash) return;
+                    if (!confirm(i18n.deleteStreamConfirm + '\n\n"' + name + '"')) return;
+
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="t2j-status-spinner"></span>';
+
+                    try {
+                        var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + itemId + '/Streams/' + hash), {
+                            method: 'DELETE',
+                            headers: getAuthHeaders()
+                        });
+                        if (res.ok) {
+                            showToast('✓ ' + i18n.streamDeletedSuccess, true);
+                            openStreamsDrawer(itemId);
+                        } else {
+                            btn.disabled = false;
+                            btn.innerHTML = '🗑️';
+                            showToast(i18n.serverError, false);
+                        }
+                    } catch (e) {
+                        btn.disabled = false;
+                        btn.innerHTML = '🗑️';
+                        showToast(i18n.connError, false);
+                    }
+                };
+            });
+        } else {
+            // Tab Search
+            var alts = _drawerData.Alternatives || [];
+            var queryVal = _drawerData.SearchQuery || (_drawerData.OriginalTitle || _drawerData.Title || '');
+
+            var taggedAlts = alts.filter(function (r) {
+                return r.IsGold || (r.Tags && r.Tags.length > 0);
+            });
+
+            var activeList = (_drawerSearchFilter === 'gold') ? taggedAlts : alts;
+
+            var html = `
+                <div class="t2j-drawer-search-bar">
+                    <input type="text" class="t2j-drawer-input" id="t2j-drawer-search-input" value="${escapeHtml(queryVal)}" placeholder="Введіть назву для пошуку..." />
+                    <button type="button" class="t2j-drawer-search-btn" id="t2j-drawer-search-btn">🔍 Знайти</button>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <div class="t2j-filter-chips">
+                        <button type="button" class="t2j-chip ${_drawerSearchFilter === 'all' ? 'active' : ''}" id="t2j-filter-all">${i18n.filterAll} (${alts.length})</button>
+                        <button type="button" class="t2j-chip ${_drawerSearchFilter === 'gold' ? 'active' : ''}" id="t2j-filter-gold">${i18n.filterGold} (${taggedAlts.length})</button>
+                    </div>
+                    <div style="font-size: 0.78em; color: #94a3b8;">${activeList.length} ${i18n.releasesFound}</div>
+                </div>
+            `;
+
+            if (activeList.length === 0) {
+                html += `
+                    <div style="text-align: center; padding: 40px 20px; color: #94a3b8;">
+                        <div style="font-size: 32px; margin-bottom: 10px;">🔍</div>
+                        <div style="font-size: 1.05em; font-weight: 600; color: #cbd5e1;">Нічого не знайдено</div>
+                        <div style="font-size: 0.85em; margin-top: 6px;">Спробуйте змінити пошуковий запит вище.</div>
+                    </div>
+                `;
+            } else {
+                html += '<div style="display: flex; flex-direction: column; gap: 12px;">';
+                var existingStreams = _drawerData.ExistingStreams || [];
+                var primaryStream = existingStreams.find(function (s) { return s.IsPrimary; }) || existingStreams[0];
+
+                activeList.forEach(function (item, idx) {
+                    var title = item.Title || '';
+                    var rawLink = item.DownloadUrl || item.MagnetUrl || '';
+                    var size = item.SizeFormatted || '';
+                    var seeds = item.Seeders || 0;
+                    var tracker = item.Indexer || 'Torrent';
+                    var isGold = !!(item.IsGold || item.isGold);
+
+                    var rawTags = (item.Tags || item.tags || []).slice();
+                    var hasFreeleech = isGold || rawTags.some(function (tg) { return /freeleech|gold/i.test(tg); });
+
+                    var tagBadgesHtml = '';
+                    if (hasFreeleech) {
+                        tagBadgesHtml += '<span class="t2j-badge t2j-badge-gold">' + i18n.goldBadge + '</span>';
+                    }
+
+                    var isAdded = existingStreams.some(function (es) {
+                        return es.TorrentHash && item.InfoHash && es.TorrentHash.toLowerCase() === item.InfoHash.toLowerCase();
+                    });
+
+                    html += `
+                        <div class="t2j-card" style="margin-bottom: 0;">
+                            <div>
+                                <div class="t2j-card-meta">
+                                    <span class="t2j-badge t2j-badge-tracker">${escapeHtml(tracker)}</span>
+                                    ${tagBadgesHtml}
+                                    <span class="t2j-badge t2j-badge-seeders">▲ ${seeds}</span>
+                                    <span class="t2j-badge t2j-badge-size">${escapeHtml(size)}</span>
+                                    ${isAdded ? '<span class="t2j-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">✓ ВЖЕ В МЕДІАТЕЦІ</span>' : ''}
+                                </div>
+                                <div class="t2j-card-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
+                            </div>
+                            <div class="t2j-card-actions">
+                                <button type="button" class="t2j-add-btn t2j-btn-add-version" data-idx="${idx}" data-link="${encodeURIComponent(rawLink)}" data-title="${encodeURIComponent(title)}" data-tracker="${escapeHtml(tracker)}" data-seeds="${seeds}">
+                                    <span>${i18n.addAsVersionBtn}</span>
+                                </button>
+                                ${primaryStream && primaryStream.TorrentHash ? `
+                                    <button type="button" class="t2j-btn-secondary t2j-btn-replace" data-idx="${idx}" data-link="${encodeURIComponent(rawLink)}" data-title="${encodeURIComponent(title)}" data-tracker="${escapeHtml(tracker)}" data-seeds="${seeds}" data-oldhash="${primaryStream.TorrentHash}">
+                                        <span>${i18n.replaceStreamBtn}</span>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            body.innerHTML = html;
+
+            var inputEl = document.getElementById('t2j-drawer-search-input');
+            var searchBtn = document.getElementById('t2j-drawer-search-btn');
+            async function triggerDrawerSearch() {
+                var q = (inputEl.value || '').trim();
+                if (!q) return;
+                searchBtn.disabled = true;
+                searchBtn.innerHTML = '<span class="t2j-status-spinner"></span>';
+                try {
+                    var sres = await fetch(getApiUrl('Plugins/Torr2Jelly/Search?query=' + encodeURIComponent(q)), { headers: getAuthHeaders() });
+                    if (sres.ok) {
+                        var alts = await sres.json();
+                        _drawerData.Alternatives = alts || [];
+                        _drawerData.SearchQuery = q;
+                        var tabSearch = document.getElementById('t2j-tab-search');
+                        if (tabSearch) tabSearch.textContent = i18n.searchAlternativesTab + ' (' + _drawerData.Alternatives.length + ')';
+                        renderDrawerContent(itemId);
+                    }
+                } catch (e) {
+                    showToast(i18n.connError, false);
+                } finally {
+                    searchBtn.disabled = false;
+                    searchBtn.innerHTML = '🔍 Знайти';
+                }
+            }
+
+            if (searchBtn) searchBtn.onclick = triggerDrawerSearch;
+            if (inputEl) {
+                inputEl.onkeydown = function (e) {
+                    if (e.key === 'Enter') triggerDrawerSearch();
+                };
+            }
+
+            var filterAll = document.getElementById('t2j-filter-all');
+            var filterGold = document.getElementById('t2j-filter-gold');
+            if (filterAll) {
+                filterAll.onclick = function () {
+                    _drawerSearchFilter = 'all';
+                    renderDrawerContent(itemId);
+                };
+            }
+            if (filterGold) {
+                filterGold.onclick = function () {
+                    _drawerSearchFilter = 'gold';
+                    renderDrawerContent(itemId);
+                };
+            }
+
+            body.querySelectorAll('.t2j-btn-add-version').forEach(function (btn) {
+                btn.onclick = async function () {
+                    var link = decodeURIComponent(btn.getAttribute('data-link') || '');
+                    var title = decodeURIComponent(btn.getAttribute('data-title') || '');
+                    var tracker = btn.getAttribute('data-tracker') || '';
+                    var seeds = parseInt(btn.getAttribute('data-seeds') || '0', 10);
+                    if (!link) return;
+
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="t2j-status-spinner"></span> <span>' + i18n.adding + '</span>';
+
+                    try {
+                        var payload = {
+                            Link: link,
+                            Tracker: tracker,
+                            Seeders: seeds,
+                            ReplaceExisting: false
+                        };
+
+                        var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + itemId + '/AlternateStream'), {
+                            method: 'POST',
+                            headers: getAuthHeaders(),
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (res.ok) {
+                            btn.className = 't2j-add-btn success';
+                            btn.innerHTML = '<span>' + i18n.added + '</span>';
+                            showToast('✓ ' + i18n.streamAddedSuccess, true);
+
+                            setTimeout(function () {
+                                _activeDrawerTab = 'streams';
+                                openStreamsDrawer(itemId);
+                            }, 1200);
+
+                            if (window.ApiClient && window.ApiClient.getItem) {
+                                window.ApiClient.getItem(window.ApiClient.getCurrentUserId(), itemId).then(function (updItem) {
+                                    if (window.Events && typeof window.Events.trigger === 'function') {
+                                        window.Events.trigger(window.ApiClient, 'itemupdate', [updItem]);
+                                    }
+                                }).catch(function () {});
+                            }
+                        } else {
+                            var errData = await res.json().catch(function () { return {}; });
+                            btn.disabled = false;
+                            btn.innerHTML = '<span>' + i18n.serverError + '</span>';
+                            showToast(i18n.failedResponse + ': ' + (errData.error || i18n.failedResponse), false);
+                        }
+                    } catch (e) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<span>' + i18n.serverError + '</span>';
+                        showToast(i18n.connError + ': ' + e.message, false);
+                    }
+                };
+            });
+
+            body.querySelectorAll('.t2j-btn-replace').forEach(function (btn) {
+                btn.onclick = async function () {
+                    var link = decodeURIComponent(btn.getAttribute('data-link') || '');
+                    var title = decodeURIComponent(btn.getAttribute('data-title') || '');
+                    var tracker = btn.getAttribute('data-tracker') || '';
+                    var seeds = parseInt(btn.getAttribute('data-seeds') || '0', 10);
+                    var oldHash = btn.getAttribute('data-oldhash') || '';
+                    if (!link) return;
+
+                    if (!confirm(i18n.replaceConfirm)) return;
+
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="t2j-status-spinner"></span> <span>' + i18n.adding + '</span>';
+
+                    try {
+                        var payload = {
+                            Link: link,
+                            Tracker: tracker,
+                            Seeders: seeds,
+                            ReplaceExisting: true,
+                            OldTorrentHash: oldHash
+                        };
+
+                        var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + itemId + '/AlternateStream'), {
+                            method: 'POST',
+                            headers: getAuthHeaders(),
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (res.ok) {
+                            btn.style.background = '#047857';
+                            btn.innerHTML = '<span>' + i18n.added + '</span>';
+                            showToast('✓ ' + i18n.streamAddedSuccess, true);
+
+                            setTimeout(function () {
+                                _activeDrawerTab = 'streams';
+                                openStreamsDrawer(itemId);
+                            }, 1200);
+
+                            if (window.ApiClient && window.ApiClient.getItem) {
+                                window.ApiClient.getItem(window.ApiClient.getCurrentUserId(), itemId).then(function (updItem) {
+                                    if (window.Events && typeof window.Events.trigger === 'function') {
+                                        window.Events.trigger(window.ApiClient, 'itemupdate', [updItem]);
+                                    }
+                                }).catch(function () {});
+                            }
+                        } else {
+                            var errData = await res.json().catch(function () { return {}; });
+                            btn.disabled = false;
+                            btn.innerHTML = '<span>' + i18n.serverError + '</span>';
+                            showToast(i18n.failedResponse + ': ' + (errData.error || i18n.failedResponse), false);
+                        }
+                    } catch (e) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<span>' + i18n.serverError + '</span>';
+                        showToast(i18n.connError + ': ' + e.message, false);
+                    }
+                };
+            });
+        }
+    }
+
+    // ==========================================
+    // Item Details Page Button Watcher
+    // ==========================================
+    function checkItemDetailPage() {
+        var page = document.querySelector('.itemDetailPage') || document.getElementById('itemDetailPage');
+        if (!page) return;
+
+        var hash = window.location.hash || '';
+        var match = hash.match(/[?&]id=([a-f0-9\-]+)/i);
+        var itemId = page.getAttribute('data-itemid') || (match ? match[1] : null);
+
+        if (!itemId) return;
+
+        var buttonsContainer = page.querySelector('.mainDetailButtons');
+        if (!buttonsContainer) return;
+
+        if (buttonsContainer.querySelector('.t2j-item-streams-btn')) return;
+
+        injectStreamsButton(page, buttonsContainer, itemId);
+    }
+
+    async function injectStreamsButton(page, buttonsContainer, itemId) {
+        var i18n = getI18n();
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'emby-button detailButton detailButton-primary t2j-item-streams-btn';
+        btn.setAttribute('title', 'Альтернативні стріми та версії (Torr2Jelly)');
+        btn.style.cssText = 'background: linear-gradient(135deg, #10b981, #059669); border: 1px solid #34d399; color: #fff; font-weight: 600; margin-left: 8px; padding: 0 14px; height: 42px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);';
+
+        btn.innerHTML = '<span style="font-size: 16px;">⚡</span> <span class="t2j-btn-label">' + i18n.streamsBtn + '</span>';
+
+        btn.onclick = function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openStreamsDrawer(itemId);
+        };
+
+        var playBtn = buttonsContainer.querySelector('.btnPlay') || buttonsContainer.firstElementChild;
+        if (playBtn && playBtn.nextSibling) {
+            buttonsContainer.insertBefore(btn, playBtn.nextSibling);
+        } else {
+            buttonsContainer.appendChild(btn);
+        }
+
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + itemId + '/Streams'), { headers: getAuthHeaders() });
+            if (res.ok) {
+                var streams = await res.json();
+                if (Array.isArray(streams) && streams.length > 0) {
+                    var label = btn.querySelector('.t2j-btn-label');
+                    if (label) label.textContent = i18n.streamsBtn + ' (' + streams.length + ')';
+                }
+            }
+        } catch (e) {}
+    }
+
+    // Page watchers
+    function checkAllPages() {
+        checkSearchPage();
+        checkItemDetailPage();
+    }
+
+    document.addEventListener('viewshow', checkAllPages);
+    window.addEventListener('hashchange', checkAllPages);
+    setInterval(checkAllPages, 600);
+    setTimeout(checkAllPages, 500);
 })();
+

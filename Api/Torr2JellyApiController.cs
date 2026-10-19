@@ -1,3 +1,4 @@
+using MediaBrowser.Model.Entities;
 using System;
 using System.IO;
 using System.Collections.Generic;
@@ -461,5 +462,166 @@ public class Torr2JellyApiController : ControllerBase
     {
         _strmEngine.NotifyPathChanged(path);
         return Ok(new { success = true, message = $"Targeted scan reported for: {path}" });
+    }
+
+    [HttpGet("Items/{itemId}/Alternatives")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<MovieAlternativesResponseDto>> GetItemAlternatives(
+        [FromRoute] Guid itemId,
+        CancellationToken cancellationToken)
+    {
+        var item = _libraryManager.GetItemById(itemId);
+        if (item == null)
+        {
+            return NotFound(new { error = "Item not found in Jellyfin library." });
+        }
+
+        var targetDir = _strmEngine.ResolveItemDirectory(itemId);
+        var existingStreams = !string.IsNullOrWhiteSpace(targetDir)
+            ? _strmEngine.GetStreamsForDirectory(targetDir, item.Path)
+            : new List<MovieStreamInfoDto>();
+
+        var imdbId = item.GetProviderId(MediaBrowser.Model.Entities.MetadataProvider.Imdb);
+        var tmdbStr = item.GetProviderId(MediaBrowser.Model.Entities.MetadataProvider.Tmdb);
+        int? tmdbId = int.TryParse(tmdbStr, out var tid) ? tid : null;
+
+        var searchResults = new List<TorrentSearchResult>();
+
+        // 1. Try search by IMDb ID if available
+        if (!string.IsNullOrWhiteSpace(imdbId))
+        {
+            searchResults = await _searchService.SearchAsync(imdbId, null, null, isUserAdmin: true, cancellationToken);
+        }
+
+        // 2. Fallback to original / clean title + year
+        if (searchResults.Count == 0)
+        {
+            var searchTitle = !string.IsNullOrWhiteSpace(item.OriginalTitle) ? item.OriginalTitle : item.Name;
+            var yearStr = item.ProductionYear.HasValue ? item.ProductionYear.Value.ToString() : string.Empty;
+            var query = $"{searchTitle} {yearStr}".Trim();
+            searchResults = await _searchService.SearchAsync(query, null, null, isUserAdmin: true, cancellationToken);
+        }
+
+        // 3. If still empty and item.Name is localized (different from originalTitle), try localized name
+        if (searchResults.Count == 0 && !string.IsNullOrWhiteSpace(item.Name) && !item.Name.Equals(item.OriginalTitle, StringComparison.OrdinalIgnoreCase))
+        {
+            var yearStr = item.ProductionYear.HasValue ? item.ProductionYear.Value.ToString() : string.Empty;
+            var query = $"{item.Name} {yearStr}".Trim();
+            searchResults = await _searchService.SearchAsync(query, null, null, isUserAdmin: true, cancellationToken);
+        }
+
+        var resp = new MovieAlternativesResponseDto
+        {
+            ItemId = itemId,
+            Title = item.Name,
+            OriginalTitle = item.OriginalTitle ?? item.Name,
+            Year = item.ProductionYear,
+            ImdbId = imdbId,
+            TmdbId = tmdbId,
+            ExistingStreams = existingStreams,
+            Alternatives = searchResults
+        };
+
+        return Ok(resp);
+    }
+
+    [HttpGet("Items/{itemId}/Streams")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<List<MovieStreamInfoDto>> GetItemStreams([FromRoute] Guid itemId)
+    {
+        var item = _libraryManager.GetItemById(itemId);
+        if (item == null)
+        {
+            return NotFound(new { error = "Item not found in Jellyfin library." });
+        }
+
+        var targetDir = _strmEngine.ResolveItemDirectory(itemId);
+        if (string.IsNullOrWhiteSpace(targetDir))
+        {
+            return Ok(new List<MovieStreamInfoDto>());
+        }
+
+        var streams = _strmEngine.GetStreamsForDirectory(targetDir, item.Path);
+        return Ok(streams);
+    }
+
+    [HttpPost("Items/{itemId}/AlternateStream")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<AlternateStreamResultDto>> AddItemAlternateStream(
+        [FromRoute] Guid itemId,
+        [FromBody] AddAlternateStreamRequestDto req,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(req.Link))
+        {
+            return BadRequest(new { error = "Torrent link or magnet is required." });
+        }
+
+        var item = _libraryManager.GetItemById(itemId);
+        if (item == null)
+        {
+            return NotFound(new { error = "Item not found in Jellyfin library." });
+        }
+
+        var targetDir = _strmEngine.ResolveItemDirectory(itemId);
+        if (string.IsNullOrWhiteSpace(targetDir) || !Directory.Exists(targetDir))
+        {
+            return BadRequest(new { error = "Could not resolve target directory for this item." });
+        }
+
+        req.TargetItemId = itemId;
+        req.TargetFolderPath = targetDir;
+
+        // Add torrent to TorrServer
+        var torrent = await _torrClient.AddTorrentAsync(
+            link: req.Link,
+            title: null,
+            poster: null,
+            category: null,
+            saveToDb: true,
+            cancellationToken: cancellationToken);
+
+        if (torrent == null)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = "Failed to communicate with TorrServer." });
+        }
+
+        var result = await _strmEngine.AddAlternateStreamAsync(targetDir, torrent, req, cancellationToken);
+        if (!result.Success)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new { error = result.ErrorMessage });
+        }
+
+        // If replace existing was requested and old hash provided, remove from TorrServer
+        if (req.ReplaceExisting && !string.IsNullOrWhiteSpace(req.OldTorrentHash))
+        {
+            await _torrClient.RemoveTorrentAsync(req.OldTorrentHash, cancellationToken);
+        }
+
+        return Ok(result);
+    }
+
+    [HttpDelete("Items/{itemId}/Streams/{hash}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> DeleteItemStream(
+        [FromRoute] Guid itemId,
+        [FromRoute] string hash,
+        CancellationToken cancellationToken)
+    {
+        var targetDir = _strmEngine.ResolveItemDirectory(itemId);
+        if (string.IsNullOrWhiteSpace(targetDir) || !Directory.Exists(targetDir))
+        {
+            return NotFound(new { error = "Directory for item not found." });
+        }
+
+        var deletedFromDisk = await _strmEngine.DeleteStreamByHashAsync(targetDir, hash, cancellationToken);
+        await _torrClient.RemoveTorrentAsync(hash, cancellationToken);
+
+        return Ok(new { success = true, deletedFromDisk });
     }
 }

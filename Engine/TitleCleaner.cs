@@ -61,45 +61,37 @@ public static partial class TitleCleaner
         }
 
         var sb = new StringBuilder(text.Length);
-        foreach (var ch in text)
+        for (var i = 0; i < text.Length; i++)
         {
-            var s = ch.ToString();
-            if (TranslitMap.TryGetValue(s, out var replacement))
+            var c = text[i];
+            var key = c.ToString();
+            if (TranslitMap.TryGetValue(key, out var latin))
             {
-                sb.Append(replacement);
+                sb.Append(latin);
             }
             else
             {
-                sb.Append(ch);
+                sb.Append(c);
             }
         }
 
-        return MultipleSpacesRegex().Replace(sb.ToString(), " ").Trim();
+        return sb.ToString();
     }
 
     public static string GetEnglishOrLatinTitle(string cleanTitle, string? originalTitle)
     {
-        // 1. If original English title exists, prefer it
-        if (!string.IsNullOrWhiteSpace(originalTitle) && originalTitle.Any(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')))
+        if (!string.IsNullOrWhiteSpace(originalTitle) && !originalTitle.Any(c => c >= 0x0400 && c <= 0x04FF))
         {
             return originalTitle.Trim();
         }
 
-        // 2. If cleanTitle is already Latin/English, return it
-        var hasCyrillic = cleanTitle.Any(c => c >= 0x0400 && c <= 0x04FF);
-        if (!hasCyrillic && !string.IsNullOrWhiteSpace(cleanTitle))
+        if (!string.IsNullOrWhiteSpace(cleanTitle) && !cleanTitle.Any(c => c >= 0x0400 && c <= 0x04FF))
         {
             return cleanTitle.Trim();
         }
 
-        // 3. If cleanTitle is Cyrillic, transliterate to Latin
         var translit = TransliterateUkrainianToLatin(cleanTitle);
-        if (!string.IsNullOrWhiteSpace(translit))
-        {
-            return translit;
-        }
-
-        return cleanTitle;
+        return !string.IsNullOrWhiteSpace(translit) ? translit.Trim() : cleanTitle.Trim();
     }
 
     public static (string CleanTitle, string? OriginalTitle, int? Year) CleanTitleAndExtractYear(string rawTitle)
@@ -111,7 +103,7 @@ public static partial class TitleCleaner
 
         var text = rawTitle.Trim();
 
-        // 1. Check for year range e.g. (1999-2003) or (2011-2019)
+        // 1. Check for year range first e.g. (1994-2004) or 1994-2004
         int? extractedYear = null;
         var yearRangeMatch = YearRangeRegex().Match(text);
         if (yearRangeMatch.Success)
@@ -178,15 +170,8 @@ public static partial class TitleCleaner
             }
         }
 
-        // Replace dots and underscores with space
+        // Clean dots and underscores
         text = DotsAndUnderscoresRegex().Replace(text, " ");
-
-        // Clean empty or unmatched parentheses / brackets
-        text = Regex.Replace(text, @"\(\s*\)|\[\s*\]", "");
-        if (text.Count(c => c == '(') > text.Count(c => c == ')')) text = text.Replace("(", "");
-        if (text.Count(c => c == ')') > text.Count(c => c == '(')) text = text.Replace(")", "");
-
-        // Clean edge punctuation
         text = text.Trim(' ', '-', '_', '.', '/', '\\', '(', ')', ':');
         text = MultipleSpacesRegex().Replace(text, " ").Trim();
 
@@ -265,5 +250,81 @@ public static partial class TitleCleaner
         }
 
         return MultipleSpacesRegex().Replace(sb.ToString(), " ").Trim(' ', '.', '-');
+    }
+
+    public static string ExtractQualityTag(string rawTitle)
+    {
+        if (string.IsNullOrWhiteSpace(rawTitle))
+        {
+            return "1080p";
+        }
+
+        var matches = NoiseTokensRegex().Matches(rawTitle);
+        if (matches.Count == 0)
+        {
+            return "1080p";
+        }
+
+        var res = string.Empty;
+        var hasRemux = false;
+        var hasHdr = false;
+        var hasDv = false;
+        var is4K = false;
+
+        foreach (Match m in matches)
+        {
+            var val = m.Value.ToLowerInvariant();
+            if (val is "2160p" or "4k" or "uhd")
+            {
+                res = "2160p";
+                is4K = true;
+            }
+            else if (string.IsNullOrEmpty(res) && val is "1080p" or "1080i")
+            {
+                res = "1080p";
+            }
+            else if (string.IsNullOrEmpty(res) && val is "720p")
+            {
+                res = "720p";
+            }
+
+            if (val.Contains("remux") || val.Contains("bdremux") || val.Contains("uhdremux"))
+            {
+                hasRemux = true;
+            }
+            if (val is "hdr" or "hdr10" or "hdr10+")
+            {
+                hasHdr = true;
+            }
+            if (val is "dv" or "dovi" or "dolby vision")
+            {
+                hasDv = true;
+            }
+        }
+
+        if (string.IsNullOrEmpty(res))
+        {
+            res = "1080p";
+        }
+
+        var parts = new List<string> { res };
+        if (is4K && !parts.Contains("4K"))
+        {
+            parts.Add("4K");
+        }
+        if (hasDv)
+        {
+            parts.Add("DV");
+        }
+        if (hasHdr && !hasDv)
+        {
+            parts.Add("HDR");
+        }
+        if (hasRemux)
+        {
+            parts.Add("Remux");
+        }
+
+        return string.Join(" ", parts);
     }
 }

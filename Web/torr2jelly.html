@@ -794,7 +794,7 @@
             <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
               <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold" id="dashCardCacheText">RAM Cache</div>
               <div class="text-2xl font-bold text-cyan-400 mt-1" id="dashCacheSize">256 MB</div>
-              <p class="text-[11px] text-slate-500 mt-0.5">Preload: 50% | Seek buffer: 95%</p>
+              <p class="text-[11px] text-slate-500 mt-0.5 truncate" id="dashCacheSub">&nbsp;</p>
             </div>
 
             <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
@@ -850,12 +850,15 @@
                 <p class="text-xs text-slate-400 mt-1" id="cfgHeaderDesc">Configure torrent streaming engine, search indexers, language, and STRM file structures.</p>
               </div>
 
-              <button type="button" id="saveSettingsBtn" onclick="window.t2jSaveSettings && window.t2jSaveSettings()"
+              <!-- Disabled until the settings have been loaded successfully (see loadSettings) -->
+              <button type="button" id="saveSettingsBtn" disabled style="opacity: 0.5; cursor: not-allowed;" onclick="window.t2jSaveSettings && window.t2jSaveSettings()"
                       class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-brand-600/30 active:scale-95 transition-all flex items-center space-x-2 cursor-pointer">
                 <i class="fa-solid fa-floppy-disk"></i>
                 <span id="saveSettingsBtnText">Save Settings</span>
               </button>
             </div>
+
+            <div id="cfgLoadError" class="hidden" role="alert" style="color: #fda4af; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.35); border-radius: 10px; padding: 10px 14px; font-size: 12px; line-height: 1.5;"></div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
@@ -908,6 +911,17 @@
                     <input type="text" id="cfgStreamUrlInput" placeholder="http://torrserver:8090" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
                   </div>
 
+                  <!-- Opt-in: push the cache settings below to TorrServer -->
+                  <div class="pt-2 border-t border-slate-800/60">
+                    <label class="flex items-start space-x-3 cursor-pointer select-none">
+                      <input type="checkbox" id="cfgManageTorrServerCheck" class="rounded text-emerald-500 focus:ring-emerald-500 bg-slate-950 border-slate-700 w-4 h-4 mt-0.5 cursor-pointer">
+                      <div>
+                        <span class="font-semibold text-white block text-xs" id="lblCfgManageTorrServer">Push cache settings to TorrServer</span>
+                        <span class="text-[11px] text-slate-400 block" id="lblCfgManageTorrServerSub">When enabled, Torr2Jelly applies the cache, preload, read-ahead and timeout values below to TorrServer (on save and periodically). Leave off if you manage TorrServer yourself.</span>
+                      </div>
+                    </label>
+                  </div>
+
                   <!-- Cache Configuration -->
                   <div class="pt-2 border-t border-slate-800/60 space-y-3">
                     <label class="flex items-start space-x-3 cursor-pointer select-none">
@@ -920,8 +934,8 @@
 
                     <div id="cfgDiskPathGroup" class="space-y-1">
                       <label class="block text-slate-300 font-medium" id="lblCfgDiskCachePath">Disk Cache Directory Path:</label>
-                      <input type="text" id="cfgDiskCachePathInput" placeholder="/mnt/sdb/AppFiles/jellyfin/cache/torrserver" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
-                      <p class="text-[10px] text-slate-500">Folder inside Jellyfin cache directory on disk sdb.</p>
+                      <input type="text" id="cfgDiskCachePathInput" placeholder="/path/to/torrserver/cache" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono">
+                      <p class="text-[10px] text-slate-500">Folder where TorrServer buffers torrent data on disk.</p>
                     </div>
 
                     <div class="space-y-1.5">
@@ -1265,6 +1279,9 @@
                                     lblCfgCacheSize: 'Cache Size (MB):',
             lblCfgUseDiskCache: 'Enable Disk Cache (Buffer to SSD/HDD)',
             lblCfgUseDiskCacheSub: 'Recommended when server RAM is limited. Buffers streams directly to disk.',
+            lblCfgManageTorrServer: 'Push cache settings to TorrServer',
+            lblCfgManageTorrServerSub: 'When enabled, Torr2Jelly applies the cache, preload, read-ahead and timeout values below to TorrServer (on save and periodically). Leave off if you manage TorrServer yourself.',
+            settingsLoadFailed: 'Could not load the settings from the server. Saving is disabled so your configuration is not overwritten with defaults.',
             lblCfgDiskCachePath: 'Disk Cache Directory Path:',
             lblCfgPreloadCache: 'Preload Buffer (%):',
             lblCfgPreloadCacheSub: 'Amount of cache to preload before playback starts. With 100 GB disk cache, 3% (~3 GB) starts immediately without freezing.',
@@ -1370,6 +1387,9 @@
                                     lblCfgCacheSize: 'Розмір кешу (МБ):',
             lblCfgUseDiskCache: 'Кешувати на диск (SSD/HDD замість RAM)',
             lblCfgUseDiskCacheSub: 'Рекомендовано при малій кількості оперативної пам\'яті. Зберігає кеш на швидкий диск.',
+            lblCfgManageTorrServer: 'Передавати налаштування кешу в TorrServer',
+            lblCfgManageTorrServerSub: 'Якщо увімкнено, Torr2Jelly застосовує значення кешу, попереднього завантаження, читання наперед і таймаутів нижче до TorrServer (при збереженні та періодично). Залиште вимкненим, якщо керуєте TorrServer самостійно.',
+            settingsLoadFailed: 'Не вдалося завантажити налаштування з сервера. Збереження вимкнено, щоб не перезаписати вашу конфігурацію значеннями за замовчуванням.',
             lblCfgDiskCachePath: 'Шлях до папки кешу на диску:',
             lblCfgPreloadCache: 'Попереднє завантаження кешу (%):',
             lblCfgPreloadCacheSub: 'Об\'єм буфера перед запуском відео. При кеші 100 ГБ значення 3% (~3 ГБ) забезпечує миттєвий старт без зависання.',
@@ -1486,6 +1506,8 @@
             'lblCfgCacheSize': t.lblCfgCacheSize,
             'lblCfgUseDiskCache': t.lblCfgUseDiskCache,
             'lblCfgUseDiskCacheSub': t.lblCfgUseDiskCacheSub,
+            'lblCfgManageTorrServer': t.lblCfgManageTorrServer,
+            'lblCfgManageTorrServerSub': t.lblCfgManageTorrServerSub,
             'lblCfgDiskCachePath': t.lblCfgDiskCachePath,
             'lblCfgPreloadCache': t.lblCfgPreloadCache,
             'lblCfgPreloadCacheSub': t.lblCfgPreloadCacheSub,
@@ -1568,9 +1590,19 @@
 
     function escapeHtml(str) {
         if (!str) return '';
-        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
     window.escapeHtml = escapeHtml;
+
+    // Extracts a readable error from a failed fetch Response ({ error: "..." } body or HTTP status).
+    async function readHttpError(res) {
+        var msg = 'HTTP ' + res.status + (res.statusText ? ' ' + res.statusText : '');
+        try {
+            var body = await res.json();
+            if (body && body.error) msg = String(body.error);
+        } catch (e) { /* non-JSON error body: keep the HTTP status text */ }
+        return msg;
+    }
 
     function formatBytes(bytes) {
         if (!bytes || bytes === 0) return '0 B';
@@ -1672,7 +1704,7 @@
             html += '      <option value="show" ' + (isShow ? 'selected' : '') + '>📺 Series</option>';
             html += '    </select>';
             html += '    <input type="text" class="t2j-cat-name bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-semibold" placeholder="Category Name" value="' + escapeHtml(cat.Name) + '">';
-            html += '    <input type="text" class="t2j-cat-folder bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono" placeholder="Target Folder Path (e.g. /mnt/sdb/media/movies)" value="' + escapeHtml(cat.Folder) + '">';
+            html += '    <input type="text" class="t2j-cat-folder bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono" placeholder="Target Folder Path (e.g. /media/movies)" value="' + escapeHtml(cat.Folder) + '">';
             html += '    <button type="button" onclick="window.t2jRemoveCategoryRow && window.t2jRemoveCategoryRow(' + idx + ')" class="t2j-cat-del-btn bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold cursor-pointer" title="Delete category">';
             html += '      <i class="fa-solid fa-trash-can text-[11px]"></i>';
             html += '    </button>';
@@ -1925,7 +1957,7 @@
 
                 if (torrStatusBadge) {
                     torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400';
-                    torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span id="t2jTorrServerStatusText">' + (data.StatusMessage || ('Online ' + daemonVer)) + '</span>';
+                    torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span id="t2jTorrServerStatusText">' + escapeHtml(data.StatusMessage || ('Online ' + daemonVer)) + '</span>';
                 }
 
                 var dashDaemonEngineSub = page.querySelector('#dashDaemonEngineSub');
@@ -1936,6 +1968,8 @@
                     var cStr = (cMb >= 1024) ? (cMb / 1024).toFixed(1).replace(/\.0$/, '') + ' GB' : cMb + ' MB';
                     dashCacheSize.innerText = data.UseDiskCache ? (cStr + ' (Диск)') : (cStr + ' (RAM)');
                 }
+                var dashCacheSub = page.querySelector('#dashCacheSub');
+                if (dashCacheSub) dashCacheSub.innerText = (data.UseDiskCache && data.DiskCachePath) ? data.DiskCachePath : ' ';
                 if (activeTorrentsBadge) activeTorrentsBadge.innerText = activeCount;
                 if (dashTorrentsCount) dashTorrentsCount.innerText = activeCount;
             } else {
@@ -1966,6 +2000,9 @@
         var searchCategorySelect = page.querySelector('#t2jSearchCategorySelect');
 
         var items = (window.t2jState.searchResults || []).slice();
+        // Series detection with word boundaries (no match on "DTS5.1" or "1080x720"); \b is ASCII-only
+        // in JS, so the Cyrillic alternatives stay unbounded.
+        var showTitleRegex = /(?:\bS\d{1,2}(?:E\d+)?\b|\bseasons?\b(?![\s._-]+of\b)|сезон|\b\d{1,2}x\d{1,2}\b|серій|серії|серії|\bep\d{1,3}\b)/i;
         var hasTagsFn = function (r) {
             var tg = r.Tags || r.tags || [];
             return tg.length > 0 || r.IsGold || r.isGold || r.IsFreeleech || r.isFreeleech;
@@ -2018,11 +2055,11 @@
             var isFreeleech = item.IsFreeleech || item.isFreeleech;
             var title = item.Title || item.title || '';
             var size = item.SizeFormatted || formatBytes(item.Size || item.size || 0);
-            var seeders = item.Seeders || item.seeders || 0;
-            var peers = item.Peers || item.peers || 0;
+            var seeders = parseInt(item.Seeders || item.seeders, 10) || 0;
+            var peers = parseInt(item.Peers || item.peers, 10) || 0;
             var indexer = item.Indexer || item.indexer || 'Tracker';
 
-            var isShowRelease = /(?:s\d{1,2}|season|сезон|\d{1,2}x\d{1,2}|серій|серії|серії|ep\d{1,3})/i.test(title);
+            var isShowRelease = showTitleRegex.test(title);
 
             // Extract tags with strict mutual exclusion for discount levels
             var rawTags = (item.Tags || item.tags || []).slice();
@@ -2204,7 +2241,8 @@
         var category = catSelect ? catSelect.value : 'Movies';
 
         var title = item.Title || item.title || '';
-        var link = item.DownloadUrl || item.MagnetUrl || item.downloadUrl || item.magnetUrl || '';
+        // Prefer the magnet link; the indexer download URL is only a fallback.
+        var link = item.MagnetUrl || item.magnetUrl || item.DownloadUrl || item.downloadUrl || '';
         if (!link) {
             alert('Torrent download link is empty.');
             return;
@@ -2313,6 +2351,14 @@
 
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), { headers: getAuthHeaders() });
+            if (!res.ok) {
+                // Show the server's error (e.g. TorrServer unreachable) instead of a misleading
+                // "No active torrents"; keep the counters untouched.
+                var loadErr = await readHttpError(res);
+                if (torrentsEmptyNotice) torrentsEmptyNotice.classList.add('hidden');
+                if (torrentsListTable) torrentsListTable.innerHTML = '<div class="p-4 text-rose-400 text-xs">Error loading torrents: ' + escapeHtml(loadErr) + '</div>';
+                return;
+            }
             var torrents = await res.json();
             window.t2jState.torrents = Array.isArray(torrents) ? torrents : [];
 
@@ -2375,6 +2421,7 @@
             }
             if (torrentsListTable) torrentsListTable.innerHTML = html;
         } catch (err) {
+            if (torrentsEmptyNotice) torrentsEmptyNotice.classList.add('hidden');
             if (torrentsListTable) torrentsListTable.innerHTML = '<div class="p-4 text-rose-400 text-xs">Error loading torrents: ' + escapeHtml(err.message) + '</div>';
         }
     }
@@ -2409,7 +2456,7 @@
                     loadTorrents(true);
                 }, 1000);
             } else {
-                alert('Failed to recategorize');
+                alert('Failed to recategorize: ' + (await readHttpError(res)));
                 btn.disabled = false;
                 btn.innerHTML = oldHtml;
             }
@@ -2430,10 +2477,17 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[11px]"></i>';
         try {
-            await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents/' + encodeURIComponent(hash) + '?deleteStrm=true'), {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents/' + encodeURIComponent(hash) + '?deleteStrm=true'), {
                 method: 'DELETE',
                 headers: getAuthHeaders()
             });
+            if (!res.ok) {
+                // Do not pretend it worked: surface the server error and leave the row in place.
+                alert('Delete failed: ' + (await readHttpError(res)));
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-trash-can text-[11px] mr-1"></i> Delete';
+                return;
+            }
             loadTorrents(true);
             checkStatus();
         } catch (err) {
@@ -2448,9 +2502,17 @@
         if (buttonEl) buttonEl.disabled = true;
         if (textEl) textEl.innerText = 'Refreshing...';
         try {
-            await fetch(getApiUrl('Plugins/Torr2Jelly/Library/Scan'), { method: 'POST', headers: getAuthHeaders() });
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Library/Scan'), { method: 'POST', headers: getAuthHeaders() });
+            if (!res.ok) {
+                // e.g. 502 when TorrServer is unreachable: the server purges nothing in that case.
+                alert('Library scan failed: ' + (await readHttpError(res)));
+            } else {
+                loadTorrents(true);
+                checkStatus();
+            }
         } catch (e) {
             console.error(e);
+            alert('Library scan failed: ' + e.message);
         }
         setTimeout(function () {
             if (buttonEl) buttonEl.disabled = false;
@@ -2491,12 +2553,27 @@
         var cfgEnableShowRenamingCheck = page.querySelector('#cfgEnableShowRenamingCheck');
         var dashMediaDir = page.querySelector('#dashMediaDir');
 
+        // Saving stays disabled until a load has succeeded: a failed load must never be followed by a
+        // save that overwrites the stored configuration with empty/default form values.
+        var loadSeq = (window.t2jState.settingsLoadSeq || 0) + 1;
+        window.t2jState.settingsLoadSeq = loadSeq;
+        window.t2jState.settingsLoaded = false;
+        setSaveEnabled(false);
+        showSettingsLoadError('');
+
         loadIndexers();
         await loadLibraries();
 
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), { headers: getAuthHeaders() });
+            if (!res.ok) {
+                throw new Error(await readHttpError(res));
+            }
             var cfg = await res.json();
+            if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) {
+                throw new Error('Unexpected response from the server');
+            }
+            if (loadSeq !== window.t2jState.settingsLoadSeq) return; // a newer load superseded this one
             window.t2jState.config = cfg;
 
             if (cfgLanguageSelect) cfgLanguageSelect.value = cfg.DefaultLanguage || 'en';
@@ -2507,7 +2584,9 @@
                 cfgUseDiskCacheCheck.checked = cfg.UseDiskCache !== false;
                 window.t2jToggleDiskCacheUI(cfgUseDiskCacheCheck.checked);
             }
-            if (cfgDiskCachePathInput) cfgDiskCachePathInput.value = cfg.DiskCachePath || '/mnt/sdb/AppFiles/jellyfin/cache/torrserver';
+            if (cfgDiskCachePathInput) cfgDiskCachePathInput.value = cfg.DiskCachePath || '';
+            var cfgManageTorrServerCheck = page.querySelector('#cfgManageTorrServerCheck');
+            if (cfgManageTorrServerCheck) cfgManageTorrServerCheck.checked = !!cfg.ManageTorrServerSettings;
             if (cfgCacheSizeInput) {
                 cfgCacheSizeInput.value = cfg.CacheSizeMb || 102400;
                 window.t2jUpdateCacheHuman(cfgCacheSizeInput.value);
@@ -2556,15 +2635,53 @@
                 searchGoldOnlyCheck._init = true;
                 searchGoldOnlyCheck.checked = !!cfg.SearchOnlyGoldByDefault;
             }
+
+            // Everything was read and applied: only now may the user save.
+            window.t2jState.settingsLoaded = true;
+            setSaveEnabled(true);
         } catch (err) {
             console.error('Failed to load settings', err);
+            if (loadSeq === window.t2jState.settingsLoadSeq) {
+                window.t2jState.settingsLoaded = false;
+                setSaveEnabled(false);
+                var tLoad = I18N[getLang()] || I18N.en;
+                showSettingsLoadError(tLoad.settingsLoadFailed + ' (' + (err && err.message ? err.message : err) + ')');
+            }
         }
     }
     window.t2jLoadSettings = loadSettings;
 
+    function setSaveEnabled(enabled) {
+        var page = getPage();
+        var btn = page ? page.querySelector('#saveSettingsBtn') : null;
+        if (!btn) return;
+        btn.disabled = !enabled;
+        btn.style.opacity = enabled ? '' : '0.5';
+        btn.style.cursor = enabled ? '' : 'not-allowed';
+    }
+
+    function showSettingsLoadError(message) {
+        var page = getPage();
+        var box = page ? page.querySelector('#cfgLoadError') : null;
+        if (!box) return;
+        if (message) {
+            box.innerText = message;
+            box.classList.remove('hidden');
+        } else {
+            box.innerText = '';
+            box.classList.add('hidden');
+        }
+    }
+
     async function saveSettings() {
         var page = getPage();
         if (!page) return;
+
+        // Never save from a form that was not populated from the server (failed or still-running load).
+        if (!window.t2jState.settingsLoaded) {
+            setSaveEnabled(false);
+            return;
+        }
 
         var cfgLanguageSelect = page.querySelector('#cfgLanguageSelect');
         var cfgExternalUrlInput = page.querySelector('#cfgExternalUrlInput');
@@ -2588,14 +2705,18 @@
         if (saveSettingsBtn) saveSettingsBtn.disabled = true;
         if (saveSettingsBtnText) saveSettingsBtnText.innerText = t.savingSettings;
 
-        // Collect disabled trackers and tag rules from UI
+        // Collect disabled trackers and tag rules from UI. They are only sent when the tracker cards were
+        // actually rendered (Prowlarr indexers loaded); otherwise the stored rules stay untouched.
+        var loadedCfg = window.t2jState.config || {};
         var disabledTrackers = [];
         var trackerRules = [];
+        var cardTrackerNames = {};
         var trackerCards = page.querySelectorAll('.t2j-tracker-card');
         trackerCards.forEach(function (card) {
             var tracker = card.getAttribute('data-tracker');
             var enableCb = card.querySelector('.t2j-tracker-checkbox');
             var enabled = enableCb ? enableCb.checked : true;
+            if (tracker) cardTrackerNames[tracker.toLowerCase()] = true;
             if (!enabled && tracker) {
                 disabledTrackers.push(tracker);
             }
@@ -2616,40 +2737,71 @@
             }
         });
 
+        // Trackers without a card right now (e.g. an indexer temporarily missing in Prowlarr) keep their
+        // stored rule instead of being silently dropped.
+        if (trackerCards.length > 0) {
+            (loadedCfg.TrackerRules || []).forEach(function (r) {
+                if (r && r.Tracker && !cardTrackerNames[String(r.Tracker).toLowerCase()]) trackerRules.push(r);
+            });
+            (loadedCfg.DisabledTrackers || []).forEach(function (n) {
+                if (n && !cardTrackerNames[String(n).toLowerCase()]) disabledTrackers.push(n);
+            });
+        }
+
         var cfgSearchOnlyGoldByDefaultCheck = page.querySelector('#cfgSearchOnlyGoldByDefaultCheck');
         var cfgOnlyGoldCheck = page.querySelector('#cfgOnlyGoldCheck');
 
         // Collect user-edited categories from UI
         var categories = collectCategoriesFromUI();
+        if (categories.length === 0) {
+            alert('At least one category with a name and a folder path is required.');
+            if (saveSettingsBtn) saveSettingsBtn.disabled = false;
+            if (saveSettingsBtnText) saveSettingsBtnText.innerText = t.btnSaveSettings;
+            return;
+        }
 
-        var selectedLang = cfgLanguageSelect ? cfgLanguageSelect.value : 'en';
+        var selectedLang = cfgLanguageSelect ? cfgLanguageSelect.value : (loadedCfg.DefaultLanguage || getLang());
 
-        var payload = {
-            DefaultLanguage: selectedLang,
-            ExternalTorrServerUrl: cfgExternalUrlInput ? cfgExternalUrlInput.value.trim() : 'http://torrserver:8090',
-            UseDiskCache: (page.querySelector('#cfgUseDiskCacheCheck') ? page.querySelector('#cfgUseDiskCacheCheck').checked : true),
-            DiskCachePath: (page.querySelector('#cfgDiskCachePathInput') ? page.querySelector('#cfgDiskCachePathInput').value.trim() : '/mnt/sdb/AppFiles/jellyfin/cache/torrserver'),
-            CacheSizeMb: parseInt(cfgCacheSizeInput ? cfgCacheSizeInput.value : '102400', 10) || 102400,
-            PreloadCachePercent: parseInt(page.querySelector('#cfgPreloadCacheInput') ? page.querySelector('#cfgPreloadCacheInput').value : '3', 10) || 3,
-            ReaderReadAHeadPercent: parseInt(page.querySelector('#cfgReaderReadAHeadInput') ? page.querySelector('#cfgReaderReadAHeadInput').value : '95', 10) || 95,
-            TorrentDisconnectTimeout: parseInt(page.querySelector('#cfgDisconnectTimeoutInput') ? page.querySelector('#cfgDisconnectTimeoutInput').value : '86400', 10) || 86400,
-            TorrServerStreamUrl: cfgStreamUrlInput ? cfgStreamUrlInput.value.trim() : 'http://torrserver:8090',
-            ProwlarrUrl: cfgProwlarrUrlInput ? cfgProwlarrUrlInput.value.trim() : '',
-            ProwlarrApiKey: cfgProwlarrKeyInput ? cfgProwlarrKeyInput.value.trim() : '',
-            MediaRootPath: cfgMediaDirInput ? cfgMediaDirInput.value.trim() : '',
-            SearchOnlyGoldByDefault: cfgSearchOnlyGoldByDefaultCheck ? cfgSearchOnlyGoldByDefaultCheck.checked : false,
-            OnlyGoldTorrentsForNonAdmins: cfgOnlyGoldCheck ? cfgOnlyGoldCheck.checked : false,
-            DisabledTrackers: disabledTrackers,
-            TrackerRules: trackerRules,
-            Categories: categories,
-            MovieFolderTemplate: cfgMovieFolderTemplateInput ? cfgMovieFolderTemplateInput.value.trim() : '{Title} ({Year})',
-            MovieFileTemplate: cfgMovieFileTemplateInput ? cfgMovieFileTemplateInput.value.trim() : '{Title} ({Year}).strm',
-            ShowFolderTemplate: cfgShowFolderTemplateInput ? cfgShowFolderTemplateInput.value.trim() : '{Title} ({Year})',
-            ShowSeasonFolderTemplate: cfgShowSeasonFolderTemplateInput ? cfgShowSeasonFolderTemplateInput.value.trim() : 'Season {Season:00}',
-            ShowEpisodeFileTemplate: cfgShowEpisodeFileTemplateInput ? cfgShowEpisodeFileTemplateInput.value.trim() : '{Title} - {EpisodeTag}.strm',
-            EnableMovieRenaming: cfgEnableMovieRenamingCheck ? cfgEnableMovieRenamingCheck.checked : true,
-            EnableShowRenaming: cfgEnableShowRenamingCheck ? cfgEnableShowRenamingCheck.checked : true
-        };
+        // Partial payload: the server merges it into the stored configuration, so a field is only sent when
+        // its form control exists on this page (and the settings were loaded successfully, see the guard
+        // above). Fields without a control here (Torznab, auto-sync, ...) are never sent, and no placeholder
+        // default is ever substituted for a blank or missing value.
+        var payload = {};
+        function putStr(key, el) { if (el) payload[key] = String(el.value || '').trim(); }
+        function putInt(key, el) {
+            if (!el) return;
+            var n = parseInt(el.value, 10);
+            if (!isNaN(n) && n >= 0) payload[key] = n;
+        }
+        function putBool(key, el) { if (el) payload[key] = !!el.checked; }
+
+        putStr('DefaultLanguage', cfgLanguageSelect);
+        putStr('ExternalTorrServerUrl', cfgExternalUrlInput);
+        putBool('UseDiskCache', page.querySelector('#cfgUseDiskCacheCheck'));
+        putStr('DiskCachePath', page.querySelector('#cfgDiskCachePathInput'));
+        putInt('CacheSizeMb', cfgCacheSizeInput);
+        putInt('PreloadCachePercent', page.querySelector('#cfgPreloadCacheInput'));
+        putInt('ReaderReadAHeadPercent', page.querySelector('#cfgReaderReadAHeadInput'));
+        putInt('TorrentDisconnectTimeout', page.querySelector('#cfgDisconnectTimeoutInput'));
+        putBool('ManageTorrServerSettings', page.querySelector('#cfgManageTorrServerCheck'));
+        putStr('TorrServerStreamUrl', cfgStreamUrlInput);
+        putStr('ProwlarrUrl', cfgProwlarrUrlInput);
+        putStr('ProwlarrApiKey', cfgProwlarrKeyInput);
+        putStr('MediaRootPath', cfgMediaDirInput);
+        putBool('SearchOnlyGoldByDefault', cfgSearchOnlyGoldByDefaultCheck);
+        putBool('OnlyGoldTorrentsForNonAdmins', cfgOnlyGoldCheck);
+        if (trackerCards.length > 0) {
+            payload.DisabledTrackers = disabledTrackers;
+            payload.TrackerRules = trackerRules;
+        }
+        payload.Categories = categories;
+        putStr('MovieFolderTemplate', cfgMovieFolderTemplateInput);
+        putStr('MovieFileTemplate', cfgMovieFileTemplateInput);
+        putStr('ShowFolderTemplate', cfgShowFolderTemplateInput);
+        putStr('ShowSeasonFolderTemplate', cfgShowSeasonFolderTemplateInput);
+        putStr('ShowEpisodeFileTemplate', cfgShowEpisodeFileTemplateInput);
+        putBool('EnableMovieRenaming', cfgEnableMovieRenamingCheck);
+        putBool('EnableShowRenaming', cfgEnableShowRenamingCheck);
 
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), {
@@ -2660,9 +2812,9 @@
 
             if (res.ok) {
                 setLang(selectedLang);
-                if (window.t2jState.config) {
-                    window.t2jState.config.Categories = categories;
-                }
+                // Keep the cached copy of the stored configuration in sync with what was just saved.
+                var cachedCfg = window.t2jState.config || (window.t2jState.config = {});
+                Object.keys(payload).forEach(function (k) { cachedCfg[k] = payload[k]; });
                 updateCategorySelects();
 
                 if (saveSettingsBtnText) saveSettingsBtnText.innerText = I18N[selectedLang].savedSettings;
@@ -2672,7 +2824,7 @@
                 }, 2000);
                 checkStatus();
             } else {
-                alert('Failed to save settings');
+                alert('Failed to save settings: ' + (await readHttpError(res)));
                 if (saveSettingsBtn) saveSettingsBtn.disabled = false;
                 if (saveSettingsBtnText) saveSettingsBtnText.innerText = t.btnSaveSettings;
             }
@@ -2794,7 +2946,7 @@
 
         try {
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Daemon/Restart'), { method: 'POST', headers: getAuthHeaders() });
-            var data = await res.json();
+            var data = await res.json().catch(function () { return {}; });
             if (restartDaemonBtn) {
                 restartDaemonBtn.disabled = false;
                 restartDaemonBtn.innerHTML = '<i class="fa-solid fa-plug text-cyan-400"></i> <span>' + escapeHtml(t.btnTestTorrServer) + '</span>';
@@ -2802,7 +2954,7 @@
             if (torrStatusBadge) {
                 if (res.ok) {
                     torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400';
-                    torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>' + (data.status || 'Connected') + '</span>';
+                    torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>' + escapeHtml(data.status || 'Connected') + '</span>';
                 } else {
                     torrStatusBadge.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-rose-400';
                     torrStatusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span>Offline / Помилка</span>';
@@ -2888,16 +3040,78 @@
         renderSearchResults();
     };
 
-    function startPolling() {
-        stopPolling();
-        window.t2jState.refreshInterval = setInterval(loadTorrents, 5000);
+    // Polling lifecycle: the 5 s torrent refresh runs only while the Streams (dashboard) tab is the active
+    // tab AND the page is really on screen. It is paused when the browser tab is hidden or the user
+    // navigates away (viewhide / pagehide / visibilitychange) and resumed when the page is shown again.
+    function isPageOnScreen() {
+        var page = getPage();
+        if (!page || document.hidden) return false;
+        return !!(page.offsetWidth || page.offsetHeight || page.getClientRects().length);
     }
 
-    function stopPolling() {
+    function clearPollTimer() {
         if (window.t2jState.refreshInterval) {
             clearInterval(window.t2jState.refreshInterval);
             window.t2jState.refreshInterval = null;
         }
+    }
+
+    function pollTick() {
+        if (!isPageOnScreen()) {
+            // Left behind (hidden tab / navigated away): stop ticking; resumePolling() restarts it.
+            clearPollTimer();
+            return;
+        }
+        loadTorrents();
+    }
+
+    function startPolling() {
+        window.t2jState.pollingWanted = true;
+        clearPollTimer();
+        if (isPageOnScreen()) {
+            window.t2jState.refreshInterval = setInterval(pollTick, 5000);
+        }
+    }
+
+    function stopPolling() {
+        window.t2jState.pollingWanted = false;
+        clearPollTimer();
+    }
+
+    function pausePolling() {
+        clearPollTimer();
+    }
+
+    function resumePolling() {
+        if (!window.t2jState.pollingWanted || window.t2jState.refreshInterval) return;
+        if (!isPageOnScreen()) return;
+        loadTorrents();
+        window.t2jState.refreshInterval = setInterval(pollTick, 5000);
+    }
+    window.t2jPausePolling = pausePolling;
+    window.t2jResumePolling = resumePolling;
+
+    function bindPollingLifecycle() {
+        // Document/window level listeners are registered once, even if this script runs twice; they call
+        // through window.* so they always reach the latest closure.
+        if (window._t2jPollingLifecycleBound) return;
+        window._t2jPollingLifecycleBound = true;
+
+        function isOurView(target) {
+            return !!(target && (target.id === 'torr2jellyPage' || (target.querySelector && target.querySelector('#torr2jellyPage'))));
+        }
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) { if (window.t2jPausePolling) window.t2jPausePolling(); }
+            else if (window.t2jResumePolling) window.t2jResumePolling();
+        });
+        window.addEventListener('pagehide', function () { if (window.t2jPausePolling) window.t2jPausePolling(); });
+        window.addEventListener('pageshow', function () { if (window.t2jResumePolling) window.t2jResumePolling(); });
+        document.addEventListener('viewhide', function (e) {
+            if (isOurView(e.target) && window.t2jPausePolling) window.t2jPausePolling();
+        });
+        document.addEventListener('viewshow', function (e) {
+            if (isOurView(e.target) && window.t2jResumePolling) window.t2jResumePolling();
+        });
     }
 
     // Tab switching
@@ -2958,9 +3172,12 @@
 
         if (view._t2jInitialized) {
             checkStatus();
+            resumePolling();
             return;
         }
         view._t2jInitialized = true;
+        // A freshly created page always starts on the Search tab, so no polling is wanted yet.
+        stopPolling();
 
         var searchForm = view.querySelector('#t2jSearchForm');
         if (searchForm) {
@@ -3015,6 +3232,7 @@
     }
 
     if (typeof document !== 'undefined') {
+        bindPollingLifecycle();
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', tryInit);
         } else {

@@ -534,6 +534,28 @@
             background: rgba(255, 255, 255, 0.18);
             color: #fff;
         }
+        .t2j-item-streams-btn .detailButton-content {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 2px !important;
+        }
+        .t2j-stream-count {
+            display: none;
+            font-size: 0.72em;
+            font-weight: 700;
+            background: rgba(128, 128, 128, 0.25);
+            color: inherit;
+            padding: 1px 5px;
+            border-radius: 999px;
+            line-height: 1.2;
+            letter-spacing: -0.2px;
+            vertical-align: middle;
+        }
+        .t2j-item-streams-btn:hover .t2j-stream-count {
+            background: rgba(128, 128, 128, 0.35);
+        }
     `;
     document.head.appendChild(style);
 
@@ -1006,7 +1028,11 @@
 
         var backdrop = document.createElement('div');
         backdrop.className = 't2j-drawer-backdrop';
-        backdrop.onclick = function () { root.remove(); };
+        function closeDrawer() {
+            root.remove();
+            refreshStreamsButtonCount(itemId);
+        }
+        backdrop.onclick = closeDrawer;
 
         var drawer = document.createElement('div');
         drawer.className = 't2j-drawer';
@@ -1037,9 +1063,7 @@
         root.appendChild(drawer);
         document.body.appendChild(root);
 
-        document.getElementById('t2j-drawer-close-btn').onclick = function () {
-            root.remove();
-        };
+        document.getElementById('t2j-drawer-close-btn').onclick = closeDrawer;
 
         var tabStreams = document.getElementById('t2j-tab-streams');
         var tabSearch = document.getElementById('t2j-tab-search');
@@ -1154,6 +1178,7 @@
                         if (res.ok) {
                             showToast('✓ ' + i18n.streamDeletedSuccess, true);
                             openStreamsDrawer(itemId);
+                            refreshStreamsButtonCount(itemId);
                         } else {
                             btn.disabled = false;
                             btn.innerHTML = '🗑️';
@@ -1336,6 +1361,7 @@
                                 _activeDrawerTab = 'streams';
                                 openStreamsDrawer(itemId);
                             }, 1200);
+                            refreshStreamsButtonCount(itemId);
 
                             if (window.ApiClient && window.ApiClient.getItem) {
                                 window.ApiClient.getItem(window.ApiClient.getCurrentUserId(), itemId).then(function (updItem) {
@@ -1397,6 +1423,7 @@
                                 _activeDrawerTab = 'streams';
                                 openStreamsDrawer(itemId);
                             }, 1200);
+                            refreshStreamsButtonCount(itemId);
 
                             if (window.ApiClient && window.ApiClient.getItem) {
                                 window.ApiClient.getItem(window.ApiClient.getCurrentUserId(), itemId).then(function (updItem) {
@@ -1470,21 +1497,59 @@
         return null;
     }
 
+    async function updateStreamsButtonCount(btn, itemId) {
+        if (!btn || !itemId) return;
+        var countEl = btn.querySelector('.t2j-stream-count');
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + itemId + '/Streams'), { headers: getAuthHeaders() });
+            if (res.ok) {
+                var streams = await res.json();
+                var i18n = getI18n();
+                if (Array.isArray(streams) && streams.length > 0) {
+                    if (countEl) {
+                        countEl.textContent = streams.length;
+                        countEl.style.display = 'inline-flex';
+                    }
+                    btn.setAttribute('title', i18n.drawerTitle + ' (' + streams.length + ')');
+                } else {
+                    if (countEl) {
+                        countEl.textContent = '';
+                        countEl.style.display = 'none';
+                    }
+                    btn.setAttribute('title', i18n.drawerTitle);
+                }
+            }
+        } catch (e) {}
+    }
+
+    function refreshStreamsButtonCount(itemId) {
+        document.querySelectorAll('.t2j-item-streams-btn').forEach(function (btn) {
+            if (!itemId || btn._t2jItemId === itemId) {
+                updateStreamsButtonCount(btn, btn._t2jItemId || itemId);
+            }
+        });
+    }
+
     var _buttonsObserver = null;
     function ensureButtonInContainer(page, buttonsContainer, itemId) {
         if (!buttonsContainer) return;
 
         var existingBtn = buttonsContainer.querySelector('.t2j-item-streams-btn');
         if (existingBtn) {
-            if (existingBtn._t2jItemId !== itemId) {
-                existingBtn._t2jItemId = itemId;
-                existingBtn.onclick = function (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    openStreamsDrawer(itemId);
-                };
+            if (existingBtn.querySelector('.detailButton-text')) {
+                existingBtn.remove();
+            } else {
+                if (existingBtn._t2jItemId !== itemId) {
+                    existingBtn._t2jItemId = itemId;
+                    existingBtn.onclick = function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openStreamsDrawer(itemId);
+                    };
+                    updateStreamsButtonCount(existingBtn, itemId);
+                }
+                return;
             }
-            return;
         }
 
         injectStreamsButton(page, buttonsContainer, itemId);
@@ -1532,9 +1597,9 @@
         btn._t2jItemId = itemId;
 
         btn.innerHTML = `
-            <div class="detailButton-content">
-                <span class="material-icons detailButton-icon" aria-hidden="true" style="color: #10b981;">bolt</span>
-                <span class="detailButton-text t2j-btn-label">${i18n.streamsBtn}</span>
+            <div class="detailButton-content" style="flex-direction: row; align-items: center; justify-content: center; gap: 2px;">
+                <span class="material-icons detailButton-icon" aria-hidden="true">bolt</span>
+                <span class="t2j-stream-count" style="display: none; font-size: 0.72em; font-weight: 700; background: rgba(128, 128, 128, 0.25); color: inherit; padding: 1px 5px; border-radius: 999px; line-height: 1.2; margin-left: 2px;"></span>
             </div>
         `;
 
@@ -1545,17 +1610,7 @@
         };
 
         buttonsContainer.appendChild(btn);
-
-        try {
-            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + itemId + '/Streams'), { headers: getAuthHeaders() });
-            if (res.ok) {
-                var streams = await res.json();
-                if (Array.isArray(streams) && streams.length > 0) {
-                    var label = btn.querySelector('.t2j-btn-label');
-                    if (label) label.textContent = i18n.streamsBtn + ' (' + streams.length + ')';
-                }
-            }
-        } catch (e) {}
+        updateStreamsButtonCount(btn, itemId);
     }
 
     // Page watchers

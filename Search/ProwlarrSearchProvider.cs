@@ -322,15 +322,17 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
             infoHash = InfoHashHelper.FromMagnet(magnet);
         }
 
-        if (magnet.Length == 0 && infoHash.Length > 0)
-        {
-            magnet = InfoHashHelper.BuildMagnet(infoHash, title);
-        }
-
         // The browser never gets the Prowlarr API key; the server re-attaches it when adding the torrent.
         var httpDownload = !string.IsNullOrWhiteSpace(item.DownloadUrl) && !IsMagnet(item.DownloadUrl)
             ? ProwlarrLinks.StripApiKey(item.DownloadUrl.Trim())
             : string.Empty;
+
+        // A magnet built from the info-hash alone has no trackers, which a private tracker's torrent never
+        // resolves. It is only a last resort: when the indexer gave an http(s) .torrent link, that link wins.
+        if (magnet.Length == 0 && infoHash.Length > 0 && httpDownload.Length == 0)
+        {
+            magnet = InfoHashHelper.BuildMagnet(infoHash, title);
+        }
 
         if (magnet.Length == 0 && httpDownload.Length == 0)
         {

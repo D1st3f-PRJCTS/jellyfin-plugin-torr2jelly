@@ -159,9 +159,11 @@ internal static class SettingsMerger
 
         if (config.ForwardedPortFilePath.Length > 0 &&
             !string.Equals(config.ForwardedPortFilePath, current.ForwardedPortFilePath?.Trim(), StringComparison.Ordinal) &&
-            !System.IO.Path.IsPathRooted(config.ForwardedPortFilePath))
+            !config.ForwardedPortFilePath
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .All(System.IO.Path.IsPathRooted))
         {
-            error = $"{nameof(PluginConfiguration.ForwardedPortFilePath)} must be an absolute path.";
+            error = $"{nameof(PluginConfiguration.ForwardedPortFilePath)} must be an absolute path (several paths may be separated by ';').";
             return false;
         }
 

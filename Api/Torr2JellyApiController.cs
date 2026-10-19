@@ -191,6 +191,7 @@ public class Torr2JellyApiController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<StrmSyncResult>> RecategorizeTorrent(
         [FromRoute] string hash,
         [FromBody] RecategorizeTorrentRequestDto req,
@@ -232,12 +233,23 @@ public class Torr2JellyApiController : ControllerBase
             forceCategory: true,
             cancellationToken: cancellationToken);
 
+        // The category is saved, but the files were not moved: report it instead of a success. "Metadata not ready"
+        // stays a 200: the stored category is honoured by the next sync, which moves the files.
+        if (!syncResult.Success &&
+            !string.Equals(syncResult.ErrorMessage, StrmEngine.MetadataNotReadyMessage, StringComparison.Ordinal))
+        {
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new { error = syncResult.ErrorMessage ?? "Failed to write the STRM files; see the Jellyfin log for details." });
+        }
+
         return Ok(syncResult);
     }
 
     [HttpDelete("Torrents/{hash}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public async Task<ActionResult> DeleteTorrent(
         [FromRoute] string hash,
         [FromQuery] bool deleteStrm = true,
@@ -248,10 +260,13 @@ public class Torr2JellyApiController : ControllerBase
             return BadRequest(new { error = "Invalid torrent hash." });
         }
 
-        var success = await _torrClient.RemoveTorrentAsync(normalizedHash, cancellationToken);
-        if (!success)
+        // The torrent must be gone from TorrServer before any .strm is deleted: otherwise a failed removal would
+        // leave a torrent behind that the next sync writes the files for again.
+        var removed = await _torrClient.RemoveTorrentAsync(normalizedHash, cancellationToken);
+        if (!removed)
         {
-            _logger.LogWarning("TorrServer did not remove torrent {Hash}; it may already be gone or TorrServer is unreachable", normalizedHash);
+            _logger.LogWarning("TorrServer did not remove torrent {Hash}; its files were left in place", normalizedHash);
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = "Failed to remove the torrent from TorrServer." });
         }
 
         var deletedFiles = 0;
@@ -260,7 +275,7 @@ public class Torr2JellyApiController : ControllerBase
             deletedFiles = await _strmEngine.DeleteTorrentFilesAsync(normalizedHash, cancellationToken);
         }
 
-        return Ok(new { success, deletedFiles });
+        return Ok(new { success = true, deletedFiles });
     }
 
     [HttpGet("Torrents/{hash}/Files")]
@@ -345,7 +360,7 @@ public class Torr2JellyApiController : ControllerBase
     public async Task<ActionResult> RestartDaemon(CancellationToken cancellationToken)
     {
         await _daemonManager.RestartAsync(cancellationToken);
-        return Ok(new { success = true, status = _daemonManager.StatusMessage });
+        return Ok(new { success = _daemonManager.IsRunning, status = _daemonManager.StatusMessage });
     }
 
     [HttpGet("search.js")]
@@ -593,6 +608,10 @@ public class Torr2JellyApiController : ControllerBase
         req.TmdbId = int.TryParse(tmdbStr, out var tid) ? tid : null;
         req.ImdbId = item.GetProviderId(MediaBrowser.Model.Entities.MetadataProvider.Imdb);
 
+        // Whether TorrServer already holds the torrent decides what a failure may clean up. Null (the list could not
+        // be read) counts as "already there": it is better to leave a torrent behind than to remove someone else's.
+        var before = await _torrClient.ListTorrentsAsync(cancellationToken);
+
         // Add torrent to TorrServer
         var torrent = await _torrClient.AddTorrentAsync(
             link: resolution.Link,
@@ -607,16 +626,37 @@ public class Torr2JellyApiController : ControllerBase
             return StatusCode(StatusCodes.Status502BadGateway, new { error = "TorrServer did not accept the torrent." });
         }
 
+        var preExisting = before == null || before.Any(t => TorrentHash.Equal(t.Hash, torrent.Hash));
+
         var result = await _strmEngine.AddAlternateStreamAsync(targetDir, torrent, req, cancellationToken);
         if (!result.Success)
         {
+            // Nothing references the torrent we just added: do not leave it behind in TorrServer.
+            var addedHash = TorrentHash.Normalize(torrent.Hash ?? string.Empty);
+            if (!preExisting && TorrentHash.IsValid(addedHash))
+            {
+                await RemoveTorrentIfUnreferencedAsync(addedHash, cancellationToken);
+            }
+
             return StatusCode(StatusCodes.Status500InternalServerError, new { error = result.ErrorMessage });
         }
 
-        // The new version is on disk; only now may the replaced one go from TorrServer.
+        // The new version is on disk; only now may the replaced one go from TorrServer. The engine deletes the old
+        // .strm only inside the managed category folders: while it is still there, the torrent is still in use.
         if (replaceExisting && oldHash != null && !TorrentHash.Equal(oldHash, torrent.Hash))
         {
-            await RemoveTorrentIfUnreferencedAsync(oldHash, cancellationToken);
+            var oldStreamRemains = _strmEngine.GetStreamsForDirectory(targetDir, item.Path)
+                .Any(s => TorrentHash.Equal(s.TorrentHash, oldHash));
+            if (oldStreamRemains)
+            {
+                _logger.LogInformation(
+                    "Keeping the replaced torrent {Hash} in TorrServer: its .strm file in {Dir} was not removed (outside the managed category folders)",
+                    oldHash, targetDir);
+            }
+            else
+            {
+                await RemoveTorrentIfUnreferencedAsync(oldHash, cancellationToken);
+            }
         }
 
         return Ok(result);
@@ -640,6 +680,12 @@ public class Torr2JellyApiController : ControllerBase
         if (string.IsNullOrWhiteSpace(targetDir) || !Directory.Exists(targetDir))
         {
             return NotFound(new { error = "Directory for item not found." });
+        }
+
+        // The engine only deletes inside the configured category folders; say so instead of a misleading "no such stream".
+        if (!_strmEngine.IsPathInsideManagedRoots(targetDir))
+        {
+            return BadRequest(new { error = "This item is outside the configured category folders, so its streams cannot be removed here." });
         }
 
         var deletedFromDisk = await _strmEngine.DeleteStreamByHashAsync(targetDir, normalizedHash, cancellationToken);

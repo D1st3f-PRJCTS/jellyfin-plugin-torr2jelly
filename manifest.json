@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/main/logo.png",
     "versions": [
       {
+        "version": "1.0.20.1",
+        "changelog": "The search button in the movie and series release dialogs is now aligned with its search field.",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/releases/download/v1.0.20.1/Torr2Jelly_1.0.20.1.zip",
+        "checksum": "9cda3b96d2d01545a42717ffaca9a978",
+        "timestamp": "2026-10-19T23:58:40Z"
+      },
+      {
         "version": "1.0.20.0",
         "changelog": "Native Jellyfin look: the search page section, the item-page dialogs and the settings page are rebuilt from Jellyfin's own components and theme colors (no external fonts or styles). Series pages can add a release straight into the series' folder, season by season. Regular users can only add magnet links, info-hashes or links from the configured indexers. Rewritten README and MIT license file.",
         "targetAbi": "10.9.0.0",

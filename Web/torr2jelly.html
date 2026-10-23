@@ -45,6 +45,11 @@
     #torr2jellyPage .t2j-torrent-row .selectContainer { order: 3; flex: 1 1 100%; width: auto; margin: 0 .5em .5em; }
 }
 
+/* Add torrent tab: file chooser */
+#torr2jellyPage .t2j-fileRow { display: flex; align-items: center; flex-wrap: wrap; gap: .5em 1em; }
+#torr2jellyPage .t2j-fileRow .fieldDescription { margin: 0; padding: 0; min-width: 0; overflow-wrap: anywhere; }
+#torr2jellyPage .t2j-fileDrop { outline: 2px dashed var(--jf-palette-primary-main, #00a4dc); outline-offset: .3em; }
+
 /* Placeholders tab */
 #torr2jellyPage .t2j-ph-list { margin-top: .5em; }
 #torr2jellyPage .t2j-ph-bulk { margin-top: 2em; }
@@ -87,7 +92,7 @@
 
     <div class="emby-tabs-slider t2j-tabs" role="tablist">
         <button type="button" is="emby-button" class="emby-tab-button emby-tab-button-active t2j-nav-btn" data-tab="search" role="tab" aria-selected="true"><div class="emby-button-foreground"><span id="tabSearchText">Search</span></div></button>
-        <button type="button" is="emby-button" class="emby-tab-button t2j-nav-btn" data-tab="magnet" role="tab" aria-selected="false"><div class="emby-button-foreground"><span id="tabMagnetText">Add magnet</span></div></button>
+        <button type="button" is="emby-button" class="emby-tab-button t2j-nav-btn" data-tab="magnet" role="tab" aria-selected="false"><div class="emby-button-foreground"><span id="tabMagnetText">Add torrent</span></div></button>
         <button type="button" is="emby-button" class="emby-tab-button t2j-nav-btn" data-tab="placeholders" role="tab" aria-selected="false"><div class="emby-button-foreground"><span id="tabPlaceholdersText">Placeholders</span></div></button>
         <button type="button" is="emby-button" class="emby-tab-button t2j-nav-btn" data-tab="dashboard" role="tab" aria-selected="false"><div class="emby-button-foreground"><span id="tabTorrentsText">Torrents</span></div></button>
         <button type="button" is="emby-button" class="emby-tab-button t2j-nav-btn" data-tab="settings" role="tab" aria-selected="false"><div class="emby-button-foreground"><span id="tabSettingsText">Settings</span></div></button>
@@ -141,8 +146,17 @@
                 <!-- emby-textarea is not registered on a cold dashboard load (12.2), so the label is explicit and the
                      textarea only borrows the native class. -->
                 <label class="textareaLabel" for="directLinkInput">Magnet link or .torrent URL</label>
-                <textarea class="emby-textarea" id="directLinkInput" rows="3" placeholder="magnet:?xt=urn:btih:... or https://example.com/file.torrent" required></textarea>
+                <textarea class="emby-textarea" id="directLinkInput" rows="3" placeholder="magnet:?xt=urn:btih:... or https://example.com/file.torrent"></textarea>
                 <div class="fieldDescription" id="t2jMagnetDesc">Add any magnet link or direct .torrent URL. STRM files will be generated instantaneously.</div>
+            </div>
+            <div class="inputContainer">
+                <input type="file" class="hidden" id="directFileInput" accept=".torrent,application/x-bittorrent" tabindex="-1" aria-hidden="true">
+                <div class="t2j-fileRow">
+                    <button type="button" is="emby-button" class="raised" id="directFileBtn"><span class="material-icons t2j-btn-icon" aria-hidden="true">upload_file</span><span id="btnDirectFileText">Choose .torrent file</span></button>
+                    <span class="fieldDescription hidden" id="directFileName"></span>
+                    <button type="button" is="paper-icon-button-light" class="paper-icon-button-light hidden" id="directFileClear" title="Remove the file" aria-label="Remove the file"><span class="material-icons" aria-hidden="true">close</span></button>
+                </div>
+                <div class="fieldDescription" id="directFileDesc">A .torrent file keeps the trackers and passkeys of private torrents (up to 4 MB). Choosing a file replaces the link above.</div>
             </div>
             <div class="inputContainer">
                 <input is="emby-input" type="text" id="directTitleInput" label="Custom Title (optional)" placeholder="Movie or Series name">
@@ -447,7 +461,7 @@
     var I18N = {
         en: {
             search: 'Search',
-            magnet: 'Add magnet',
+            magnet: 'Add torrent',
             streams: 'Torrents',
             settings: 'Settings',
             fastRefresh: 'Fast Refresh',
@@ -476,6 +490,13 @@
             magnetTitle: 'Direct Magnet / Torrent URL',
             magnetDesc: 'Add any magnet link or direct .torrent URL. STRM files will be generated instantaneously.',
             lblDirectLink: 'Magnet link or .torrent URL:',
+            btnDirectFile: 'Choose .torrent file',
+            directFileDesc: 'A .torrent file keeps the trackers and passkeys of private torrents (up to 4 MB). Choosing a file replaces the link above.',
+            directFileClear: 'Remove the file',
+            fileWrongExt: 'Choose a file with the .torrent extension',
+            fileTooLarge: 'The file is larger than 4 MB',
+            fileInvalid: 'This is not a valid .torrent file',
+            linkOrFileRequired: 'Enter a magnet link or choose a .torrent file',
             lblDirectTitle: 'Custom Title (optional):',
             lblDirectCat: 'Category / Target Library:',
             lblDirectSync: 'Generate .strm immediately and notify Jellyfin',
@@ -656,7 +677,7 @@
         },
         uk: {
             search: 'Пошук',
-            magnet: 'Додати magnet',
+            magnet: 'Додати торент',
             streams: 'Торенти',
             settings: 'Налаштування',
             fastRefresh: 'Швидке оновлення',
@@ -685,6 +706,13 @@
             magnetTitle: 'Прямий магнет / Торент посилання',
             magnetDesc: 'Додайте будь-який magnet link або прямий URL на .torrent. STRM файли з’являться миттєво.',
             lblDirectLink: 'Магнет посилання або .torrent URL:',
+            btnDirectFile: 'Вибрати .torrent-файл',
+            directFileDesc: '.torrent-файл зберігає трекери та пасскі приватних торентів (до 4 МБ). Вибір файлу замінює посилання вище.',
+            directFileClear: 'Прибрати файл',
+            fileWrongExt: 'Оберіть файл із розширенням .torrent',
+            fileTooLarge: 'Файл більший за 4 МБ',
+            fileInvalid: 'Це не коректний .torrent-файл',
+            linkOrFileRequired: 'Введіть magnet-посилання або оберіть .torrent-файл',
             lblDirectTitle: 'Власна назва (необов’язково):',
             lblDirectCat: 'Категорія / Бібліотека:',
             lblDirectSync: 'Згенерувати .strm негайно та сповістити Jellyfin',
@@ -1089,6 +1117,8 @@
             btnTrackersNoneText: t.trackersNone,
             t2jResultsLabel: t.resultsTitle,
             t2jMagnetDesc: t.magnetDesc,
+            btnDirectFileText: t.btnDirectFile,
+            directFileDesc: t.directFileDesc,
             lblDirectSync: t.lblDirectSync,
             btnDirectSubmitText: t.btnDirectSubmit,
             dashTableTitle: t.dashTableTitle,
@@ -1192,6 +1222,11 @@
 
         var searchInput = page.querySelector('#t2jSearchInput');
         if (searchInput) searchInput.placeholder = t.searchPlaceholder;
+        var fileClearBtn = page.querySelector('#directFileClear');
+        if (fileClearBtn) {
+            fileClearBtn.title = t.directFileClear;
+            fileClearBtn.setAttribute('aria-label', t.directFileClear);
+        }
         var phQueryInput = page.querySelector('#t2jPhQuery');
         if (phQueryInput) phQueryInput.placeholder = t.phQueryPlaceholder;
         var phBulkText = page.querySelector('#t2jPhBulkText');
@@ -1975,7 +2010,66 @@
         }
     };
 
-    // Direct link submit
+    // ---- add torrent: magnet / URL or a .torrent file ----
+
+    var TORRENT_FILE_MAX_BYTES = 4 * 1024 * 1024;
+
+    // '' when the file may be uploaded, else the one-line reason.
+    function checkTorrentFile(file) {
+        var t = tr();
+        if (!file || !/\.torrent$/i.test(String(file.name || ''))) return t.fileWrongExt;
+        if (file.size > TORRENT_FILE_MAX_BYTES) return t.fileTooLarge;
+        return '';
+    }
+
+    // Shows (or clears) the chosen file: its name as a text line with a clear button. The name is set as text only.
+    function renderDirectFile() {
+        var page = getPage();
+        if (!page) return;
+        var file = window.t2jState.torrentFile || null;
+        var nameEl = page.querySelector('#directFileName');
+        var clearBtn = page.querySelector('#directFileClear');
+        if (nameEl) {
+            nameEl.textContent = file ? file.name + ' (' + formatBytes(file.size) + ')' : '';
+            nameEl.classList.toggle('hidden', !file);
+        }
+        if (clearBtn) clearBtn.classList.toggle('hidden', !file);
+    }
+
+    function setDirectFile(file) {
+        window.t2jState.torrentFile = file || null;
+        var page = getPage();
+        if (file && page) {
+            // Choosing a file replaces the link.
+            var link = page.querySelector('#directLinkInput');
+            if (link) link.value = '';
+        }
+        renderDirectFile();
+    }
+    window.t2jSetDirectFile = setDirectFile;
+
+    // A file from the chooser or from a drop: only a valid .torrent is kept.
+    function acceptDirectFile(file) {
+        if (!file) return;
+        var problem = checkTorrentFile(file);
+        if (problem) {
+            showToast(problem);
+            return;
+        }
+        setDirectFile(file);
+    }
+
+    // Text for a failed upload: the fixed text for the two file errors, else the server's generic error.
+    async function uploadFailureText(res) {
+        var t = tr();
+        var body = await res.json().catch(function () { return {}; });
+        var code = body && body.code ? String(body.code) : '';
+        if (code === 'invalid_torrent_file') return t.fileInvalid;
+        if (code === 'file_too_large') return t.fileTooLarge;
+        return (body && body.error) ? String(body.error) : ('HTTP ' + res.status);
+    }
+
+    // Direct submit: a chosen .torrent file goes up as multipart/form-data (Torrents/File), otherwise the link as JSON.
     window.t2jSubmitDirect = async function () {
         var page = getPage();
         if (!page) return;
@@ -1985,34 +2079,61 @@
         var directCategorySelect = page.querySelector('#directCategorySelect');
         var directSyncCheck = page.querySelector('#directSyncCheck');
         var directSubmitBtn = page.querySelector('#directSubmitBtn');
-
-        var link = (directLinkInput ? directLinkInput.value : '').trim();
-        if (!link) return;
+        var directFileInput = page.querySelector('#directFileInput');
 
         var t = tr();
+        var file = window.t2jState.torrentFile || null;
+        var link = (directLinkInput ? directLinkInput.value : '').trim();
+        if (!file && !link) {
+            showToast(t.linkOrFileRequired);
+            return;
+        }
+        if (directSubmitBtn && directSubmitBtn.disabled) return;
+
         if (directSubmitBtn) {
             directSubmitBtn.disabled = true;
             setBtnText(directSubmitBtn, t.adding);
         }
 
         try {
-            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({
-                    Link: link,
-                    Title: directTitleInput ? directTitleInput.value.trim() : null,
-                    Category: directCategorySelect ? directCategorySelect.value : 'Movies',
-                    SyncNow: directSyncCheck ? directSyncCheck.checked : true
-                })
-            });
+            var res;
+            if (file) {
+                var form = new FormData();
+                form.append('File', file, file.name);
+                var titleText = directTitleInput ? directTitleInput.value.trim() : '';
+                if (titleText) form.append('Title', titleText);
+                form.append('Category', directCategorySelect ? directCategorySelect.value : 'Movies');
+                form.append('SyncNow', (directSyncCheck ? directSyncCheck.checked : true) ? 'true' : 'false');
+                // No Content-Type here: the browser adds it with the multipart boundary.
+                var uploadHeaders = getAuthHeaders();
+                delete uploadHeaders['Content-Type'];
+                res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents/File'), {
+                    method: 'POST',
+                    headers: uploadHeaders,
+                    body: form
+                });
+            } else {
+                res = await fetch(getApiUrl('Plugins/Torr2Jelly/Torrents'), {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        Link: link,
+                        Title: directTitleInput ? directTitleInput.value.trim() : null,
+                        Category: directCategorySelect ? directCategorySelect.value : 'Movies',
+                        SyncNow: directSyncCheck ? directSyncCheck.checked : true
+                    })
+                });
+            }
 
             if (res.ok) {
                 var directData = await res.json().catch(function () { return null; });
                 if (directLinkInput) directLinkInput.value = '';
                 if (directTitleInput) directTitleInput.value = '';
+                if (file) setDirectFile(null);
                 showToast(isSyncPending(directData) ? t.addedPending : t.torrentAdded);
                 checkStatus();
+            } else if (file) {
+                showToast('Error: ' + (await uploadFailureText(res)));
             } else {
                 var err = await res.json().catch(function () { return {}; });
                 showToast('Error: ' + (err.error || 'Failed to add torrent'));
@@ -2020,6 +2141,8 @@
         } catch (e) {
             showToast('Request failed: ' + e.message);
         } finally {
+            // So that the same file can be chosen again.
+            if (directFileInput) directFileInput.value = '';
             if (directSubmitBtn) {
                 directSubmitBtn.disabled = false;
                 setBtnText(directSubmitBtn, tr().btnDirectSubmit);
@@ -3344,6 +3467,38 @@
 
         on(q('#t2jSearchForm'), 'submit', function (e) { e.preventDefault(); window.t2jDoSearch(); });
         on(q('#directAddForm'), 'submit', function (e) { e.preventDefault(); window.t2jSubmitDirect(); });
+        on(q('#directFileBtn'), 'click', function () { var fi = q('#directFileInput'); if (fi) fi.click(); });
+        on(q('#directFileInput'), 'change', function () {
+            var f = this.files && this.files[0];
+            this.value = '';
+            acceptDirectFile(f);
+        });
+        on(q('#directFileClear'), 'click', function () { setDirectFile(null); });
+        // Typing a link drops the chosen file.
+        on(q('#directLinkInput'), 'input', function () {
+            if (this.value && window.t2jState.torrentFile) setDirectFile(null);
+        });
+        // A .torrent dropped on the tab is taken as if it was chosen.
+        var dropZone = q('#t2jTabMagnet');
+        if (dropZone) {
+            dropZone.addEventListener('dragover', function (e) {
+                if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') !== -1) {
+                    e.preventDefault();
+                    dropZone.classList.add('t2j-fileDrop');
+                }
+            });
+            dropZone.addEventListener('dragleave', function (e) {
+                if (e.target === dropZone) dropZone.classList.remove('t2j-fileDrop');
+            });
+            dropZone.addEventListener('drop', function (e) {
+                dropZone.classList.remove('t2j-fileDrop');
+                var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+                if (f) {
+                    e.preventDefault();
+                    acceptDirectFile(f);
+                }
+            });
+        }
 
         // Placeholders
         on(q('#t2jPhForm'), 'submit', function (e) { e.preventDefault(); window.t2jPhSearch(); });

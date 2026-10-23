@@ -158,6 +158,21 @@ public class TorrClientService
         }
     }
 
+    private async Task<HttpResponseMessage> PostMultipartAsync(string path, HttpContent content, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(timeout);
+
+        try
+        {
+            return await _httpClient.PostAsync($"{GetBaseUrl()}{path}", content, cts.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"TorrServer did not answer within {timeout.TotalSeconds:0} s.");
+        }
+    }
+
     /// <summary>
     /// Lists the torrents stored in TorrServer. Returns <c>null</c> on any failure (unreachable, timeout,
     /// non-success status, unreadable body) so callers can tell "TorrServer has no torrents" (empty list) from
@@ -267,6 +282,99 @@ public class TorrClientService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to add torrent to TorrServer");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Adds a torrent from the bytes of a .torrent file (kept as a file, so the trackers and passkeys of a private
+    /// torrent survive) through TorrServer's <c>/torrent/upload</c>. The client's file name is never sent. Returns
+    /// <c>null</c> when TorrServer could not be reached or did not accept the file. When the answer carries no
+    /// info-hash, the v1 hash is computed from the file and the torrent is fetched with <c>get</c>.
+    /// </summary>
+    public async Task<TorrTorrent?> AddTorrentFileAsync(
+        byte[] file,
+        string? title = null,
+        string? poster = null,
+        string? category = null,
+        bool saveToDb = true,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            var fileContent = new ByteArrayContent(file);
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/x-bittorrent");
+            content.Add(fileContent, "file", "upload.torrent");
+            content.Add(new StringContent(saveToDb ? "true" : "false"), "save");
+            if (!string.IsNullOrWhiteSpace(title)) content.Add(new StringContent(title), "title");
+            if (!string.IsNullOrWhiteSpace(category)) content.Add(new StringContent(category), "category");
+            if (!string.IsNullOrWhiteSpace(poster)) content.Add(new StringContent(poster), "poster");
+
+            using var response = await PostMultipartAsync("/torrent/upload", content, AddTimeout, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("TorrServer rejected the uploaded torrent file with HTTP {Status}", (int)response.StatusCode);
+                return null;
+            }
+
+            var torrent = ParseUploadResponse(await response.Content.ReadAsStringAsync(cancellationToken));
+            if (torrent != null && TorrentHash.IsValid(torrent.Hash))
+            {
+                return torrent;
+            }
+
+            // No usable hash in the answer: derive it from the file and ask TorrServer for the torrent.
+            if (!TorrentFile.TryGetInfoHash(file, out var hash))
+            {
+                return null;
+            }
+
+            var fetched = await GetTorrentAsync(hash, cancellationToken);
+            if (fetched != null && !TorrentHash.IsValid(fetched.Hash))
+            {
+                fetched.Hash = hash;
+            }
+
+            return fetched;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload a torrent file to TorrServer");
+            return null;
+        }
+    }
+
+    /// <summary>Reads TorrServer's answer to an upload: one torrent object, or an array (the first element is taken).</summary>
+    internal static TorrTorrent? ParseUploadResponse(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var element = doc.RootElement;
+            if (element.ValueKind == JsonValueKind.Array)
+            {
+                if (element.GetArrayLength() == 0)
+                {
+                    return null;
+                }
+
+                element = element[0];
+            }
+
+            return element.ValueKind == JsonValueKind.Object ? element.Deserialize<TorrTorrent>(ListJsonOptions) : null;
+        }
+        catch (JsonException)
+        {
             return null;
         }
     }

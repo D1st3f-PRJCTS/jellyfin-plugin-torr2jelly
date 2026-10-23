@@ -16,7 +16,7 @@ Torr2Jelly is a Jellyfin plugin that turns torrents into a streamable Jellyfin l
 
 - **Indexer search** through [Prowlarr](https://prowlarr.com) (JSON API) and/or any Torznab endpoint (for example [Jackett](https://github.com/Jackett/Jackett)). Results from several indexers are merged and de-duplicated by info-hash.
 - **Search where you already are.** Results appear as a "Torrents" section at the bottom of Jellyfin's own search page and on the plugin's admin page. One click adds a release to TorrServer and generates the files.
-- **Add by link.** Paste a magnet link or a `.torrent` URL on the admin page.
+- **Add by link or file.** Paste a magnet link or a `.torrent` URL on the admin page, or upload a `.torrent` file (also from a movie's or series' page). A file keeps the trackers and passkeys of private torrents, which a bare magnet link would lose.
 - **Extra versions of a movie** (admins). From a movie's page, add another release as an additional version, using Jellyfin's native multi-version switching. Versions can be replaced or deleted.
 - **New seasons for a series** (admins). From a series' page, add a release (for example a new season pack) and its episodes are written into that series' folder, season by season.
 - **Categories.** Each category has a name, a type (movie or show) and a folder. File and folder names follow configurable templates. Season packs, multi-file torrents and releases with Ukrainian or Russian titles are handled.
@@ -108,6 +108,7 @@ Search for a title as usual. A "Torrents" section at the bottom lists matching r
 Administrators see an icon button (tooltip "Torrent versions") next to the usual buttons on movie pages. It opens a dialog with two tabs:
 
 - **Versions** lists the movie's torrent versions and lets you delete one.
+- **Add .torrent file** (next to the search field) adds a release from a file instead of the search results.
 - **Find releases** searches for other releases (by IMDb id when the movie has one, otherwise by title and year). **Add as version** adds a release next to the existing ones; **Replace current** swaps it in. Replacing and deleting ask for confirmation.
 
 Jellyfin then offers the versions in its normal version picker. A torrent is removed from TorrServer only when no remaining `.strm` file uses it.
@@ -121,7 +122,7 @@ Administrators see an **Add torrents to this series** button on series pages. It
 | Tab | What it does |
 | --- | --- |
 | **Search** | Search your indexers, filter by category, sort by freeleech, seeders or size, and add a result to a chosen category. |
-| **Add magnet** | Add a magnet link or `.torrent` URL, with an optional custom title, a category and a "generate .strm immediately" option. |
+| **Add torrent** | Add a magnet link or `.torrent` URL, or choose (or drop) a `.torrent` file, with an optional custom title, a category and a "generate .strm immediately" option. Uploading a file is for administrators only; files are limited to 4 MB. |
 | **Torrents** | Lists the torrents in TorrServer. Change a torrent's category (its files are moved), delete it (together with its `.strm` files), refresh the list, or run **Scan Library**. |
 | **Placeholders** | Search TMDb by title and add a movie or series as a placeholder, or paste a list of titles (one per line, optionally with a year) to add many at once; ambiguous lines offer up to three candidates. Needs a TMDb API key. |
 | **Settings** | TorrServer, Indexers (including the freeleech switch and the TMDb key), Library & categories, Trackers, Naming and Language. |

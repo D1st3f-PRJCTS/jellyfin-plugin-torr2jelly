@@ -37,6 +37,9 @@ public class Torr2JellyApiController : ControllerBase
     private const int MaxPlaceholdersPerRequest = 500;
     private const int MaxEchoedImdbIdLength = 32;
     private const int MaxTmdbKeyLength = 2048;
+
+    // Room for a .torrent file (TorrentFile.MaxBytes) plus the other form fields and multipart framing.
+    private const int UploadRequestLimit = TorrentFile.MaxBytes + 64 * 1024;
     private static readonly TimeSpan StreamsTorrServerTimeout = TimeSpan.FromSeconds(3);
 
     private static readonly SemaphoreSlim SettingsLock = new(1, 1);
@@ -810,19 +813,138 @@ public class Torr2JellyApiController : ControllerBase
         return Ok(streams);
     }
 
+    // Where the torrent of an add request comes from. The JSON flows hand over a link, the .../File flows a .torrent file;
+    // this is the only difference between them (everything after the torrent is obtained is shared).
+    //   Prepare: runs once the request is otherwise valid (a link is resolved); returns an error text, or null when fine.
+    //   Add:     obtains the torrent from TorrServer, or null when TorrServer did not accept it.
+    private sealed record TorrentSource(
+        Func<CancellationToken, Task<string?>> Prepare,
+        TorrentIntake.AddTorrent Add);
+
+    private TorrentSource LinkSource(string? link)
+    {
+        string? resolved = null;
+        return new TorrentSource(
+            async ct =>
+            {
+                var resolution = await _linkResolver.ResolveAsync(link, ct);
+                if (!resolution.Success)
+                {
+                    return resolution.Error ?? "The torrent link could not be used.";
+                }
+
+                resolved = resolution.Link;
+                return null;
+            },
+            (title, poster, category, ct) => _torrClient.AddTorrentAsync(
+                link: resolved!,
+                title: title,
+                poster: poster,
+                category: category,
+                saveToDb: true,
+                cancellationToken: ct));
+    }
+
+    private TorrentSource FileSource(byte[] file)
+    {
+        return new TorrentSource(
+            _ => Task.FromResult<string?>(null),
+            (title, poster, category, ct) => _torrClient.AddTorrentFileAsync(file, title, poster, category, saveToDb: true, cancellationToken: ct));
+    }
+
+    /// <summary>
+    /// Adds a torrent from an uploaded <c>.torrent</c> file (multipart/form-data, field <c>File</c>; the file is passed on
+    /// to TorrServer as a file, so the trackers and passkeys of a private torrent are kept). Same behaviour and
+    /// responses as <c>POST Torrents</c>. Administrators only.
+    /// </summary>
+    [HttpPost("Torrents/File")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(UploadRequestLimit)]
+    [RequestFormLimits(MultipartBodyLengthLimit = UploadRequestLimit)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<ActionResult<StrmSyncResult>> AddTorrentFile(
+        [FromForm] AddTorrentFileForm form,
+        CancellationToken cancellationToken)
+    {
+        var (data, error) = await TorrentIntake.ReadTorrentFileAsync(form?.File, _logger, cancellationToken);
+        if (error != null)
+        {
+            return error;
+        }
+
+        var source = FileSource(data!);
+        return await TorrentIntake.AddAsync(
+            _torrClient,
+            _strmEngine,
+            _logger,
+            isAdministrator: true,
+            source.Add,
+            form!.Category,
+            form.Title,
+            posterUrl: null,
+            form.TmdbId,
+            form.ImdbId,
+            form.SyncNow,
+            cancellationToken);
+    }
+
     [HttpPost("Items/{itemId}/AlternateStream")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<AlternateStreamResultDto>> AddItemAlternateStream(
+    public Task<ActionResult<AlternateStreamResultDto>> AddItemAlternateStream(
         [FromRoute] Guid itemId,
         [FromBody] AddAlternateStreamRequestDto req,
         CancellationToken cancellationToken)
     {
-        var resolution = await _linkResolver.ResolveAsync(req.Link, cancellationToken);
-        if (!resolution.Success)
+        return AddAlternateStreamCoreAsync(itemId, req, LinkSource(req.Link), cancellationToken);
+    }
+
+    /// <summary>
+    /// <c>POST Items/{itemId}/AlternateStream</c> with an uploaded <c>.torrent</c> file (fields <c>File</c>,
+    /// <c>ReplaceExisting</c>, <c>OldTorrentHash</c>, <c>TorrentTitle</c>). Same checks, rollback, registration and
+    /// placeholder replacement as the link flow. Administrators only.
+    /// </summary>
+    [HttpPost("Items/{itemId}/AlternateStream/File")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(UploadRequestLimit)]
+    [RequestFormLimits(MultipartBodyLengthLimit = UploadRequestLimit)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<AlternateStreamResultDto>> AddItemAlternateStreamFile(
+        [FromRoute] Guid itemId,
+        [FromForm] AddAlternateStreamFileForm form,
+        CancellationToken cancellationToken)
+    {
+        var (data, error) = await TorrentIntake.ReadTorrentFileAsync(form?.File, _logger, cancellationToken);
+        if (error != null)
         {
-            return BadRequest(new { error = resolution.Error });
+            return error;
+        }
+
+        var req = new AddAlternateStreamRequestDto
+        {
+            ReplaceExisting = form!.ReplaceExisting,
+            OldTorrentHash = form.OldTorrentHash,
+            TorrentTitle = form.TorrentTitle
+        };
+        return await AddAlternateStreamCoreAsync(itemId, req, FileSource(data!), cancellationToken);
+    }
+
+    private async Task<ActionResult<AlternateStreamResultDto>> AddAlternateStreamCoreAsync(
+        Guid itemId,
+        AddAlternateStreamRequestDto req,
+        TorrentSource source,
+        CancellationToken cancellationToken)
+    {
+        var prepareError = await source.Prepare(cancellationToken);
+        if (prepareError != null)
+        {
+            return BadRequest(new { error = prepareError });
         }
 
         string? oldHash = null;
@@ -885,13 +1007,7 @@ public class Torr2JellyApiController : ControllerBase
         var before = await _torrClient.ListTorrentsAsync(cancellationToken);
 
         // Add torrent to TorrServer
-        var torrent = await _torrClient.AddTorrentAsync(
-            link: resolution.Link,
-            title: null,
-            poster: null,
-            category: null,
-            saveToDb: true,
-            cancellationToken: cancellationToken);
+        var torrent = await source.Add(null, null, null, cancellationToken);
 
         if (torrent == null)
         {
@@ -961,6 +1077,43 @@ public class Torr2JellyApiController : ControllerBase
             return BadRequest(new { error = linkError });
         }
 
+        return await AddSeriesTorrentCoreAsync(itemId, req.TorrentTitle, LinkSource(req.Link), cancellationToken);
+    }
+
+    /// <summary>
+    /// <c>POST Items/{itemId}/SeriesTorrent</c> with an uploaded <c>.torrent</c> file (fields <c>File</c>,
+    /// <c>TorrentTitle</c>). Same behaviour as the link flow. Administrators only.
+    /// </summary>
+    [HttpPost("Items/{itemId}/SeriesTorrent/File")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(UploadRequestLimit)]
+    [RequestFormLimits(MultipartBodyLengthLimit = UploadRequestLimit)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<ActionResult<SeriesTorrentResultDto>> AddItemSeriesTorrentFile(
+        [FromRoute] Guid itemId,
+        [FromForm] AddSeriesTorrentFileForm form,
+        CancellationToken cancellationToken)
+    {
+        var (data, error) = await TorrentIntake.ReadTorrentFileAsync(form?.File, _logger, cancellationToken);
+        if (error != null)
+        {
+            return error;
+        }
+
+        return await AddSeriesTorrentCoreAsync(itemId, form!.TorrentTitle, FileSource(data!), cancellationToken);
+    }
+
+    private async Task<ActionResult<SeriesTorrentResultDto>> AddSeriesTorrentCoreAsync(
+        Guid itemId,
+        string? rawTorrentTitle,
+        TorrentSource source,
+        CancellationToken cancellationToken)
+    {
         var item = _libraryManager.GetItemById(itemId);
         if (item == null)
         {
@@ -986,17 +1139,17 @@ public class Torr2JellyApiController : ControllerBase
             return BadRequest(new { error = seriesDirError ?? "The folder of this series cannot hold a series torrent." });
         }
 
-        var resolution = await _linkResolver.ResolveAsync(req.Link, cancellationToken);
-        if (!resolution.Success)
+        var prepareError = await source.Prepare(cancellationToken);
+        if (prepareError != null)
         {
-            return BadRequest(new { error = resolution.Error });
+            return BadRequest(new { error = prepareError });
         }
 
         // Whether TorrServer already holds the torrent decides what a failure may clean up. Null (the list could not
         // be read) counts as "already there": it is better to leave a torrent behind than to remove someone else's.
         var before = await _torrClient.ListTorrentsAsync(cancellationToken);
 
-        var torrentTitle = string.IsNullOrWhiteSpace(req.TorrentTitle) ? null : req.TorrentTitle.Trim();
+        var torrentTitle = string.IsNullOrWhiteSpace(rawTorrentTitle) ? null : rawTorrentTitle.Trim();
         if (torrentTitle != null && torrentTitle.Length > MaxTorrentTitleLength)
         {
             torrentTitle = torrentTitle[..MaxTorrentTitleLength];
@@ -1006,13 +1159,7 @@ public class Torr2JellyApiController : ControllerBase
         // folder is ever gone, a sync then files the torrent where that series' siblings are.
         var category = _strmEngine.GetCategoryNameForPath(seriesDir) ?? string.Empty;
 
-        var torrent = await _torrClient.AddTorrentAsync(
-            link: resolution.Link,
-            title: torrentTitle,
-            poster: null,
-            category: category,
-            saveToDb: true,
-            cancellationToken: cancellationToken);
+        var torrent = await source.Add(torrentTitle, null, category, cancellationToken);
 
         if (torrent == null)
         {

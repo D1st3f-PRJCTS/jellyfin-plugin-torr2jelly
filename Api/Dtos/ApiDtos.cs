@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Http;
 using Jellyfin.Plugin.Torr2Jelly.Search.Models;
 
 namespace Jellyfin.Plugin.Torr2Jelly.Api.Dtos;
@@ -49,6 +50,33 @@ public class TestConnectionRequestDto
     public string Service { get; set; } = string.Empty; // "prowlarr", "torznab", "torrserver"
     public string? Url { get; set; }
     public string? ApiKey { get; set; }
+}
+
+/// <summary>Form of <c>POST Torrents/File</c> (multipart/form-data): a .torrent file instead of a link.</summary>
+public class AddTorrentFileForm
+{
+    public IFormFile? File { get; set; }
+    public string? Title { get; set; }
+    public string? Category { get; set; }
+    public string? ImdbId { get; set; }
+    public int? TmdbId { get; set; }
+    public bool SyncNow { get; set; } = true;
+}
+
+/// <summary>Form of <c>POST Items/{id}/AlternateStream/File</c>.</summary>
+public class AddAlternateStreamFileForm
+{
+    public IFormFile? File { get; set; }
+    public bool ReplaceExisting { get; set; }
+    public string? OldTorrentHash { get; set; }
+    public string? TorrentTitle { get; set; }
+}
+
+/// <summary>Form of <c>POST Items/{id}/SeriesTorrent/File</c>.</summary>
+public class AddSeriesTorrentFileForm
+{
+    public IFormFile? File { get; set; }
+    public string? TorrentTitle { get; set; }
 }
 
 public class AddAlternateStreamRequestDto

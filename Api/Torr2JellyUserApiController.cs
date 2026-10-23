@@ -31,9 +31,6 @@ namespace Jellyfin.Plugin.Torr2Jelly.Api;
 public class Torr2JellyUserApiController : ControllerBase
 {
     private const int MaxQueryLength = 200;
-    private const int MaxTitleLength = 300;
-
-    private static readonly Regex ImdbIdRegex = new(@"^tt\d{1,10}$", RegexOptions.Compiled);
 
     // VirtualFolderInfo.CollectionType is a different enum type in Jellyfin 10.11 than in the 10.9 this plugin is
     // built against; reading it by reflection avoids a MissingMethodException there.
@@ -195,95 +192,28 @@ public class Torr2JellyUserApiController : ControllerBase
             return BadRequest(new { error = resolution.Error });
         }
 
-        // Only a configured category is passed on; anything else lets the engine route by what the release is.
-        var category = config.Categories
-            .FirstOrDefault(c => c != null && c.Name.Equals(req.Category?.Trim(), StringComparison.OrdinalIgnoreCase))?.Name;
-
-        var title = string.IsNullOrWhiteSpace(req.Title) ? null : req.Title.Trim();
-        if (title != null && title.Length > MaxTitleLength)
-        {
-            title = title.Substring(0, MaxTitleLength);
-        }
-
         // Posters are downloaded by the server too; Jellyfin fetches artwork from its metadata providers anyway.
         var posterUrl = isAdmin ? TorrentLinkResolver.SanitizePosterUrl(req.PosterUrl) : null;
-        var tmdbId = req.TmdbId > 0 ? req.TmdbId : null;
-        var imdbId = !string.IsNullOrWhiteSpace(req.ImdbId) && ImdbIdRegex.IsMatch(req.ImdbId.Trim()) ? req.ImdbId.Trim() : null;
 
-        try
-        {
-            var torrent = await _torrClient.AddTorrentAsync(
+        // Everything after the torrent has been obtained is shared with the .torrent file upload (TorrentIntake).
+        return await TorrentIntake.AddAsync(
+            _torrClient,
+            _strmEngine,
+            _logger,
+            isAdmin,
+            (title, poster, category, ct) => _torrClient.AddTorrentAsync(
                 link: resolution.Link,
                 title: title,
-                poster: posterUrl,
+                poster: poster,
                 category: category,
                 saveToDb: true,
-                cancellationToken: cancellationToken);
-
-            if (torrent == null)
-            {
-                return StatusCode(StatusCodes.Status502BadGateway, new { error = "TorrServer did not accept the torrent." });
-            }
-
-            if (category != null)
-            {
-                await _torrClient.SetTorrentCategoryAsync(torrent.Hash, category, torrent.Title, torrent.Poster, cancellationToken);
-            }
-
-            if (req.SyncNow)
-            {
-                var syncResult = await _strmEngine.SyncTorrentAsync(
-                    torrent: torrent,
-                    category: category,
-                    customTitle: title,
-                    posterUrl: posterUrl,
-                    tmdbId: tmdbId,
-                    imdbId: imdbId,
-                    forceCategory: category != null,
-                    cancellationToken: cancellationToken);
-
-                // The torrent is in TorrServer, but without .strm files it is not in the library: that is a failure.
-                // "Metadata not ready" is the exception: the files follow with the next sync, so it stays a 200.
-                if (!syncResult.Success &&
-                    !string.Equals(syncResult.ErrorMessage, StrmEngine.MetadataNotReadyMessage, StringComparison.Ordinal))
-                {
-                    return StatusCode(
-                        StatusCodes.Status500InternalServerError,
-                        new { error = syncResult.ErrorMessage ?? "Failed to write the STRM files; see the Jellyfin log for details." });
-                }
-
-                return Ok(IsAdministrator ? syncResult : WithoutServerPaths(syncResult));
-            }
-
-            return Ok(new StrmSyncResult
-            {
-                TorrentHash = torrent.Hash,
-                TorrentTitle = torrent.Title,
-                Success = true
-            });
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error adding torrent");
-            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Failed to add the torrent; see the Jellyfin log for details." });
-        }
-    }
-
-    // Ordinary users get the outcome, not the layout of the server's file system.
-    private static StrmSyncResult WithoutServerPaths(StrmSyncResult result)
-    {
-        return new StrmSyncResult
-        {
-            TorrentHash = result.TorrentHash,
-            TorrentTitle = result.TorrentTitle,
-            Category = result.Category,
-            VideoFilesCount = result.VideoFilesCount,
-            Success = result.Success,
-            ErrorMessage = result.ErrorMessage
-        };
+                cancellationToken: ct),
+            req.Category,
+            req.Title,
+            posterUrl,
+            req.TmdbId,
+            req.ImdbId,
+            req.SyncNow,
+            cancellationToken);
     }
 }

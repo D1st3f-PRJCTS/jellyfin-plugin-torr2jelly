@@ -122,6 +122,11 @@
                 return 'Added ' + count + (count === 1 ? ' episode' : ' episodes') + (seriesName ? ' to ' + seriesName : '');
             },
             seriesPendingToast: isUk ? 'Торент додано; епізоди з\'являться за кілька хвилин' : 'Torrent added; episodes will appear in a few minutes',
+            // Adding a .torrent file (admin).
+            addFileBtn: isUk ? 'Додати .torrent-файл' : 'Add .torrent file',
+            fileInvalid: isUk ? 'Це не коректний .torrent-файл' : 'This is not a valid .torrent file',
+            fileTooLarge: isUk ? 'Файл більший за 4 МБ' : 'The file is larger than 4 MB',
+            fileWrongExt: isUk ? 'Оберіть файл із розширенням .torrent' : 'Choose a file with the .torrent extension',
             // Placeholders (admin): titles that are not on the trackers, found through TMDb.
             phTitle: isUk ? 'Додати як заглушку' : 'Add as placeholder',
             phHint: isUk ? 'Знайдіть назву в TMDb і додайте її в медіатеку без стріму; торент можна додати пізніше.' : 'Look the title up on TMDb and add it to the library without a stream; a release can be added later.',
@@ -208,6 +213,9 @@
         .t2j-find-row { display: flex; align-items: stretch; gap: 0.5em; }
         .t2j-find-row .emby-input { flex: 1 1 auto; min-width: 0; }
         .t2j-find-row .t2j-find-btn { flex: 0 0 auto; margin: 0; padding-top: 0; padding-bottom: 0; }
+        .t2j-find-row .t2j-file-btn { flex: 0 0 auto; margin: 0; }
+        .t2j-file-btn .t2j-btn-icon { margin-inline-end: 0.4em; }
+        .t2j-file-input { display: none; }
         .t2j-filter-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.25em 1em; margin: 0.75em 0 0.25em; }
         .t2j-ph { margin-top: 0.5em; }
         .t2j-ph > .sectionTitle { margin-top: 1em; margin-bottom: 0.5em; }
@@ -219,6 +227,8 @@
         .t2j-ph-kind { display: inline-flex; align-items: center; gap: 0.25em; }
         .t2j-ph-kind .material-icons { font-size: 1.1em; }
         @media (max-width: 50em) {
+            .t2j-find-row { flex-wrap: wrap; }
+            .t2j-find-row .emby-input { flex-basis: 100%; }
             .t2j-dialog { width: 100%; max-width: none; height: 100%; max-height: none; border-radius: 0; }
         }
     `;
@@ -481,6 +491,65 @@
                 }
                 setTimeout(poll, 120);
             })();
+        });
+    }
+
+    // ---- .torrent file upload (admin) ----
+    var TORRENT_FILE_MAX_BYTES = 4 * 1024 * 1024;
+
+    // '' when the file may be uploaded, else the one-line reason (checked before anything is sent).
+    function checkTorrentFile(file, i18n) {
+        if (!file || !/\.torrent$/i.test(String(file.name || ''))) return i18n.fileWrongExt;
+        if (file.size > TORRENT_FILE_MAX_BYTES) return i18n.fileTooLarge;
+        return '';
+    }
+
+    // The file name without its extension: a readable title for the version / episodes of an uploaded torrent.
+    function torrentFileTitle(file) {
+        return String((file && file.name) || '').replace(/\.torrent$/i, '');
+    }
+
+    // multipart/form-data: the browser sets the Content-Type (with the boundary) itself, so it must not be sent here.
+    function getUploadHeaders() {
+        var headers = getAuthHeaders();
+        delete headers['Content-Type'];
+        return headers;
+    }
+
+    // One-line text for a failed upload: the fixed text for the two file errors, friendly 401/403, else the server's error.
+    async function uploadErrorMessage(res, i18n) {
+        var friendly = authErrorMessage(res.status, i18n);
+        if (friendly) return friendly;
+        var body = await res.json().catch(function () { return {}; });
+        var code = body && body.code ? String(body.code) : '';
+        if (code === 'invalid_torrent_file') return i18n.fileInvalid;
+        if (code === 'file_too_large') return i18n.fileTooLarge;
+        return i18n.failedResponse + ': ' + ((body && body.error) ? String(body.error) : ('(' + res.status + ')'));
+    }
+
+    // The "Add .torrent file" button + its hidden file input (only the visible button is focusable).
+    function fileButtonHtml(btnId, inputId, i18n) {
+        return '<button is="emby-button" type="button" class="button-flat emby-button t2j-file-btn" id="' + btnId + '">'
+            + iconHtml('upload_file', 't2j-btn-icon') + '<span>' + escapeHtml(i18n.addFileBtn) + '</span></button>'
+            + '<input type="file" class="t2j-file-input" id="' + inputId + '" accept=".torrent,application/x-bittorrent" tabindex="-1" aria-hidden="true">';
+    }
+
+    function setFileButtonBusy(btn, busy, i18n) {
+        if (!btn) return;
+        btn.disabled = !!busy;
+        btn.innerHTML = iconHtml(busy ? 'hourglass_empty' : 'upload_file', 't2j-btn-icon')
+            + '<span>' + escapeHtml(busy ? i18n.adding : i18n.addFileBtn) + '</span>';
+    }
+
+    // Wires a file button: a click opens the chooser, a chosen file goes to onFile(file); the input is reset every
+    // time so the same file can be chosen again.
+    function bindFileButton(btn, input, onFile) {
+        if (!btn || !input) return;
+        btn.addEventListener('click', function () { input.click(); });
+        input.addEventListener('change', function () {
+            var file = input.files && input.files[0];
+            input.value = '';
+            if (file) onFile(file);
         });
     }
 
@@ -1331,6 +1400,7 @@
     var _drawerRoot = null;      // the .dialogContainer element while open
     var _drawerReturnFocus = null;
     var _drawerBodyLocked = false;
+    var _drawerFileBusy = 0;     // dialog token whose .torrent file upload is running (0 = none)
 
     function lockBodyScroll() {
         if (document.body && !document.body.classList.contains('bodyWithPopupOpen')) {
@@ -1533,12 +1603,14 @@
     // Search box + button of the "Find releases" tab and of the series dialog. The label sits on its own line and
     // the input and button share one row, so the button is exactly as tall as the input. The input is a plain
     // element with the native class: an upgraded emby-input would insert its own label inside that row.
-    function findBarHtml(inputId, buttonId, value, i18n) {
+    // fileIds ({ button, input }, optional) adds the "Add .torrent file" button beside the search button.
+    function findBarHtml(inputId, buttonId, value, i18n, fileIds) {
         return '<div class="inputContainer t2j-find-bar">'
             + '<label class="inputLabel" for="' + inputId + '">' + escapeHtml(i18n.searchLabel) + '</label>'
             + '<div class="t2j-find-row">'
             + '<input type="text" class="emby-input" id="' + inputId + '" value="' + escapeHtml(value) + '" placeholder="' + escapeHtml(i18n.searchPlaceholder) + '">'
             + '<button is="emby-button" type="button" class="raised button-submit emby-button t2j-find-btn" id="' + buttonId + '"><span>' + escapeHtml(i18n.findBtn) + '</span></button>'
+            + (fileIds ? fileButtonHtml(fileIds.button, fileIds.input, i18n) : '')
             + '</div>'
             + '</div>';
     }
@@ -1799,7 +1871,7 @@
         var primaryStream = existingStreams.find(function (s) { return s.IsPrimary; }) || existingStreams[0];
 
         var html =
-            findBarHtml('t2j-drawer-search-input', 't2j-drawer-search-btn', queryVal, i18n)
+            findBarHtml('t2j-drawer-search-input', 't2j-drawer-search-btn', queryVal, i18n, { button: 't2j-drawer-file-btn', input: 't2j-drawer-file-input' })
             + '<div class="t2j-filter-row">'
             + '<div class="fieldDescription">' + activeList.length + ' ' + escapeHtml(i18n.releasesFound) + '</div>'
             + '</div>';
@@ -1855,6 +1927,13 @@
         }
 
         if (searchBtn) searchBtn.addEventListener('click', triggerDrawerSearch);
+
+        var fileBtn = document.getElementById('t2j-drawer-file-btn');
+        bindFileButton(fileBtn, document.getElementById('t2j-drawer-file-input'), function (file) {
+            submitAlternateFile(itemId, file, i18n);
+        });
+        if (_drawerFileBusy === _drawerToken) setFileButtonBusy(fileBtn, true, i18n);
+
         if (inputEl) {
             inputEl.addEventListener('keydown', function (e) {
                 if (e.key === 'Enter') triggerDrawerSearch();
@@ -1912,21 +1991,7 @@
 
             if (res.ok) {
                 setActState(btn, 'done', i18n.added);
-                showToast(i18n.streamAddedSuccess, true);
-
-                // Show the new list only if the dialog is still on this same item.
-                setTimeout(function () {
-                    reloadDrawerStreams(itemId, token);
-                }, 1200);
-                refreshStreamsButtonCount(itemId);
-
-                if (window.ApiClient && window.ApiClient.getItem) {
-                    window.ApiClient.getItem(window.ApiClient.getCurrentUserId(), itemId).then(function (updItem) {
-                        if (window.Events && typeof window.Events.trigger === 'function') {
-                            window.Events.trigger(window.ApiClient, 'itemupdate', [updItem]);
-                        }
-                    }).catch(function () {});
-                }
+                afterAlternateAdded(itemId, token, i18n);
             } else {
                 var errMsg = await readErrorMessage(res, i18n);
                 setActState(btn, 'error', i18n.serverError);
@@ -1936,6 +2001,65 @@
             setActState(btn, 'error', i18n.serverError);
             showToast(i18n.connError + ': ' + e.message, false);
         }
+    }
+
+    // Everything after a version was added (by link or by file): toast, fresh versions list, button count, item refresh.
+    function afterAlternateAdded(itemId, token, i18n) {
+        showToast(i18n.streamAddedSuccess, true);
+
+        // Show the new list only if the dialog is still on this same item.
+        setTimeout(function () {
+            reloadDrawerStreams(itemId, token);
+        }, 1200);
+        refreshStreamsButtonCount(itemId);
+
+        if (window.ApiClient && window.ApiClient.getItem) {
+            window.ApiClient.getItem(window.ApiClient.getCurrentUserId(), itemId).then(function (updItem) {
+                if (window.Events && typeof window.Events.trigger === 'function') {
+                    window.Events.trigger(window.ApiClient, 'itemupdate', [updItem]);
+                }
+            }).catch(function () {});
+        }
+    }
+
+    // Add a chosen .torrent file as another version of the item (the file keeps the trackers of a private torrent).
+    // _drawerFileBusy holds the token of the dialog whose upload is running, so a second file waits and a re-render
+    // keeps the button busy.
+    async function submitAlternateFile(itemId, file, i18n) {
+        if (_drawerFileBusy === _drawerToken) return;
+        var problem = checkTorrentFile(file, i18n);
+        if (problem) {
+            showToast(problem, false);
+            return;
+        }
+
+        var token = _drawerToken;
+        _drawerFileBusy = token;
+        setFileButtonBusy(document.getElementById('t2j-drawer-file-btn'), true, i18n);
+
+        try {
+            var form = new FormData();
+            form.append('File', file, file.name);
+            form.append('TorrentTitle', torrentFileTitle(file));
+            form.append('ReplaceExisting', 'false');
+
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + encodeURIComponent(itemId) + '/AlternateStream/File'), {
+                method: 'POST',
+                headers: getUploadHeaders(),
+                body: form
+            });
+
+            if (res.ok) {
+                afterAlternateAdded(itemId, token, i18n);
+            } else {
+                showToast(await uploadErrorMessage(res, i18n), false);
+            }
+        } catch (e) {
+            showToast(i18n.connError + ': ' + (e && e.message ? e.message : e), false);
+        }
+
+        if (_drawerFileBusy === token) _drawerFileBusy = 0;
+        setFileButtonBusy(document.getElementById('t2j-drawer-file-btn'), false, i18n);
     }
 
     // ==========================================
@@ -1953,7 +2077,7 @@
         var i18n = getI18n();
 
         var myToken = openDialogShell(previousFocus, i18n.seriesDialogTitle,
-            '<div class="t2j-series-bar">' + findBarHtml('t2j-series-search-input', 't2j-series-search-btn', '', i18n) + '</div>'
+            '<div class="t2j-series-bar">' + findBarHtml('t2j-series-search-input', 't2j-series-search-btn', '', i18n, { button: 't2j-series-file-btn', input: 't2j-series-file-input' }) + '</div>'
             + '<div class="t2j-dialog-body" id="t2j-drawer-body"></div>');
         _drawerItemId = itemId;
         var data = _seriesData = {
@@ -1980,6 +2104,9 @@
             }
         });
         searchBtn.addEventListener('click', function () { runSeriesSearch(); });
+        bindFileButton(document.getElementById('t2j-series-file-btn'), document.getElementById('t2j-series-file-input'), function (file) {
+            addSeriesFile(file);
+        });
 
         renderSeriesResults();
         // Typing starts right away with a mouse; touch and remote-control devices would pop up a keyboard instead.
@@ -2165,25 +2292,7 @@
             });
 
             if (res.ok) {
-                // Success and !Pending: the episodes are written (EpisodesWritten). Pending: the torrent was accepted but
-                // TorrServer has not listed its files yet, so the episodes follow with a later sync.
-                var result = await res.json().catch(function () { return null; });
-                var outcome = result || {};
-                var pending = outcome.Pending === true || outcome.pending === true;
-                var success = outcome.Success === true || outcome.success === true;
-                var written = parseInt(outcome.EpisodesWritten != null ? outcome.EpisodesWritten : outcome.episodesWritten, 10);
-
-                if (!pending && !success && result) {
-                    var reason = outcome.Message || outcome.message || '';
-                    showToast(i18n.failedResponse + (reason ? ': ' + reason : ''), false);
-                } else {
-                    finalState = 'done';
-                    if (!pending && success && isFinite(written)) {
-                        showToast(i18n.seriesAddedToast(written, seriesName), true);
-                    } else {
-                        showToast(i18n.seriesPendingToast, true);
-                    }
-                }
+                finalState = await showSeriesAddOutcome(res, seriesName, i18n);
             } else {
                 var errMsg = await readErrorMessage(res, i18n);
                 showToast(authErrorMessage(res.status, i18n) ? errMsg : (i18n.failedResponse + ': ' + errMsg), false);
@@ -2195,6 +2304,65 @@
         // The dialog may have been closed meanwhile: its state object is then simply dropped with it.
         data.states[link] = finalState;
         applySeriesActStates();
+    }
+
+    // The toast for a successful add to a series (by link or by file); resolves 'done', or 'error' when the body says it failed.
+    // Success and !Pending: the episodes are written (EpisodesWritten). Pending: the torrent was accepted but TorrServer
+    // has not listed its files yet, so the episodes follow with a later sync.
+    async function showSeriesAddOutcome(res, seriesName, i18n) {
+        var result = await res.json().catch(function () { return null; });
+        var outcome = result || {};
+        var pending = outcome.Pending === true || outcome.pending === true;
+        var success = outcome.Success === true || outcome.success === true;
+        var written = parseInt(outcome.EpisodesWritten != null ? outcome.EpisodesWritten : outcome.episodesWritten, 10);
+
+        if (!pending && !success && result) {
+            var reason = outcome.Message || outcome.message || '';
+            showToast(i18n.failedResponse + (reason ? ': ' + reason : ''), false);
+            return 'error';
+        }
+        if (!pending && success && isFinite(written)) {
+            showToast(i18n.seriesAddedToast(written, seriesName), true);
+        } else {
+            showToast(i18n.seriesPendingToast, true);
+        }
+        return 'done';
+    }
+
+    // Adds a chosen .torrent file to the series (the server resolves the episodes of the torrent, as for a link).
+    async function addSeriesFile(file) {
+        var data = _seriesData;
+        if (!data || data.fileBusy) return;
+        var i18n = getI18n();
+        var problem = checkTorrentFile(file, i18n);
+        if (problem) {
+            showToast(problem, false);
+            return;
+        }
+
+        data.fileBusy = true;
+        var btn = document.getElementById('t2j-series-file-btn');
+        setFileButtonBusy(btn, true, i18n);
+        try {
+            var form = new FormData();
+            form.append('File', file, file.name);
+            form.append('TorrentTitle', torrentFileTitle(file));
+
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Items/' + encodeURIComponent(data.itemId) + '/SeriesTorrent/File'), {
+                method: 'POST',
+                headers: getUploadHeaders(),
+                body: form
+            });
+            if (res.ok) {
+                await showSeriesAddOutcome(res, data.Title, i18n);
+            } else {
+                showToast(await uploadErrorMessage(res, i18n), false);
+            }
+        } catch (e) {
+            showToast(i18n.connError + ': ' + (e && e.message ? e.message : e), false);
+        }
+        data.fileBusy = false;
+        setFileButtonBusy(document.getElementById('t2j-series-file-btn'), false, i18n);
     }
 
     // ==========================================

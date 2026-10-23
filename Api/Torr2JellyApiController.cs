@@ -34,6 +34,8 @@ namespace Jellyfin.Plugin.Torr2Jelly.Api;
 public class Torr2JellyApiController : ControllerBase
 {
     private const int MaxTorrentTitleLength = 512;
+    private const int MaxPlaceholdersPerRequest = 500;
+    private const int MaxEchoedImdbIdLength = 32;
 
     private static readonly SemaphoreSlim SettingsLock = new(1, 1);
     private static string? _searchScript;
@@ -454,6 +456,64 @@ public class Torr2JellyApiController : ControllerBase
 
         _strmEngine.NotifyPathChanged(path);
         return Ok(new { success = true, message = $"Targeted scan reported for: {path}" });
+    }
+
+    /// <summary>
+    /// Creates movie placeholders: a folder with a placeholder .strm and a movie.nfo (IMDb / TMDb ids) per item, so the
+    /// movie shows up in the library with its poster and metadata before any torrent exists for it. Nothing is
+    /// overwritten or deleted, an existing movie folder or placeholder is reported as "exists", and one failing item
+    /// does not stop the others. When a release is added to the movie later (Torrent versions - Find releases), it
+    /// replaces the placeholder.
+    /// </summary>
+    [HttpPost("Placeholders")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<CreatePlaceholdersResponseDto>> CreatePlaceholders(
+        [FromBody] CreatePlaceholdersRequestDto req,
+        CancellationToken cancellationToken)
+    {
+        if (req?.Items == null || req.Items.Count == 0)
+        {
+            return BadRequest(new { error = "Items is required." });
+        }
+
+        if (req.Items.Count > MaxPlaceholdersPerRequest)
+        {
+            return BadRequest(new { error = $"At most {MaxPlaceholdersPerRequest} items per request." });
+        }
+
+        var requests = req.Items
+            .Select(i => new PlaceholderRequest(i?.Category ?? string.Empty, i?.Title ?? string.Empty, i?.Year, i?.ImdbId ?? string.Empty, i?.TmdbId))
+            .ToList();
+
+        try
+        {
+            var results = await _strmEngine.CreateMoviePlaceholdersAsync(requests, cancellationToken);
+            var response = new CreatePlaceholdersResponseDto();
+            for (var i = 0; i < results.Count; i++)
+            {
+                var imdb = requests[i].ImdbId.Trim();
+                response.Results.Add(new PlaceholderResultDto
+                {
+                    ImdbId = imdb.Length <= MaxEchoedImdbIdLength ? imdb : imdb[..MaxEchoedImdbIdLength],
+                    Status = results[i].Status,
+                    Folder = results[i].Folder,
+                    Reason = results[i].Reason
+                });
+            }
+
+            return Ok(response);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating movie placeholders");
+            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Failed to create the placeholders; see the Jellyfin log for details." });
+        }
     }
 
     [HttpGet("Items/{itemId}/Alternatives")]

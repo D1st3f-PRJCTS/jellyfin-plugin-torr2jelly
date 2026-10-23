@@ -50,10 +50,62 @@ public class FullSyncReport
     public List<string> Errors { get; set; } = new();
 }
 
+/// <summary>Outcome of <see cref="StrmEngine.CreateMoviePlaceholderAsync"/> for one movie.</summary>
+public class PlaceholderResult
+{
+    /// <summary>The placeholder files were written.</summary>
+    public const string StatusCreated = "created";
+
+    /// <summary>The movie already has a folder with a stream (or a placeholder): nothing was written.</summary>
+    public const string StatusExists = "exists";
+
+    /// <summary>The request was refused or could not be carried out; <see cref="Reason"/> is a fixed code.</summary>
+    public const string StatusError = "error";
+
+    // Fixed reason codes: no exception text, no paths.
+    public const string ReasonInvalidImdb = "invalid_imdb";
+    public const string ReasonInvalidTitle = "invalid_title";
+    public const string ReasonInvalidYear = "invalid_year";
+    public const string ReasonUnknownCategory = "unknown_category";
+    public const string ReasonNotMovieCategory = "not_a_movie_category";
+    public const string ReasonCategoryUnavailable = "category_unavailable";
+    public const string ReasonFolderHasStream = "folder_has_stream";
+    public const string ReasonPlaceholderExists = "placeholder_exists";
+    public const string ReasonWriteFailed = "write_failed";
+
+    /// <summary><see cref="StatusCreated"/>, <see cref="StatusExists"/> or <see cref="StatusError"/>.</summary>
+    public string Status { get; set; } = StatusError;
+
+    /// <summary>The movie folder (created, or the one that already holds the stream / placeholder).</summary>
+    public string? Folder { get; set; }
+
+    /// <summary>A fixed reason code for <see cref="StatusExists"/> and <see cref="StatusError"/>; null when created.</summary>
+    public string? Reason { get; set; }
+}
+
+/// <summary>One movie to create a placeholder for (see <see cref="StrmEngine.CreateMoviePlaceholdersAsync"/>).</summary>
+public sealed record PlaceholderRequest(string Category, string Title, int? Year, string ImdbId, int? TmdbId);
+
 public class StrmEngine
 {
     /// <summary><see cref="StrmSyncResult.ErrorMessage"/> used when a torrent's file list is not available yet.</summary>
     public const string MetadataNotReadyMessage = "metadata not ready";
+
+    /// <summary>
+    /// Marks the .strm of a movie placeholder: its single line is <c>{streamBase}/t2j-placeholder?imdb={ttid}</c>.
+    /// Such a file carries no <c>link=</c> hash, so every hash-based routine ignores it.
+    /// </summary>
+    public const string PlaceholderMarker = "t2j-placeholder";
+
+    private const int MaxPlaceholderTitleLength = 512;
+    private const int MinPlaceholderYear = 1870;
+    private const int MaxPlaceholderYear = 2200;
+
+    // The imdb id inside a placeholder URL ("...t2j-placeholder?imdb=tt0096874").
+    private static readonly Regex PlaceholderImdbRegex =
+        new(Regex.Escape(PlaceholderMarker) + @"\?imdb=(tt[0-9]{1,10})(?=[&#\s]|$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex PlaceholderRequestImdbRegex = new(@"^tt[0-9]{1,10}$", RegexOptions.Compiled);
 
     private const int MaxReportedErrors = 100;
     private const int MaxPruneLevels = 3;
@@ -674,7 +726,69 @@ public class StrmEngine
             return false;
         }
 
+        if (IsPlaceholderText(text))
+        {
+            // a movie placeholder belongs to no torrent: the real stream takes its place
+            return false;
+        }
+
         return !(TorrentHash.TryExtractFromStrm(text, out var owner) && TorrentHash.Equal(owner, hash));
+    }
+
+    /// <summary>True when <paramref name="text"/> (the content of a .strm) contains <see cref="PlaceholderMarker"/>.</summary>
+    public static bool IsPlaceholderStrmText(string? text)
+    {
+        return !string.IsNullOrEmpty(text) && text.Contains(PlaceholderMarker, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // A placeholder as far as this engine is concerned: the marker and no torrent hash. A file that names a torrent
+    // is a real stream whatever else it says.
+    private static bool IsPlaceholderText(string? text)
+    {
+        return IsPlaceholderStrmText(text) && !TorrentHash.TryExtractFromStrm(text, out _);
+    }
+
+    private static bool IsPlaceholderStrmFile(string path)
+    {
+        return IsPlaceholderText(TryReadStrmText(path));
+    }
+
+    /// <summary>
+    /// True when a .strm directly in <paramref name="dir"/> is not a placeholder: a real stream (or any other .strm,
+    /// including one that cannot be read), which a placeholder must never take the place of.
+    /// </summary>
+    private static bool HasNonPlaceholderStrm(string dir)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(dir, "*.strm", StrmTopLevelEnumeration).Any(f => !IsPlaceholderStrmFile(f));
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>The placeholder .strm files directly in <paramref name="dir"/>, in ordinal name order.</summary>
+    private static List<string> FindPlaceholderStrms(string dir)
+    {
+        var found = new List<string>();
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(dir, "*.strm", StrmTopLevelEnumeration).OrderBy(f => f, StringComparer.Ordinal))
+            {
+                if (IsPlaceholderStrmFile(file))
+                {
+                    found.Add(file);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // unreadable folder: no placeholders
+        }
+
+        return found;
     }
 
     // ------------------------------------------------------------------------------------------------------------
@@ -1038,26 +1152,14 @@ public class StrmEngine
         var changed = false;
 
         // Movies / Movie Collections
-        var folderTemplate = !string.IsNullOrWhiteSpace(config.MovieFolderTemplate) ? config.MovieFolderTemplate : "{Title} ({Year})";
         var fileTemplate = !string.IsNullOrWhiteSpace(config.MovieFileTemplate) ? config.MovieFileTemplate : "{Title} ({Year}).strm";
 
         // Ensure file and folder names on disk are always in English/Latin
         var fileTitle = TitleCleaner.GetEnglishOrLatinTitle(cleanTitle, originalTitle);
 
-        // Avoid duplicating year in folder name if fileTitle already contains extractedYear
-        var yearToken = extractedYear.HasValue && !fileTitle.Contains(extractedYear.Value.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
-            ? extractedYear.Value.ToString(CultureInfo.InvariantCulture)
-            : string.Empty;
+        var tokens = BuildMovieTokens(fileTitle, originalTitle, extractedYear, rawTitle);
 
-        var tokens = new Dictionary<string, string>
-        {
-            ["Title"] = fileTitle,
-            ["OriginalTitle"] = originalTitle ?? fileTitle,
-            ["Year"] = yearToken,
-            ["RawTitle"] = rawTitle
-        };
-
-        var folderName = ResolveFolderName(config.EnableMovieRenaming, folderTemplate, tokens, rawTitle, fileTitle, extractedYear, hash);
+        var folderName = ResolveMovieFolderName(config, tokens, rawTitle, fileTitle, extractedYear, hash);
         var movieDir = Path.Combine(categoryDir, folderName);
         Directory.CreateDirectory(movieDir);
         result.FolderPath = movieDir;
@@ -1069,18 +1171,7 @@ public class StrmEngine
         {
             // Single movie file
             var mainFile = videoFiles[0];
-            string stemRaw;
-            if (config.EnableMovieRenaming)
-            {
-                stemRaw = FormatTemplate(fileTemplate, tokens);
-            }
-            else
-            {
-                var origBase = GetBaseName(mainFile.Path);
-                stemRaw = string.IsNullOrWhiteSpace(origBase) ? rawTitle : origBase;
-            }
-
-            var strmName = BuildStrmFileName(stemRaw, folderName, hash, wholeNameSanitized: config.EnableMovieRenaming);
+            var strmName = BuildSingleMovieStrmName(config, tokens, rawTitle, mainFile.Path, folderName, hash);
             var strmPath = ResolveStrmPath(movieDir, strmName, mainFile.Id, hash, usedPaths);
             var streamUrl = $"{streamBase}/stream?link={hash}&index={mainFile.Id}&play\n";
             changed |= await WriteTextIfChangedAsync(strmPath, streamUrl, ct);
@@ -1143,6 +1234,10 @@ public class StrmEngine
             }
         }
 
+        // The real stream takes the place of a movie placeholder that sits in this folder under another file name
+        // (one with the same name was overwritten above).
+        changed |= DeletePlaceholderStrms(movieDir, result.CreatedStrmFiles);
+
         // Download poster if provided
         if (!string.IsNullOrWhiteSpace(posterUrl))
         {
@@ -1150,6 +1245,44 @@ public class StrmEngine
         }
 
         return changed;
+    }
+
+    /// <summary>
+    /// Deletes the movie placeholder .strm files (marker, no torrent hash) directly in <paramref name="dir"/> that are
+    /// not in <paramref name="keep"/>. Nothing else is touched, not even a placeholder's sidecar .nfo. Returns true
+    /// when a file was deleted. The caller guarantees that <paramref name="dir"/> lies inside a managed root.
+    /// </summary>
+    private bool DeletePlaceholderStrms(string dir, IReadOnlyCollection<string> keep)
+    {
+        var deleted = false;
+        try
+        {
+            var kept = new HashSet<string>(keep.Select(p => Canonicalize(p) ?? p), PathComparer);
+            foreach (var file in Directory.EnumerateFiles(dir, "*.strm", StrmTopLevelEnumeration).ToList())
+            {
+                if (kept.Contains(Canonicalize(file) ?? file) || !IsPlaceholderStrmFile(file))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    File.Delete(file);
+                    deleted = true;
+                    _logger.LogInformation("Removed movie placeholder {File}: a real stream took its place", file);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete movie placeholder {File}", file);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not look for movie placeholders in {Dir}", dir);
+        }
+
+        return deleted;
     }
 
     private async Task<bool> SyncShowAsync(
@@ -1332,6 +1465,62 @@ public class StrmEngine
     // ------------------------------------------------------------------------------------------------------------
     // Naming helpers
     // ------------------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The tokens a movie's folder / file templates are filled from (shared by the torrent sync and by placeholders,
+    /// so both land on the same names). The year token stays empty when the title already contains the year.
+    /// </summary>
+    private static Dictionary<string, string> BuildMovieTokens(string fileTitle, string? originalTitle, int? year, string rawTitle)
+    {
+        // Avoid duplicating year in folder name if fileTitle already contains the year
+        var yearToken = year.HasValue && !fileTitle.Contains(year.Value.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            ? year.Value.ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
+
+        return new Dictionary<string, string>
+        {
+            ["Title"] = fileTitle,
+            ["OriginalTitle"] = originalTitle ?? fileTitle,
+            ["Year"] = yearToken,
+            ["RawTitle"] = rawTitle
+        };
+    }
+
+    private static string ResolveMovieFolderName(
+        PluginConfiguration config,
+        Dictionary<string, string> tokens,
+        string rawTitle,
+        string fileTitle,
+        int? year,
+        string hash)
+    {
+        var folderTemplate = !string.IsNullOrWhiteSpace(config.MovieFolderTemplate) ? config.MovieFolderTemplate : "{Title} ({Year})";
+        return ResolveFolderName(config.EnableMovieRenaming, folderTemplate, tokens, rawTitle, fileTitle, year, hash);
+    }
+
+    /// <summary>The .strm file name of a single-video movie (the primary file of its folder).</summary>
+    private static string BuildSingleMovieStrmName(
+        PluginConfiguration config,
+        Dictionary<string, string> tokens,
+        string rawTitle,
+        string? videoPath,
+        string folderName,
+        string hash)
+    {
+        string stemRaw;
+        if (config.EnableMovieRenaming)
+        {
+            var fileTemplate = !string.IsNullOrWhiteSpace(config.MovieFileTemplate) ? config.MovieFileTemplate : "{Title} ({Year}).strm";
+            stemRaw = FormatTemplate(fileTemplate, tokens);
+        }
+        else
+        {
+            var origBase = GetBaseName(videoPath);
+            stemRaw = string.IsNullOrWhiteSpace(origBase) ? rawTitle : origBase;
+        }
+
+        return BuildStrmFileName(stemRaw, folderName, hash, wholeNameSanitized: config.EnableMovieRenaming);
+    }
 
     private static string ResolveFolderName(
         bool renaming,
@@ -2043,7 +2232,14 @@ public class StrmEngine
             {
                 var fileName = Path.GetFileName(strmFile);
                 var baseName = Path.GetFileNameWithoutExtension(strmFile);
-                var hash = TryReadStrmHash(strmFile);
+                var text = TryReadStrmText(strmFile);
+                if (IsPlaceholderText(text))
+                {
+                    // A movie placeholder is not a version of the movie.
+                    continue;
+                }
+
+                var hash = text != null && TorrentHash.TryExtractFromStrm(text, out var parsedHash) ? parsedHash : null;
 
                 var isPrimary = (!string.IsNullOrWhiteSpace(activeItemPath) && strmFile.Equals(activeItemPath, StringComparison.OrdinalIgnoreCase))
                     || !baseName.Contains(" - ", StringComparison.Ordinal);
@@ -2297,7 +2493,19 @@ public class StrmEngine
             var strmFileName = BuildStrmFileName($"{baseFolderName} - {versionLabel}", baseFolderName, hash, wholeNameSanitized: true);
             var strmPath = Path.Combine(dir, strmFileName);
 
-            if (File.Exists(strmPath))
+            // A movie that so far has only a placeholder: the new stream takes the placeholder's place as the primary
+            // file (same file name, overwritten in place) instead of becoming a "{folder} - {label}" version next to it.
+            // With a real stream already there, nothing changes (a stray placeholder is removed below).
+            string? placeholderPath = null;
+            var folderPlaceholders = FindPlaceholderStrms(dir);
+            if (folderPlaceholders.Count > 0 && !HasNonPlaceholderStrm(dir))
+            {
+                placeholderPath = folderPlaceholders.FirstOrDefault(p =>
+                    string.Equals(Path.GetFileNameWithoutExtension(p), baseFolderName, PathComparison)) ?? folderPlaceholders[0];
+                strmPath = placeholderPath;
+            }
+
+            if (placeholderPath == null && File.Exists(strmPath))
             {
                 // Reuse the file when it already belongs to this torrent or to the version being replaced;
                 // otherwise keep both versions apart.
@@ -2326,6 +2534,12 @@ public class StrmEngine
 
             // Remember it, so syncing never turns this alternate into a standalone item.
             _altStore.Register(hash, dir, request.TargetItemId, strmPath);
+
+            // No placeholder is left next to a real stream (only inside the managed roots, like every other delete).
+            if (folderPlaceholders.Count > 0 && FindContainingRoot(GetManagedRoots(roots), dir) != null)
+            {
+                changed |= DeletePlaceholderStrms(dir, new[] { strmPath });
+            }
 
             // Drop the replaced version only after the new one is safely on disk.
             if (oldHash != null)
@@ -2359,6 +2573,265 @@ public class StrmEngine
         {
             _lock.Release();
         }
+    }
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Movie placeholders: a library item (poster / metadata from its IMDb id) without a real stream yet. The movie's
+    // folder gets "{name}.strm" (one line: {streamBase}/t2j-placeholder?imdb={ttid}) and movie.nfo; a real stream added
+    // later takes the placeholder's place (AddAlternateStreamAsync, SyncMovieAsync). A placeholder carries no
+    // link=hash, so none of the hash-based routines lists, syncs, migrates or deletes it.
+    // ------------------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Creates the placeholder files of one movie in <paramref name="categoryName"/> (see
+    /// <see cref="CreateMoviePlaceholdersAsync"/>, which this wraps).
+    /// </summary>
+    public async Task<PlaceholderResult> CreateMoviePlaceholderAsync(
+        string categoryName,
+        string title,
+        int? year,
+        string imdbId,
+        int? tmdbId,
+        CancellationToken ct = default)
+    {
+        var results = await CreateMoviePlaceholdersAsync(
+            new[] { new PlaceholderRequest(categoryName, title, year, imdbId, tmdbId) }, ct);
+        return results[0];
+    }
+
+    /// <summary>
+    /// Creates the placeholder files for each movie, in order, under one hold of the engine lock (and with one scan of
+    /// the category folders for existing placeholders). One result per request; a failing request never stops the
+    /// others. Idempotent and non-destructive: a movie folder that already holds a .strm or video file, or a
+    /// placeholder of the same IMDb id anywhere in the category folders, yields <see cref="PlaceholderResult.StatusExists"/>
+    /// and nothing is written; nothing is ever overwritten or deleted. The folder and file names come from the same
+    /// templates and sanitising as a real movie stream, so a stream added later lands in the same folder.
+    /// </summary>
+    public async Task<IReadOnlyList<PlaceholderResult>> CreateMoviePlaceholdersAsync(
+        IReadOnlyList<PlaceholderRequest> items,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+
+        var results = new List<PlaceholderResult>(items.Count);
+        if (items.Count == 0)
+        {
+            return results;
+        }
+
+        await _lock.WaitAsync(ct);
+        try
+        {
+            var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+            var categories = GetEffectiveCategories(config);
+            var roots = GetCategoryRoots();
+            Dictionary<string, string>? known = null;
+
+            foreach (var item in items)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                try
+                {
+                    results.Add(await CreateMoviePlaceholderCoreAsync(
+                        item, config, categories, roots, () => known ??= BuildPlaceholderIndex(roots), ct));
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to create a movie placeholder");
+                    results.Add(new PlaceholderResult { Status = PlaceholderResult.StatusError, Reason = PlaceholderResult.ReasonWriteFailed });
+                }
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+
+        return results;
+    }
+
+    private static PlaceholderResult PlaceholderError(string reason) =>
+        new() { Status = PlaceholderResult.StatusError, Reason = reason };
+
+    // Maps the IMDb id of every placeholder .strm in the category folders to the folder it sits in (first one wins).
+    private Dictionary<string, string> BuildPlaceholderIndex(IReadOnlyList<CategoryRoot> roots)
+    {
+        var index = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var root in GetScanRoots(roots))
+        {
+            try
+            {
+                if (!Directory.Exists(root))
+                {
+                    continue;
+                }
+
+                foreach (var file in Directory.EnumerateFiles(root, "*.strm", StrmTreeEnumeration))
+                {
+                    var text = TryReadStrmText(file);
+                    if (!IsPlaceholderText(text))
+                    {
+                        continue;
+                    }
+
+                    var match = PlaceholderImdbRegex.Match(text!);
+                    var dir = Path.GetDirectoryName(file);
+                    if (match.Success && !string.IsNullOrEmpty(dir))
+                    {
+                        index.TryAdd(match.Groups[1].Value, dir);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not enumerate .strm files in {Root}", root);
+            }
+        }
+
+        return index;
+    }
+
+    // True when the folder (or anything below it) holds a .strm or a video file.
+    private static bool HoldsStreamOrVideo(string dir)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(dir, "*", StrmTreeEnumeration)
+                .Any(f => string.Equals(Path.GetExtension(f), ".strm", StringComparison.OrdinalIgnoreCase) || EpisodeMatcher.IsVideoFile(f));
+        }
+        catch (Exception)
+        {
+            // Unreadable: do not write into it.
+            return true;
+        }
+    }
+
+    // Callers hold the engine lock.
+    private async Task<PlaceholderResult> CreateMoviePlaceholderCoreAsync(
+        PlaceholderRequest? request,
+        PluginConfiguration config,
+        IReadOnlyList<CategoryMapping> categories,
+        IReadOnlyList<CategoryRoot> roots,
+        Func<Dictionary<string, string>> getKnownPlaceholders,
+        CancellationToken ct)
+    {
+        var imdb = request?.ImdbId?.Trim() ?? string.Empty;
+        if (request == null || !PlaceholderRequestImdbRegex.IsMatch(imdb))
+        {
+            return PlaceholderError(PlaceholderResult.ReasonInvalidImdb);
+        }
+
+        var title = (request.Title ?? string.Empty).Trim();
+        if (title.Length == 0 || title.Length > MaxPlaceholderTitleLength)
+        {
+            return PlaceholderError(PlaceholderResult.ReasonInvalidTitle);
+        }
+
+        var year = request.Year;
+        if (year.HasValue && (year.Value < MinPlaceholderYear || year.Value > MaxPlaceholderYear))
+        {
+            return PlaceholderError(PlaceholderResult.ReasonInvalidYear);
+        }
+
+        var category = categories.FirstOrDefault(c => c.Name.Equals(request.Category?.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (category == null)
+        {
+            return PlaceholderError(PlaceholderResult.ReasonUnknownCategory);
+        }
+
+        if (!string.Equals(category.Type, "movie", StringComparison.OrdinalIgnoreCase))
+        {
+            return PlaceholderError(PlaceholderResult.ReasonNotMovieCategory);
+        }
+
+        // The category folder must be one of the (safe) managed roots; otherwise nothing is written.
+        if (!TryResolveCategoryRoot(category, out var categoryDir) || !roots.Any(r => PathEquals(r.Dir, categoryDir)))
+        {
+            _logger.LogWarning("Category '{Category}' has no permitted root folder; not creating a placeholder for {Imdb}", category.Name, imdb);
+            return PlaceholderError(PlaceholderResult.ReasonCategoryUnavailable);
+        }
+
+        // Same names as a real movie stream of this title / year.
+        var rawTitle = TitleCleaner.FormatFolderTitle(title, year);
+        var fileTitle = TitleCleaner.GetEnglishOrLatinTitle(title, null);
+        if (TitleCleaner.SanitizeFilenameOrEmpty(fileTitle).Length == 0)
+        {
+            return PlaceholderError(PlaceholderResult.ReasonInvalidTitle);
+        }
+
+        var tokens = BuildMovieTokens(fileTitle, null, year, rawTitle);
+        var folderName = ResolveMovieFolderName(config, tokens, rawTitle, fileTitle, year, imdb);
+        var strmName = BuildSingleMovieStrmName(config, tokens, rawTitle, null, folderName, imdb);
+
+        var movieDir = Path.Combine(categoryDir, folderName);
+        var canonicalMovieDir = Canonicalize(movieDir);
+        if (canonicalMovieDir == null || PathEquals(canonicalMovieDir, categoryDir) || !IsInsideOrEqual(categoryDir, canonicalMovieDir))
+        {
+            return PlaceholderError(PlaceholderResult.ReasonCategoryUnavailable);
+        }
+
+        var folderExisted = Directory.Exists(canonicalMovieDir);
+        if (folderExisted && HoldsStreamOrVideo(canonicalMovieDir))
+        {
+            return new PlaceholderResult { Status = PlaceholderResult.StatusExists, Folder = canonicalMovieDir, Reason = PlaceholderResult.ReasonFolderHasStream };
+        }
+
+        var known = getKnownPlaceholders();
+        if (known.TryGetValue(imdb, out var knownFolder) && Directory.Exists(knownFolder))
+        {
+            return new PlaceholderResult { Status = PlaceholderResult.StatusExists, Folder = knownFolder, Reason = PlaceholderResult.ReasonPlaceholderExists };
+        }
+
+        var strmPath = Path.Combine(canonicalMovieDir, strmName);
+        var strmExisted = File.Exists(strmPath);
+        try
+        {
+            Directory.CreateDirectory(canonicalMovieDir);
+
+            var url = $"{_daemonManager.GetStreamBaseUrl()}/{PlaceholderMarker}?imdb={imdb}\n";
+            await WriteTextIfChangedAsync(strmPath, url, ct);
+
+            // Jellyfin fetches poster and metadata from the ids; an NFO that already exists is never replaced.
+            await WriteMovieNfoAsync(canonicalMovieDir, folderName, title, null, year, request.TmdbId, imdb, createOnly: true, ct);
+        }
+        catch (Exception ex)
+        {
+            // Take back what this call added; whatever was there before is left alone.
+            try
+            {
+                if (!strmExisted && File.Exists(strmPath))
+                {
+                    File.Delete(strmPath);
+                }
+
+                if (!folderExisted && Directory.Exists(canonicalMovieDir) && !Directory.EnumerateFileSystemEntries(canonicalMovieDir).Any())
+                {
+                    Directory.Delete(canonicalMovieDir, recursive: false);
+                }
+            }
+            catch (Exception cleanupEx)
+            {
+                _logger.LogDebug(cleanupEx, "Could not take back the placeholder files in {Dir}", canonicalMovieDir);
+            }
+
+            if (ex is OperationCanceledException && ct.IsCancellationRequested)
+            {
+                throw;
+            }
+
+            _logger.LogError(ex, "Failed to write the placeholder for {Imdb} in {Dir}", imdb, canonicalMovieDir);
+            return PlaceholderError(PlaceholderResult.ReasonWriteFailed);
+        }
+
+        known[imdb] = canonicalMovieDir;
+        NotifyPathChanged(canonicalMovieDir);
+        _logger.LogInformation("Created a movie placeholder for {Imdb} in {Dir}", imdb, canonicalMovieDir);
+        return new PlaceholderResult { Status = PlaceholderResult.StatusCreated, Folder = canonicalMovieDir };
     }
 
     // ------------------------------------------------------------------------------------------------------------

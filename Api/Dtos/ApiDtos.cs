@@ -122,6 +122,35 @@ public class SeriesTorrentResultDto
     public SeriesTorrentFailure Failure { get; set; }
 }
 
+/// <summary>Body of <c>POST Plugins/Torr2Jelly/Placeholders</c>: movies to create library placeholders for.</summary>
+public class CreatePlaceholdersRequestDto
+{
+    public List<PlaceholderItemDto> Items { get; set; } = new();
+}
+
+public class PlaceholderItemDto
+{
+    public string Category { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public int? Year { get; set; }
+    public string ImdbId { get; set; } = string.Empty;
+    public int? TmdbId { get; set; }
+}
+
+public class CreatePlaceholdersResponseDto
+{
+    public List<PlaceholderResultDto> Results { get; set; } = new();
+}
+
+/// <summary>Per-movie outcome: <see cref="Status"/> is "created", "exists" or "error"; <see cref="Reason"/> is a fixed code.</summary>
+public class PlaceholderResultDto
+{
+    public string ImdbId { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string? Folder { get; set; }
+    public string? Reason { get; set; }
+}
+
 public class MovieStreamInfoDto
 {
     public string Name { get; set; } = string.Empty;

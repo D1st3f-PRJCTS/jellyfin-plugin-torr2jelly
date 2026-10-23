@@ -102,6 +102,7 @@
             bronzeBadge: isUk ? 'Бронзова' : 'Bronze',
             authorBadge: isUk ? 'Авторський' : 'Author',
             exclusiveBadge: isUk ? 'Ексклюзив' : 'Exclusive',
+            noStreamYet: isUk ? 'Стріму ще немає — відкрийте «Пошук роздач», щоб додати його' : 'No stream yet — open Find releases to add one',
             noStreamsHint: isUk ? 'Перейдіть на вкладку "Пошук роздач", щоб знайти та додати версію.' : 'Switch to the "Find releases" tab to find and add a version.',
             deleteStreamTitle: isUk ? 'Видалити цей стрім' : 'Delete this stream',
             searchLabel: isUk ? 'Пошук' : 'Search',
@@ -1399,7 +1400,14 @@
 
             var streams = data.ExistingStreams;
             if (streams.length === 0) {
-                body.innerHTML = stateLineHtml(i18n.noStreamsFound, false) + '<div class="fieldDescription">' + escapeHtml(i18n.noStreamsHint) + '</div>';
+                // Also what a movie that only has a placeholder looks like: the next step is the "Find releases" tab.
+                body.innerHTML = stateLineHtml(i18n.noStreamYet, false)
+                    + '<button is="emby-button" type="button" class="raised button-submit emby-button" id="t2j-goto-search"><span>' + escapeHtml(i18n.searchAlternativesTab) + '</span></button>';
+                var gotoSearch = document.getElementById('t2j-goto-search');
+                var searchTabBtn = document.getElementById('t2j-tab-search');
+                if (gotoSearch && searchTabBtn) {
+                    gotoSearch.addEventListener('click', function () { searchTabBtn.click(); });
+                }
                 return;
             }
 

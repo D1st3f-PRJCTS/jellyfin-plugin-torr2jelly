@@ -20,7 +20,8 @@ Torr2Jelly is a Jellyfin plugin that turns torrents into a streamable Jellyfin l
 - **Extra versions of a movie** (admins). From a movie's page, add another release as an additional version, using Jellyfin's native multi-version switching. Versions can be replaced or deleted.
 - **New seasons for a series** (admins). From a series' page, add a release (for example a new season pack) and its episodes are written into that series' folder, season by season.
 - **Categories.** Each category has a name, a type (movie or show) and a folder. File and folder names follow configurable templates. Season packs, multi-file torrents and releases with Ukrainian or Russian titles are handled.
-- **Tracker and tag rules.** Enable or disable trackers one by one, choose which tags are allowed per tracker (freeleech, halfleech, and so on), filter searches to tagged releases, and optionally limit non-admin users to tagged releases.
+- **Freeleech only.** One switch (on by default) hides every torrent that counts against your download statistics on the tracker, so searches show only freeleech releases. Trackers can also be enabled or disabled one by one.
+- **Placeholders.** Titles that have no stream yet can sit in the library as placeholders with their poster and metadata, for movies and for series. Add one from Jellyfin's search page, search TMDb by name on the admin page, or paste a whole list of titles. Adding a release later replaces the placeholder with the real stream.
 - **Library sync.** The scheduled task "Torr2Jelly Library Sync" keeps the files in step with TorrServer. "Scan library" on the admin page also removes `.strm` files of torrents that no longer exist in TorrServer.
 - **Optional TorrServer tuning.** Push cache settings (cache size, disk cache path, preload, read-ahead, disconnect timeout) and a VPN-forwarded peer port from the plugin. Off by default on new installs.
 - **English and Ukrainian** interface.
@@ -100,7 +101,7 @@ A fresh install shows the admin page in Ukrainian. Change this under **Settings 
 
 ### On Jellyfin's search page
 
-Search for a title as usual. A "Torrents" section at the bottom lists matching releases from your indexers with seeders, size and tracker tags. Choose the target category or library, optionally limit the list to releases with tags, and press **Add**. The first eight results are shown, with **Show all** for the rest. Once TorrServer has loaded the torrent's metadata the real files replace the first placeholder (see [Troubleshooting](#troubleshooting)).
+Search for a title as usual. A "Torrents" section at the bottom lists matching releases from your indexers with their size and seeders; freeleech releases carry a **Freeleech** chip. Choose the target category or library and press **Add**. The first eight results are shown, with **Show all** for the rest. Administrators who find nothing on the trackers (or press **Not on trackers? Add a placeholder**) get a list of TMDb matches with a button to add a placeholder. Once TorrServer has loaded the torrent's metadata the real files replace the temporary single file (see [Troubleshooting](#troubleshooting)).
 
 ### On a movie's page (admins)
 
@@ -119,10 +120,11 @@ Administrators see an **Add torrents to this series** button on series pages. It
 
 | Tab | What it does |
 | --- | --- |
-| **Search** | Search your indexers, filter by category and tags, sort by priority, seeders or size, and add a result to a chosen category. |
+| **Search** | Search your indexers, filter by category, sort by freeleech, seeders or size, and add a result to a chosen category. |
 | **Add magnet** | Add a magnet link or `.torrent` URL, with an optional custom title, a category and a "generate .strm immediately" option. |
 | **Torrents** | Lists the torrents in TorrServer. Change a torrent's category (its files are moved), delete it (together with its `.strm` files), refresh the list, or run **Scan Library**. |
-| **Settings** | TorrServer, Indexers, Library & categories, Trackers & tags, Naming and Language. |
+| **Placeholders** | Search TMDb by title and add a movie or series as a placeholder, or paste a list of titles (one per line, optionally with a year) to add many at once; ambiguous lines offer up to three candidates. Needs a TMDb API key. |
+| **Settings** | TorrServer, Indexers (including the freeleech switch and the TMDb key), Library & categories, Trackers, Naming and Language. |
 
 ### Library sync
 
@@ -156,14 +158,23 @@ The names come from the templates under **Settings → Naming** (available token
 
 The two "Rename ... using templates" switches turn renaming off for movies or series, which keeps the original torrent names.
 
-### Trackers and tags
+### Freeleech and trackers
 
-On **Settings → Trackers & tags**, every tracker known to Prowlarr gets a card where it can be disabled and where you choose the allowed tags: Gold (freeleech), Silver (halfleech), Bronze, Author (internal), Exclusive, 2x Upload and Untagged (regular). A release is shown if its tracker is enabled and the release carries at least one allowed tag, or carries no tag and Untagged is allowed. Tags are taken from what the indexer reports (tags, flags, upload and download factors) and from a few markers in the release title.
+Freeleech here means the download does not count against your statistics on the tracker: the indexer reports a download factor of 0 (or flags the release as freeleech). Half-price and similar discounts do not count.
 
-Two switches build on this:
+- **Show only freeleech torrents** (**Settings → Indexers**, on by default) hides every other release from every search, for every user.
+- Turn it off to see all releases; the free ones are marked with a **Freeleech** chip.
+- On **Settings → Trackers**, every tracker known to Prowlarr gets a card where it can be disabled.
 
-- **Search only releases with tags by default** turns the "only with tags" filter on for searches by default.
-- **Only tagged releases for regular non-admin users** forces that filter for everyone who is not an administrator.
+### Placeholders
+
+A placeholder is a library entry without a stream: Jellyfin shows the poster and metadata, and playing it simply fails until a stream exists. Use it for titles you want to keep in the library but cannot stream yet.
+
+- **TMDb key.** Paste a free TMDb API key (a v3 key or a v4 read-access token; get one at themoviedb.org under Settings → API) into **Settings → Indexers → TMDb** and press **Test**. The key is used only to look titles up by name.
+- **From Jellyfin's search page** (administrators): see [On Jellyfin's search page](#on-jellyfins-search-page).
+- **Placeholders tab:** search by name, or paste a list such as `Dune (2021)` one per line.
+- Movies go to the default movie category and series to the default show category (or the category you pick). A placeholder is never created over something that already has a stream.
+- **Replacing it:** on a movie's page, add a release from **Torrent versions → Find releases**; on a series' page, use **Add torrents to this series**. The placeholder is removed automatically once a real stream exists.
 
 ### TorrServer cache settings (optional)
 
@@ -177,13 +188,13 @@ All plugin API endpoints require a Jellyfin login. The one exception is the stat
 
 | Action | Signed-in user | Administrator |
 | --- | --- | --- |
-| Search the indexers | yes (limited to tagged releases if configured) | yes |
+| Search the indexers | yes (freeleech only while that setting is on) | yes |
 | Add a release (magnet link, `.torrent` URL or info-hash) | yes | yes |
 | See server folder paths | no | yes |
 | Settings, torrent list, category changes, deleting torrents, Scan Library, TorrServer status | no | yes |
-| Torrent versions on a movie's page, adding torrents to a series | no | yes |
+| Torrent versions on a movie's page, adding torrents to a series, placeholders and TMDb search | no | yes |
 
-Anyone with a Jellyfin account can add torrents to your TorrServer, so hand out accounts accordingly or restrict non-admin users to tagged releases.
+Anyone with a Jellyfin account can add torrents to your TorrServer, so hand out accounts accordingly or keep the freeleech-only switch on.
 
 Other safeguards:
 

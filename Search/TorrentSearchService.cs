@@ -60,7 +60,7 @@ public class TorrentSearchService
     public async Task<List<TorrentSearchResult>> SearchAsync(
         string query,
         string? category = null,
-        bool? onlyGold = null,
+        bool? onlyGold = null, // obsolete: accepted for compatibility, ignored (see PluginConfiguration.FreeleechOnly)
         bool isUserAdmin = true,
         CancellationToken cancellationToken = default)
     {
@@ -104,27 +104,15 @@ public class TorrentSearchService
             results = results.Where(r => policy.Allows(r)).ToList();
         }
 
-        // Filter by Gold/Tags according to user parameter or plugin configuration
-        var shouldFilterGold = onlyGold ?? config.SearchOnlyGoldByDefault;
-        if (!isUserAdmin && config.OnlyGoldTorrentsForNonAdmins)
+        // One switch for everyone (admins and users alike): only releases that do not count against the download
+        // statistics. The old onlyGold / tag-rule options no longer influence the result. Filtering happens before the
+        // de-duplication, so a non-free copy of a release can never shadow its free copy.
+        if (config.FreeleechOnly)
         {
-            shouldFilterGold = true;
-        }
-
-        if (shouldFilterGold)
-        {
-            results = results.Where(r => r.IsGold || (r.Tags != null && r.Tags.Count > 0)).ToList();
+            results = results.Where(r => r.IsFreeleech).ToList();
         }
 
         var deduped = DeduplicateByHash(results);
-
-        if (shouldFilterGold)
-        {
-            return deduped
-                .OrderByDescending(r => (r.Tags != null && r.Tags.Count > 0) ? (r.IsGold ? 3 : 2) : 0)
-                .ThenByDescending(r => r.Seeders)
-                .ToList();
-        }
 
         return deduped
             .OrderByDescending(r => r.Seeders)
@@ -219,38 +207,31 @@ public class TorrentSearchService
 
     private static bool IsBetterCopy(TorrentSearchResult candidate, TorrentSearchResult current)
     {
-        if (candidate.IsGold != current.IsGold)
+        if (candidate.IsFreeleech != current.IsFreeleech)
         {
-            return candidate.IsGold;
+            return candidate.IsFreeleech;
         }
 
         return candidate.Seeders > current.Seeders;
     }
 
     /// <summary>
-    /// A snapshot of DisabledTrackers + TrackerRules. Every lookup is built with GroupBy(...).First(), so duplicate
-    /// or null rules in a hand-edited config cannot throw.
+    /// A snapshot of DisabledTrackers + the enabled flag of TrackerRules. Every lookup is built with
+    /// GroupBy(...).First(), so duplicate or null rules in a hand-edited config cannot throw. The per-rule tag
+    /// allow-lists of older versions are deliberately not evaluated any more.
     /// </summary>
     private sealed class TrackerPolicy
     {
-        private sealed class RuleEntry
-        {
-            public bool Enabled { get; init; }
-
-            /// <summary>Canonical allowed tags; null means "no restriction".</summary>
-            public HashSet<string>? Allowed { get; init; }
-        }
-
         private readonly HashSet<string> _disabled;
-        private readonly Dictionary<string, RuleEntry> _rules;
+        private readonly Dictionary<string, bool> _enabled;
 
-        private TrackerPolicy(HashSet<string> disabled, Dictionary<string, RuleEntry> rules)
+        private TrackerPolicy(HashSet<string> disabled, Dictionary<string, bool> enabled)
         {
             _disabled = disabled;
-            _rules = rules;
+            _enabled = enabled;
         }
 
-        public bool HasAnyRestriction => _disabled.Count > 0 || _rules.Count > 0;
+        public bool HasAnyRestriction => _disabled.Count > 0 || _enabled.Count > 0;
 
         public static TrackerPolicy FromConfig(PluginConfiguration config)
         {
@@ -266,37 +247,15 @@ public class TorrentSearchService
                 }
             }
 
-            var rules = (config.TrackerRules ?? new List<TrackerRule>())
+            var enabled = (config.TrackerRules ?? new List<TrackerRule>())
                 .Where(r => r != null && !string.IsNullOrWhiteSpace(r.Tracker))
                 .GroupBy(r => r.Tracker.Trim(), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(
                     g => g.Key,
-                    g => ToEntry(g.First()),
+                    g => g.First().Enabled,
                     StringComparer.OrdinalIgnoreCase);
 
-            return new TrackerPolicy(disabled, rules);
-        }
-
-        private static RuleEntry ToEntry(TrackerRule rule)
-        {
-            HashSet<string>? allowed = null;
-            if (rule.AllowedTags != null && rule.AllowedTags.Count > 0)
-            {
-                var set = new HashSet<string>(StringComparer.Ordinal);
-                foreach (var tag in rule.AllowedTags)
-                {
-                    if (TorrentTags.TryCanonicalize(tag, out var canonical))
-                    {
-                        set.Add(canonical);
-                    }
-                }
-
-                // A rule that only lists tags this plugin does not know would otherwise hide everything
-                // from that tracker; treat it as "no restriction" instead.
-                allowed = set.Count > 0 ? set : null;
-            }
-
-            return new RuleEntry { Enabled = rule.Enabled, Allowed = allowed };
+            return new TrackerPolicy(disabled, enabled);
         }
 
         /// <summary>Same test <see cref="TorrentSearchService.GetAvailableIndexersAsync"/> reports as "disabled in plugin".</summary>
@@ -308,40 +267,9 @@ public class TorrentSearchService
                 return true;
             }
 
-            return _rules.TryGetValue(name, out var rule) && !rule.Enabled;
+            return _enabled.TryGetValue(name, out var isEnabled) && !isEnabled;
         }
 
-        public bool Allows(TorrentSearchResult result)
-        {
-            var indexer = result.Indexer?.Trim() ?? string.Empty;
-            if (IsDisabled(indexer))
-            {
-                return false;
-            }
-
-            if (!_rules.TryGetValue(indexer, out var rule) || rule.Allowed == null)
-            {
-                return true;
-            }
-
-            // "regular" means the release carries no known discount/special tag.
-            var hasKnownTag = false;
-            if (result.Tags != null)
-            {
-                foreach (var tag in result.Tags)
-                {
-                    if (TorrentTags.TryCanonicalize(tag, out var canonical) && canonical != TorrentTags.Regular)
-                    {
-                        hasKnownTag = true;
-                        if (rule.Allowed.Contains(canonical))
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-
-            return !hasKnownTag && rule.Allowed.Contains(TorrentTags.Regular);
-        }
+        public bool Allows(TorrentSearchResult result) => !IsDisabled(result.Indexer);
     }
 }

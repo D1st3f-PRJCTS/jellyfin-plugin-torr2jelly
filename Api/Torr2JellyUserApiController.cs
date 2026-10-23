@@ -115,8 +115,8 @@ public class Torr2JellyUserApiController : ControllerBase
             query = query.Substring(0, MaxQueryLength);
         }
 
-        var filter = onlyTags ?? onlyGold;
-        var results = await _searchService.SearchAsync(query, category, filter, isUserAdmin: IsAdministrator, cancellationToken);
+        // onlyGold / onlyTags are obsolete and ignored: the FreeleechOnly setting decides what is returned.
+        var results = await _searchService.SearchAsync(query, category, null, isUserAdmin: IsAdministrator, cancellationToken);
         return Ok(results);
     }
 

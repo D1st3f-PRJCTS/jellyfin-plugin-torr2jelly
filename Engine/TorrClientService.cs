@@ -56,6 +56,16 @@ public class TorrTorrent
     [JsonPropertyName("loaded_size")]
     public long LoadedSize { get; set; }
 
+    // Live swarm numbers; TorrServer reports them only while the torrent is active (absent or 0 otherwise).
+    [JsonPropertyName("connected_seeders")]
+    public int? ConnectedSeeders { get; set; }
+
+    [JsonPropertyName("active_peers")]
+    public int? ActivePeers { get; set; }
+
+    [JsonPropertyName("total_peers")]
+    public int? TotalPeers { get; set; }
+
     [JsonPropertyName("file_stats")]
     public List<TorrTorrentFile>? FileStats { get; set; }
 

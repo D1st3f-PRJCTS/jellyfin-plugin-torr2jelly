@@ -66,11 +66,7 @@
             noReleases: isUk ? 'Роздач не знайдено' : 'No releases found',
             categoryLabel: isUk ? 'Категорія / Бібліотека:' : 'Category / Library:',
             addTo: isUk ? 'Додати до:' : 'Add to:',
-            goldBadge: isUk ? 'Золотий' : 'Gold',
-            doubleBadge: '2x',
-            filterAll: isUk ? 'Всі' : 'All',
-            filterGold: isUk ? 'З бонусами' : 'With Tags',
-            onlyTagged: isUk ? 'Лише з бонусами' : 'Only with tags',
+            freeleechBadge: 'Freeleech',
             showAll: isUk ? 'Показати всі' : 'Show all',
             seedersTitle: isUk ? 'Сідери' : 'Seeders',
             addBtn: isUk ? 'Додати' : 'Add',
@@ -98,10 +94,6 @@
             streamAddedSuccess: isUk ? 'Роздачу успішно додано як версію стріму!' : 'Release successfully added to item!',
             streamDeletedSuccess: isUk ? 'Стрім успішно видалено' : 'Stream deleted successfully',
             seriesBadge: isUk ? 'Серіал' : 'Series',
-            silverBadge: isUk ? 'Срібна' : 'Silver',
-            bronzeBadge: isUk ? 'Бронзова' : 'Bronze',
-            authorBadge: isUk ? 'Авторський' : 'Author',
-            exclusiveBadge: isUk ? 'Ексклюзив' : 'Exclusive',
             noStreamYet: isUk ? 'Стріму ще немає — відкрийте «Пошук роздач», щоб додати його' : 'No stream yet — open Find releases to add one',
             noStreamsHint: isUk ? 'Перейдіть на вкладку "Пошук роздач", щоб знайти та додати версію.' : 'Switch to the "Find releases" tab to find and add a version.',
             deleteStreamTitle: isUk ? 'Видалити цей стрім' : 'Delete this stream',
@@ -129,7 +121,40 @@
                 }
                 return 'Added ' + count + (count === 1 ? ' episode' : ' episodes') + (seriesName ? ' to ' + seriesName : '');
             },
-            seriesPendingToast: isUk ? 'Торент додано; епізоди з\'являться за кілька хвилин' : 'Torrent added; episodes will appear in a few minutes'
+            seriesPendingToast: isUk ? 'Торент додано; епізоди з\'являться за кілька хвилин' : 'Torrent added; episodes will appear in a few minutes',
+            // Placeholders (admin): titles that are not on the trackers, found through TMDb.
+            phTitle: isUk ? 'Додати як заглушку' : 'Add as placeholder',
+            phHint: isUk ? 'Знайдіть назву в TMDb і додайте її в медіатеку без стріму; торент можна додати пізніше.' : 'Look the title up on TMDb and add it to the library without a stream; a release can be added later.',
+            phOpenBtn: isUk ? 'Немає на трекерах? Додати заглушку' : 'Not on trackers? Add a placeholder',
+            phSearching: isUk ? 'Шукаємо в TMDb...' : 'Searching TMDb...',
+            phNothing: isUk ? 'У TMDb нічого не знайдено' : 'Nothing found on TMDb',
+            phAddTitle: isUk ? 'Додати заглушку' : 'Add placeholder',
+            phAddedTitle: isUk ? 'Заглушку додано' : 'Placeholder added',
+            phAddedToast: function (title) {
+                return isUk ? 'Заглушку додано: «' + title + '»' : 'Placeholder added: ' + title;
+            },
+            phExistsToast: isUk ? 'Вже є в медіатеці' : 'Already in the library',
+            phNoCategory: isUk ? 'У налаштуваннях Torr2Jelly немає відповідної категорії' : 'No matching category in the Torr2Jelly settings',
+            phInLibrary: isUk ? 'У медіатеці' : 'In library',
+            phInLibraryPlaceholder: isUk ? 'Заглушка' : 'Placeholder',
+            phKindMovie: isUk ? 'Фільм' : 'Movie',
+            phKindSeries: isUk ? 'Серіал' : 'Series',
+            tmdbKeyMissing: isUk ? 'Додайте ключ TMDb API у налаштуваннях Torr2Jelly' : 'Add a TMDb API key in the Torr2Jelly settings',
+            tmdbKeyInvalid: isUk ? 'Ключ TMDb API відхилено. Перевірте його в налаштуваннях Torr2Jelly.' : 'The TMDb API key was rejected. Check it in the Torr2Jelly settings.',
+            tmdbFailed: isUk ? 'TMDb зараз недоступний' : 'TMDb is not reachable right now',
+            phReasons: {
+                no_id: isUk ? 'Немає жодного ідентифікатора' : 'No id to create it from',
+                invalid_imdb: isUk ? 'Некоректний IMDb id' : 'Invalid IMDb id',
+                invalid_title: isUk ? 'Некоректна назва' : 'Invalid title',
+                invalid_year: isUk ? 'Некоректний рік' : 'Invalid year',
+                unknown_category: isUk ? 'Невідома категорія' : 'Unknown category',
+                not_a_movie_category: isUk ? 'Категорія не для фільмів' : 'Not a movie category',
+                not_a_show_category: isUk ? 'Категорія не для серіалів' : 'Not a series category',
+                category_unavailable: isUk ? 'Папка категорії недоступна' : 'The category folder is not available',
+                folder_has_stream: isUk ? 'У папці вже є стрім' : 'The folder already has a stream',
+                placeholder_exists: isUk ? 'Заглушка вже існує' : 'A placeholder already exists',
+                write_failed: isUk ? 'Не вдалося записати файли' : 'Could not write the files'
+            }
         };
     }
 
@@ -146,7 +171,6 @@
         .t2j-head > .sectionTitle { margin-top: 1em; margin-bottom: 0.5em; }
         .t2j-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5em 1.5em; }
         .t2j-tools .selectContainer, .t2j-tools .checkboxContainer { margin: 0; }
-        .t2j-tools .checkboxContainer, .t2j-filter-row .checkboxContainer { width: auto; margin-bottom: 0; }
         .t2j-state { padding: 0.5em 0 1em; }
         .t2j-state-error { color: var(--jf-palette-error-main, #c62828); }
         .t2j-list { margin: 0.25em 0 0; }
@@ -156,6 +180,8 @@
         .t2j-title { white-space: normal; word-break: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
         .t2j-title-row { display: flex; align-items: center; gap: 0.5em; }
         .t2j-title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .t2j-ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .t2j-title-row .t2j-meta { flex-wrap: nowrap; }
         .t2j-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.15em 0.5em; }
         .t2j-meta .mediaInfoText, .t2j-title-row .mediaInfoText { margin: 0; }
         .t2j-title-row .mediaInfoText { flex-shrink: 0; }
@@ -183,6 +209,15 @@
         .t2j-find-row .emby-input { flex: 1 1 auto; min-width: 0; }
         .t2j-find-row .t2j-find-btn { flex: 0 0 auto; margin: 0; padding-top: 0; padding-bottom: 0; }
         .t2j-filter-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.25em 1em; margin: 0.75em 0 0.25em; }
+        .t2j-ph { margin-top: 0.5em; }
+        .t2j-ph > .sectionTitle { margin-top: 1em; margin-bottom: 0.5em; }
+        .t2j-ph > .fieldDescription { padding-left: 0; padding-right: 0; }
+        .t2j-ph .t2j-btn-icon { margin-inline-end: 0.4em; }
+        .t2j-ph .t2j-ph-open { margin-left: 0; }
+        .t2j-ph-poster { flex-shrink: 0; width: 2.6em; height: 3.9em; margin: 0 0 0 0.9em; background-size: cover; background-position: center; background-repeat: no-repeat; }
+        .t2j-ph-overview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; }
+        .t2j-ph-kind { display: inline-flex; align-items: center; gap: 0.25em; }
+        .t2j-ph-kind .material-icons { font-size: 1.1em; }
         @media (max-width: 50em) {
             .t2j-dialog { width: 100%; max-width: none; height: 100%; max-height: none; border-radius: 0; }
         }
@@ -305,18 +340,9 @@
         return SHOW_TITLE_REGEX.test(title || '');
     }
 
-    // Picture quality labels read from a release title: resolution first, then HDR / Dolby Vision.
-    function parseQuality(title) {
-        var t = String(title || '');
-        var out = [];
-        if (/\b(?:2160p|4k)\b/i.test(t)) out.push('4K');
-        else if (/\b1080[pi]\b/i.test(t)) out.push('1080p');
-        else if (/\b720p\b/i.test(t)) out.push('720p');
-        else if (/\b(?:576|480)[pi]\b/i.test(t)) out.push('SD');
-        else if (/\buhd\b/i.test(t)) out.push('4K');
-        if (/\b(?:dolby[\s._-]*vision|dovi)\b|\bDV\b/i.test(t)) out.push('DV');
-        if (/\bHDR(?!ip)/i.test(t)) out.push('HDR');
-        return out;
+    // Freeleech = the download does not count against the tracker's statistics (the server computes IsFreeleech).
+    function isFreeleech(item) {
+        return !!(item && (item.IsFreeleech || item.isFreeleech));
     }
 
     // Friendly message for auth failures; null for everything else.
@@ -443,6 +469,86 @@
         return headers;
     }
 
+    // Resolves true/false once the admin lookup has an answer (it is cached per user; gives up after about 3 s).
+    function waitForAdmin() {
+        return new Promise(function (resolve) {
+            var tries = 0;
+            (function poll() {
+                var value = getIsAdminCached();
+                if (value !== null || tries++ > 25) {
+                    resolve(value === true);
+                    return;
+                }
+                setTimeout(poll, 120);
+            })();
+        });
+    }
+
+    // 16.9 GB / 700 MB; '' when the size is unknown.
+    function formatSize(bytes) {
+        var n = Number(bytes);
+        if (!isFinite(n) || n <= 0) return '';
+        var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        var i = 0;
+        while (n >= 1024 && i < units.length - 1) {
+            n /= 1024;
+            i++;
+        }
+        return (i >= 3 ? n.toFixed(1) : String(Math.round(n))) + ' ' + units[i];
+    }
+
+    // True when the text has only Latin-script letters (digits, punctuation and spaces do not count).
+    function isLatinTitle(text) {
+        var s = String(text || '');
+        if (!s) return false;
+        return s.replace(/[\u0000-ɏḀ-ỿ -⁯℀-⅏]/g, '') === '';
+    }
+
+    // The title a placeholder folder is named after: the original title when it is Latin-script, else the TMDb title.
+    function placeholderTitle(item) {
+        var original = String(item.OriginalTitle || '').trim();
+        if (original && isLatinTitle(original)) return original;
+        return String(item.Title || original || '').trim();
+    }
+
+    // Fixed text for a TMDb failure (status + the stable "code" of the error body); null = no special text.
+    function tmdbErrorMessage(status, code, i18n) {
+        if (code === 'tmdb_key_missing' || (status === 503 && !code)) return i18n.tmdbKeyMissing;
+        if (code === 'tmdb_key_invalid') return i18n.tmdbKeyInvalid;
+        if (code === 'tmdb_failed') return i18n.tmdbFailed;
+        return null;
+    }
+
+    // First default category of the wanted type ('movie' | 'series'), else the first one of that type.
+    function pickCategoryName(cats, kind) {
+        var wantShow = (kind === 'series');
+        var typed = (cats || []).filter(function (c) {
+            var t = String((c && c.Type) || '').toLowerCase();
+            var isShow = (t === 'show' || t === 'tvshows');
+            return !!(c && c.Name) && isShow === wantShow;
+        });
+        var def = typed.find(function (c) { return c.IsDefault; });
+        return def ? def.Name : (typed.length > 0 ? typed[0].Name : '');
+    }
+
+    // The configured categories (admin settings), read once; falls back to the Jellyfin libraries list.
+    var _phCats = null;
+    async function getPlaceholderCategories() {
+        if (_phCats && _phCats.length > 0) return _phCats;
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Settings'), { headers: getAuthHeaders() });
+            if (res.ok) {
+                var cfg = await res.json();
+                if (cfg && Array.isArray(cfg.Categories) && cfg.Categories.length > 0) {
+                    _phCats = cfg.Categories;
+                    return _phCats;
+                }
+            }
+        } catch (e) { }
+        var libs = await getAvailableLibraries();
+        return libs.map(function (l) { return { Name: l.Name, Type: l.Type, IsDefault: false }; });
+    }
+
     // ==========================================
     // Shared release row (search page section + "Find releases" tab)
     // ==========================================
@@ -452,44 +558,9 @@
         return '<div class="mediaInfoItem mediaInfoText' + (primary ? ' t2j-chip-primary' : '') + '">' + escapeHtml(text) + '</div>';
     }
 
-    // Tag chips of a release: freeleech/gold in the accent colour, the other known tags neutral.
-    function buildTagChipsHtml(item, i18n) {
-        var isGold = !!(item.IsGold || item.isGold);
-        var rawTags = (item.Tags || item.tags || []).slice();
-        var hasFreeleech = isGold || rawTags.some(function (tg) { return /freeleech|gold/i.test(tg); });
-        var hasHalfleech = !hasFreeleech && rawTags.some(function (tg) { return /halfleech|silver|50%/i.test(tg); });
-        var hasBronze = !hasFreeleech && !hasHalfleech && rawTags.some(function (tg) { return /bronze/i.test(tg); });
-
-        rawTags = rawTags.filter(function (tg) {
-            return !/^(freeleech|gold|halfleech|silver|bronze)$/i.test(String(tg || '').trim());
-        });
-
-        if (hasFreeleech) {
-            rawTags.unshift('freeleech');
-        } else if (hasHalfleech) {
-            rawTags.unshift('halfleech');
-        } else if (hasBronze) {
-            rawTags.unshift('bronze');
-        }
-
-        var html = '';
-        rawTags.forEach(function (tg) {
-            var ltg = String(tg || '').toLowerCase();
-            if (ltg === 'freeleech' || ltg === 'gold') {
-                html += chipHtml(i18n.goldBadge, true);
-            } else if (ltg === 'halfleech' || ltg === 'silver') {
-                html += chipHtml(i18n.silverBadge, false);
-            } else if (ltg === 'bronze') {
-                html += chipHtml(i18n.bronzeBadge, false);
-            } else if (ltg === 'internal' || ltg === 'author' || ltg.indexOf('автор') !== -1) {
-                html += chipHtml(i18n.authorBadge, false);
-            } else if (ltg === 'exclusive' || ltg.indexOf('ексклюзив') !== -1) {
-                html += chipHtml(i18n.exclusiveBadge, false);
-            } else if (ltg === 'doubleupload' || ltg === '2xupload') {
-                html += chipHtml(i18n.doubleBadge, false);
-            }
-        });
-        return html;
+    // The one release attribute besides size and seeders that is shown: a single accent-colour Freeleech chip.
+    function freeleechChipHtml(item, i18n) {
+        return isFreeleech(item) ? chipHtml(i18n.freeleechBadge, true) : '';
     }
 
     // Trailing icon button of a row. data-icon is the idle icon; data-act says what a click does.
@@ -542,9 +613,6 @@
         var tracker = item.Indexer || 'Torrent';
         var leadIcon = leadIconOverride || (isShowTitle(title) ? 'tv' : 'movie');
 
-        var quality = '';
-        parseQuality(title).forEach(function (q) { quality += chipHtml(q, false); });
-
         var sep = '<span aria-hidden="true">&middot;</span>';
         var meta = '<span>' + escapeHtml(tracker) + '</span>';
         if (size) meta += sep + '<span>' + escapeHtml(size) + '</span>';
@@ -554,7 +622,7 @@
             + iconHtml(leadIcon, 'listItemIcon listItemIcon-transparent')
             + '<div class="listItemBody t2j-body">'
             + '<div class="listItemBodyText t2j-title" title="' + escapeHtml(title) + '">' + escapeHtml(title) + '</div>'
-            + '<div class="listItemBodyText secondary t2j-meta">' + meta + quality + buildTagChipsHtml(item, i18n) + (extraChipsHtml || '') + '</div>'
+            + '<div class="listItemBodyText secondary t2j-meta">' + meta + freeleechChipHtml(item, i18n) + (extraChipsHtml || '') + '</div>'
             + '</div>'
             + '<div class="t2j-actions">' + actionsHtml + '</div>'
             + '</div>';
@@ -583,6 +651,7 @@
         window._t2jLastResults = [];
         _searchCategory = { query: '', value: '' };
         _searchShowAll = false;
+        resetPlaceholderState('');
         removeResultsContainer();
     }
 
@@ -746,8 +815,20 @@
 
         var target = getSearchTargetContainer();
         if (results.length === 0) {
+            // Admins get the "Add as placeholder" block here (TMDb lookup of the same query); nobody else sees a section.
+            var isAdminZero = await waitForAdmin();
+            if (requestId !== undefined && requestId !== searchRequestId) return;
+            target = getSearchTargetContainer();
             if (target && target.mode === 'empty') {
                 renderSectionMessage(i18n.noReleases, false);
+                if (isAdminZero) maybeAttachPlaceholder(query, requestId, true);
+            } else if (isAdminZero && target) {
+                var zeroContainer = ensureResultsContainer(target);
+                if (target.mode === 'results' && zeroContainer.parentNode === target.parent && zeroContainer.nextElementSibling) {
+                    target.parent.appendChild(zeroContainer);
+                }
+                zeroContainer.innerHTML = '';
+                maybeAttachPlaceholder(query, requestId, true);
             } else {
                 removeResultsContainer();
             }
@@ -764,7 +845,6 @@
 
         window._t2jLastQuery = query;
         window._t2jLastResults = results;
-        if (!window._t2jCurrentFilter) window._t2jCurrentFilter = 'all';
 
         var libs = await getAvailableLibraries();
         // A newer search (or leaving the page) may have happened while the library list was loading.
@@ -797,20 +877,14 @@
             catOptionsHtml = '<option value="' + escapeHtml(targetLibName) + '" selected>' + escapeHtml(targetLibName) + '</option>' + catOptionsHtml;
         }
 
-        var taggedResults = results.filter(function (r) {
-            return r.IsGold || (r.Tags && r.Tags.length > 0);
-        });
-        var filterOn = (window._t2jCurrentFilter === 'gold');
-        var list = filterOn ? taggedResults : results;
+        // Freeleech-only is a server setting now: the list shown is the list received.
+        var list = results;
         var visibleCount = _searchShowAll ? list.length : Math.min(list.length, SEARCH_PAGE_SIZE);
 
         var toolsHtml =
             '<div class="selectContainer selectContainer-inline t2j-cat">'
             + '<select is="emby-select" id="t2j-cat-select" class="emby-select-withcolor" label="' + escapeHtml(i18n.addTo) + '" aria-label="' + escapeHtml(i18n.addTo) + '">'
-            + catOptionsHtml + '</select></div>'
-            + '<label class="checkboxContainer">'
-            + '<input is="emby-checkbox" type="checkbox" id="t2j-filter-tagged"' + (filterOn ? ' checked' : '') + '>'
-            + '<span>' + escapeHtml(i18n.onlyTagged) + ' (' + taggedResults.length + ')</span></label>';
+            + catOptionsHtml + '</select></div>';
 
         var rowsHtml = '';
         for (var i = 0; i < visibleCount; i++) {
@@ -836,6 +910,8 @@
         }
 
         container.innerHTML = sectionHeadHtml(i18n, toolsHtml) + bodyHtml;
+        // Admins: the flat "Not on trackers? Add a placeholder" button (or the open block) under the releases.
+        maybeAttachPlaceholder(query, requestId, false);
 
         if (focusedId) {
             var refocus = document.getElementById(focusedId);
@@ -846,13 +922,6 @@
         if (catSelect) {
             catSelect.addEventListener('change', function () {
                 _searchCategory = { query: query, value: catSelect.value || '' };
-            });
-        }
-
-        var filterBox = container.querySelector('#t2j-filter-tagged');
-        if (filterBox) {
-            filterBox.addEventListener('change', function () {
-                window._t2jSetFilter(filterBox.checked ? 'gold' : 'all');
             });
         }
 
@@ -939,13 +1008,245 @@
         }
     }
 
-    window._t2jSetFilter = function (filterMode) {
-        window._t2jCurrentFilter = filterMode;
-        _searchShowAll = false;
-        if (window._t2jLastQuery && window._t2jLastResults) {
-            renderSearchResults(window._t2jLastQuery, window._t2jLastResults, searchRequestId);
+    // ==========================================
+    // "Add as placeholder" block (admins only): a title that is not on the trackers is looked up on TMDb and added to
+    // the library without a stream. TMDb is only asked once this block is opened (automatically when the tracker
+    // search found nothing, else by its button), and never for non-admins.
+    // ==========================================
+    var _ph = { query: '', open: false, loading: false, results: null, error: '', errorIsHint: false, states: {} };
+    var _phSeq = 0; // only the latest TMDb request of the current query may render
+
+    function resetPlaceholderState(query) {
+        _phSeq++;
+        _ph = { query: query || '', open: false, loading: false, results: null, error: '', errorIsHint: false, states: {} };
+    }
+
+    function tmdbItemKey(item) {
+        return (item.Kind === 'series' ? 'tv' : 'movie') + ':' + item.TmdbId;
+    }
+
+    // Posters come from TMDb's image host only; anything else is dropped.
+    function safePosterUrl(url) {
+        var u = String(url || '');
+        return /^https:\/\/image\.tmdb\.org\/t\/p\/[A-Za-z0-9_\/.\-]+$/.test(u) ? u : '';
+    }
+
+    // A TMDb match as a native list row: poster (or kind icon), "Title (year)", kind / original title / library chips.
+    function tmdbRowHtml(item, idx, i18n) {
+        var isSeries = item.Kind === 'series';
+        var title = item.Title || item.OriginalTitle || '';
+        var heading = title + (item.Year ? ' (' + item.Year + ')' : '');
+        var poster = safePosterUrl(item.PosterUrl);
+        var lead = poster
+            ? '<div class="listItemImage t2j-ph-poster" style="background-image:url(\'' + escapeHtml(poster) + '\')" aria-hidden="true"></div>'
+            : iconHtml(isSeries ? 'tv' : 'movie', 'listItemIcon listItemIcon-transparent');
+
+        var sep = '<span aria-hidden="true">&middot;</span>';
+        var meta = '<span class="t2j-ph-kind">' + iconHtml(isSeries ? 'tv' : 'movie') + escapeHtml(isSeries ? i18n.phKindSeries : i18n.phKindMovie) + '</span>';
+        if (item.OriginalTitle && item.OriginalTitle !== item.Title) meta += sep + '<span>' + escapeHtml(item.OriginalTitle) + '</span>';
+        if (item.InLibrary) meta += chipHtml(item.InLibraryAs === 'placeholder' ? i18n.phInLibraryPlaceholder : i18n.phInLibrary, false);
+
+        return '<div class="listItem listItem-border t2j-row t2j-ph-row" data-action="none">'
+            + lead
+            + '<div class="listItemBody t2j-body">'
+            + '<div class="listItemBodyText t2j-title" title="' + escapeHtml(heading) + '">' + escapeHtml(heading) + '</div>'
+            + '<div class="listItemBodyText secondary t2j-meta">' + meta + '</div>'
+            + (item.Overview ? '<div class="listItemBodyText secondary t2j-ph-overview">' + escapeHtml(item.Overview) + '</div>' : '')
+            + '</div>'
+            + '<div class="t2j-actions">' + actionButtonHtml('placeholder', idx, 'bookmark_add', i18n.phAddTitle) + '</div>'
+            + '</div>';
+    }
+
+    // Brings the add buttons in line with the states kept for the block (rows that are already in the library or were
+    // added here show a check mark, an add that is running stays busy).
+    function applyPlaceholderStates() {
+        var host = document.getElementById('t2j-ph-host');
+        if (!host || !_ph.results) return;
+        var i18n = getI18n();
+        var buttons = host.querySelectorAll('.t2j-act[data-act="placeholder"]');
+        for (var i = 0; i < buttons.length; i++) {
+            var btn = buttons[i];
+            var item = _ph.results[parseInt(btn.getAttribute('data-idx'), 10)];
+            if (!item) continue;
+            var kept = _ph.states[tmdbItemKey(item)];
+            var state = kept || (item.InLibrary ? 'done' : 'idle');
+            if ((btn.getAttribute('data-state') || 'idle') === state) continue;
+            var title = state === 'busy' ? i18n.adding
+                : (state === 'done' ? (kept ? i18n.phAddedTitle : i18n.phInLibrary) : (state === 'error' ? i18n.serverError : ''));
+            setActState(btn, state, title);
         }
-    };
+    }
+
+    function renderPlaceholderBlock() {
+        var host = document.getElementById('t2j-ph-host');
+        if (!host) return;
+        var i18n = getI18n();
+
+        if (!_ph.open) {
+            host.innerHTML = '<button is="emby-button" type="button" class="button-flat emby-button t2j-ph-open" id="t2j-ph-open">'
+                + iconHtml('bookmark_add', 't2j-btn-icon') + '<span>' + escapeHtml(i18n.phOpenBtn) + '</span></button>';
+            var openBtn = host.querySelector('#t2j-ph-open');
+            if (openBtn) {
+                openBtn.addEventListener('click', function () {
+                    _ph.open = true;
+                    loadPlaceholderResults();
+                });
+            }
+            return;
+        }
+
+        var body;
+        if (_ph.error) {
+            body = stateLineHtml(_ph.error, !_ph.errorIsHint);
+        } else if (!_ph.results) {
+            body = stateLineHtml(i18n.phSearching, false);
+        } else if (_ph.results.length === 0) {
+            body = stateLineHtml(i18n.phNothing, false);
+        } else {
+            body = '<div class="paperList t2j-list">';
+            _ph.results.forEach(function (item, idx) { body += tmdbRowHtml(item, idx, i18n); });
+            body += '</div>';
+        }
+
+        host.innerHTML = '<h2 class="sectionTitle sectionTitle-cards">' + escapeHtml(i18n.phTitle) + '</h2>'
+            + '<div class="fieldDescription">' + escapeHtml(i18n.phHint) + '</div>'
+            + body;
+        applyPlaceholderStates();
+
+        var listEl = host.querySelector('.t2j-list');
+        if (listEl) {
+            listEl.addEventListener('click', function (e) {
+                var btn = closestAct(e.target, listEl);
+                if (!btn || btn.getAttribute('data-act') !== 'placeholder') return;
+                var item = _ph.results && _ph.results[parseInt(btn.getAttribute('data-idx'), 10)];
+                if (item) addPlaceholderFromTmdb(btn, item);
+            });
+        }
+    }
+
+    async function loadPlaceholderResults() {
+        var state = _ph;
+        var query = state.query;
+        if (!query) return;
+        var mySeq = ++_phSeq;
+        var i18n = getI18n();
+        state.loading = true;
+        state.results = null;
+        state.error = '';
+        state.errorIsHint = false;
+        renderPlaceholderBlock();
+
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Tmdb/Search?query=' + encodeURIComponent(query) + '&type=all'), { headers: getAuthHeaders() });
+            if (mySeq !== _phSeq) return;
+            if (res.ok) {
+                var list = await res.json();
+                if (mySeq !== _phSeq) return;
+                state.results = Array.isArray(list) ? list : [];
+            } else {
+                var errBody = await res.json().catch(function () { return {}; });
+                if (mySeq !== _phSeq) return;
+                var special = tmdbErrorMessage(res.status, (errBody && errBody.code) ? String(errBody.code) : '', i18n);
+                state.error = special || authErrorMessage(res.status, i18n)
+                    || (i18n.searchFailed + ': ' + ((errBody && errBody.error) ? String(errBody.error) : (i18n.failedResponse + ' (' + res.status + ')')));
+                state.errorIsHint = !!special && special === i18n.tmdbKeyMissing;
+            }
+        } catch (e) {
+            if (mySeq !== _phSeq) return;
+            state.error = i18n.connError + ': ' + (e && e.message ? e.message : e);
+        }
+        state.loading = false;
+        renderPlaceholderBlock();
+    }
+
+    // Creates one placeholder through POST Placeholders (the server decides created / exists / error).
+    async function addPlaceholderFromTmdb(btn, item) {
+        if (isActLocked(btn)) return;
+        var i18n = getI18n();
+        var key = tmdbItemKey(item);
+        var kind = item.Kind === 'series' ? 'series' : 'movie';
+        var tmdbId = parseInt(item.TmdbId, 10) || 0;
+        if (tmdbId <= 0) return;
+
+        var phState = _ph; // the block may be replaced by another query's meanwhile
+        phState.states[key] = 'busy';
+        setActState(btn, 'busy', i18n.adding);
+        var finalState = 'error';
+
+        try {
+            var category = pickCategoryName(await getPlaceholderCategories(), kind);
+            if (!category) {
+                showToast(i18n.phNoCategory, false);
+            } else {
+                var year = parseInt(item.Year, 10);
+                var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Placeholders'), {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        Items: [{
+                            Kind: kind,
+                            TmdbId: tmdbId,
+                            Title: placeholderTitle(item),
+                            Year: year > 0 ? year : null,
+                            Category: category
+                        }]
+                    })
+                });
+                if (res.ok) {
+                    var data = await res.json().catch(function () { return null; });
+                    var rows = (data && (data.Results || data.results)) || [];
+                    var row = rows[0] || {};
+                    var status = String(row.Status || row.status || '').toLowerCase();
+                    if (status === 'created') {
+                        finalState = 'done';
+                        showToast(i18n.phAddedToast(placeholderTitle(item)), true);
+                    } else if (status === 'exists') {
+                        finalState = 'done';
+                        showToast(i18n.phExistsToast, true);
+                    } else {
+                        var reason = String(row.Reason || row.reason || '');
+                        showToast(i18n.failedResponse + (reason ? ': ' + (i18n.phReasons[reason] || reason) : ''), false);
+                    }
+                } else {
+                    var errMsg = await readErrorMessage(res, i18n);
+                    showToast(authErrorMessage(res.status, i18n) ? errMsg : (i18n.failedResponse + ': ' + errMsg), false);
+                }
+            }
+        } catch (e) {
+            showToast(i18n.connError + ': ' + (e && e.message ? e.message : e), false);
+        }
+
+        phState.states[key] = finalState;
+        // The block may have been re-rendered meanwhile: bring whatever button is on screen in line with the result.
+        applyPlaceholderStates();
+        if (finalState === 'done' && document.body.contains(btn) && btn.getAttribute('data-state') !== 'done') {
+            setActState(btn, 'done', i18n.phAddedTitle);
+        }
+    }
+
+    // Puts the block under the section for admins. autoOpen = the tracker search found nothing: look TMDb up right away.
+    function attachPlaceholderBlock(container, query, autoOpen) {
+        if (_ph.query !== query) resetPlaceholderState(query);
+        var host = container.querySelector('#t2j-ph-host');
+        if (!host) {
+            host = document.createElement('div');
+            host.id = 't2j-ph-host';
+            host.className = 't2j-ph padded-left padded-right';
+            container.appendChild(host);
+        }
+        if (autoOpen && !_ph.open) _ph.open = true;
+        renderPlaceholderBlock();
+        if (_ph.open && !_ph.results && !_ph.loading && !_ph.error) loadPlaceholderResults();
+    }
+
+    // Admin check first (the lookup is cached per user), then the block; a newer search or leaving the page cancels it.
+    function maybeAttachPlaceholder(query, requestId, autoOpen) {
+        waitForAdmin().then(function (isAdmin) {
+            if (!isAdmin || disposed || requestId !== searchRequestId) return;
+            var container = document.getElementById('t2j-search-section');
+            if (container) attachPlaceholderBlock(container, query, autoOpen);
+        });
+    }
 
     // Observer and query sync
     var _onSearchPage = false;
@@ -1025,7 +1326,6 @@
     var _drawerData = null;      // movie dialog: { ExistingStreams, Alternatives, Title, Year, ... }; null lists = not loaded yet
     var _seriesData = null;      // series dialog state (see openSeriesDialog); only one of the two is set while a dialog is open
     var _activeDrawerTab = 'streams'; // 'streams' or 'search'
-    var _drawerSearchFilter = 'all';
     var _drawerToken = 0;        // bumped every time a dialog is opened or closed
     var _drawerItemId = null;    // item the current dialog belongs to
     var _drawerRoot = null;      // the .dialogContainer element while open
@@ -1256,7 +1556,6 @@
         _drawerItemId = itemId;
         _drawerData = { ExistingStreams: null, Alternatives: null, Title: '', Year: null, OriginalTitle: '', SearchQuery: '', typedQuery: null, streamsError: '', altsError: '', altsLoading: false };
         _activeDrawerTab = 'streams';
-        _drawerSearchFilter = 'all';
 
         var tabStreams = document.getElementById('t2j-tab-streams');
         var tabSearch = document.getElementById('t2j-tab-search');
@@ -1364,22 +1663,47 @@
         loadDrawerStreams(itemId, token);
     }
 
-    function versionRowHtml(s, idx, i18n) {
+    // A version of the movie: "size - arrow_upward seeders" (what is known; the version label when neither is), the
+    // torrent title below it. When the Find releases data is loaded and has the same torrent, its tracker seeders
+    // (preferred) and Freeleech flag are used. The hash and the full file name live in the row's tooltip only.
+    function versionRowHtml(s, idx, i18n, alternatives) {
         var isPrimary = !!s.IsPrimary;
-        var shortHash = s.TorrentHash ? (s.TorrentHash.length > 8 ? s.TorrentHash.substring(0, 8) : s.TorrentHash) : '';
+        var hash = s.TorrentHash ? String(s.TorrentHash) : '';
+
+        var tracker = null;
+        if (hash && alternatives) {
+            tracker = alternatives.find(function (a) {
+                return a && a.InfoHash && String(a.InfoHash).toLowerCase() === hash.toLowerCase();
+            }) || null;
+        }
+
+        var seeders = parseInt(tracker && tracker.Seeders, 10);
+        if (!(seeders > 0)) seeders = parseInt(s.Seeders, 10);
+        var hasSeeders = seeders > 0;
+        var size = formatSize(s.SizeBytes);
+
+        var sep = '<span aria-hidden="true">&middot;</span>';
+        var primaryHtml = '';
+        if (size) primaryHtml += '<span>' + escapeHtml(size) + '</span>';
+        if (hasSeeders) {
+            primaryHtml += (size ? sep : '') + '<span class="t2j-seeds" title="' + escapeHtml(i18n.seedersTitle) + '">' + iconHtml('arrow_upward') + seeders + '</span>';
+        }
         var label = s.VersionLabel || s.Name || '';
+        if (!primaryHtml) primaryHtml = '<span class="t2j-ellipsis">' + escapeHtml(label) + '</span>';
 
-        var meta = '<span title="' + escapeHtml(s.Path) + '">' + escapeHtml(s.Name) + '</span>';
-        if (shortHash) meta += '<span aria-hidden="true">&middot;</span><span>#' + escapeHtml(shortHash) + '</span>';
+        var fileName = String(s.Name || '');
+        var secondary = String(s.TorrentTitle || '').trim() || fileName.replace(/\.[^.\\\/]{1,5}$/, '');
+        var tooltip = fileName + (hash ? '\n' + hash : '');
 
-        return '<div class="listItem listItem-border t2j-row" data-action="none">'
+        return '<div class="listItem listItem-border t2j-row" data-action="none" title="' + escapeHtml(tooltip) + '">'
             + iconHtml(isPrimary ? 'star' : 'layers', 'listItemIcon listItemIcon-transparent')
             + '<div class="listItemBody t2j-body">'
             + '<div class="listItemBodyText t2j-title-row">'
-            + '<span class="t2j-title-text" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</span>'
+            + '<span class="t2j-title-text t2j-meta">' + primaryHtml + '</span>'
             + (isPrimary ? chipHtml(i18n.currentBadge, true) : '')
+            + (isFreeleech(tracker) ? chipHtml(i18n.freeleechBadge, true) : '')
             + '</div>'
-            + '<div class="listItemBodyText secondary t2j-meta">' + meta + '</div>'
+            + '<div class="listItemBodyText secondary t2j-ellipsis" title="' + escapeHtml(secondary) + '">' + escapeHtml(secondary) + '</div>'
             + '</div>'
             + '<div class="t2j-actions">' + (s.TorrentHash ? actionButtonHtml('delete', idx, 'delete', i18n.deleteStreamTitle) : '') + '</div>'
             + '</div>';
@@ -1413,7 +1737,7 @@
 
             var html = '<div class="paperList t2j-list">';
             streams.forEach(function (s, idx) {
-                html += versionRowHtml(s, idx, i18n);
+                html += versionRowHtml(s, idx, i18n, data.Alternatives);
             });
             html += '</div>';
             body.innerHTML = html;
@@ -1469,11 +1793,7 @@
         var alts = data.Alternatives;
         var queryVal = (data.typedQuery != null) ? data.typedQuery : (data.SearchQuery || (data.OriginalTitle || data.Title || ''));
 
-        var taggedAlts = alts.filter(function (r) {
-            return r.IsGold || (r.Tags && r.Tags.length > 0);
-        });
-        var filterOn = (_drawerSearchFilter === 'gold');
-        var activeList = filterOn ? taggedAlts : alts;
+        var activeList = alts;
 
         var existingStreams = data.ExistingStreams || [];
         var primaryStream = existingStreams.find(function (s) { return s.IsPrimary; }) || existingStreams[0];
@@ -1481,8 +1801,6 @@
         var html =
             findBarHtml('t2j-drawer-search-input', 't2j-drawer-search-btn', queryVal, i18n)
             + '<div class="t2j-filter-row">'
-            + '<label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="t2j-filter-tagged-dlg"' + (filterOn ? ' checked' : '') + '>'
-            + '<span>' + escapeHtml(i18n.onlyTagged) + ' (' + taggedAlts.length + ')</span></label>'
             + '<div class="fieldDescription">' + activeList.length + ' ' + escapeHtml(i18n.releasesFound) + '</div>'
             + '</div>';
 
@@ -1540,17 +1858,6 @@
         if (inputEl) {
             inputEl.addEventListener('keydown', function (e) {
                 if (e.key === 'Enter') triggerDrawerSearch();
-            });
-        }
-
-        var filterBox = document.getElementById('t2j-filter-tagged-dlg');
-        if (filterBox) {
-            filterBox.addEventListener('change', function () {
-                _drawerSearchFilter = filterBox.checked ? 'gold' : 'all';
-                if (inputEl) data.typedQuery = inputEl.value;
-                renderDrawerContent(itemId);
-                var again = document.getElementById('t2j-filter-tagged-dlg');
-                if (again && typeof again.focus === 'function') again.focus();
             });
         }
 

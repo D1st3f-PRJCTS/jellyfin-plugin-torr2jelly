@@ -36,6 +36,8 @@ public class Torr2JellyApiController : ControllerBase
     private const int MaxTorrentTitleLength = 512;
     private const int MaxPlaceholdersPerRequest = 500;
     private const int MaxEchoedImdbIdLength = 32;
+    private const int MaxTmdbKeyLength = 2048;
+    private static readonly TimeSpan StreamsTorrServerTimeout = TimeSpan.FromSeconds(3);
 
     private static readonly SemaphoreSlim SettingsLock = new(1, 1);
     private static string? _searchScript;
@@ -47,6 +49,8 @@ public class Torr2JellyApiController : ControllerBase
     private readonly TorrentSearchService _searchService;
     private readonly ILibraryManager _libraryManager;
     private readonly TorrentLinkResolver _linkResolver;
+    private readonly TmdbClient _tmdb;
+    private readonly PlaceholderTitleResolver _titleResolver;
 
     public Torr2JellyApiController(
         ILogger<Torr2JellyApiController> logger,
@@ -55,9 +59,13 @@ public class Torr2JellyApiController : ControllerBase
         StrmEngine strmEngine,
         TorrentSearchService searchService,
         ILibraryManager libraryManager,
-        TorrentLinkResolver linkResolver)
+        TorrentLinkResolver linkResolver,
+        TmdbClient tmdb,
+        PlaceholderTitleResolver titleResolver)
     {
         _logger = logger;
+        _tmdb = tmdb;
+        _titleResolver = titleResolver;
         _daemonManager = daemonManager;
         _torrClient = torrClient;
         _strmEngine = strmEngine;
@@ -459,11 +467,11 @@ public class Torr2JellyApiController : ControllerBase
     }
 
     /// <summary>
-    /// Creates movie placeholders: a folder with a placeholder .strm and a movie.nfo (IMDb / TMDb ids) per item, so the
-    /// movie shows up in the library with its poster and metadata before any torrent exists for it. Nothing is
-    /// overwritten or deleted, an existing movie folder or placeholder is reported as "exists", and one failing item
-    /// does not stop the others. When a release is added to the movie later (Torrent versions - Find releases), it
-    /// replaces the placeholder.
+    /// Creates placeholders for movies and series: a folder with a placeholder .strm and an NFO (IMDb / TMDb / TVDB
+    /// ids) per item, so the title shows up in the library with its poster and metadata before any torrent exists for
+    /// it. Nothing is overwritten or deleted, an existing folder or placeholder is reported as "exists", and one
+    /// failing item does not stop the others. When a release is added later (Torrent versions - Find releases for a
+    /// movie, "Add torrents to this series" for a series), it replaces the placeholder.
     /// </summary>
     [HttpPost("Placeholders")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -475,35 +483,92 @@ public class Torr2JellyApiController : ControllerBase
     {
         if (req?.Items == null || req.Items.Count == 0)
         {
-            return BadRequest(new { error = "Items is required." });
+            return ApiError(StatusCodes.Status400BadRequest, "items_required", "Items is required.");
         }
 
         if (req.Items.Count > MaxPlaceholdersPerRequest)
         {
-            return BadRequest(new { error = $"At most {MaxPlaceholdersPerRequest} items per request." });
+            return ApiError(StatusCodes.Status400BadRequest, "too_many_items", $"At most {MaxPlaceholdersPerRequest} items per request.");
         }
 
-        var requests = req.Items
-            .Select(i => new PlaceholderRequest(i?.Category ?? string.Empty, i?.Title ?? string.Empty, i?.Year, i?.ImdbId ?? string.Empty, i?.TmdbId))
-            .ToList();
+        var rows = new PlaceholderResultDto[req.Items.Count];
+        var movieRequests = new List<PlaceholderRequest>();
+        var movieRows = new List<int>();
+        var seriesRequests = new List<SeriesPlaceholderRequest>();
+        var seriesRows = new List<int>();
+
+        for (var i = 0; i < req.Items.Count; i++)
+        {
+            var item = req.Items[i];
+            var imdb = (item?.ImdbId ?? string.Empty).Trim();
+            var tmdb = item?.TmdbId is > 0 ? item.TmdbId : null;
+            var tvdb = item?.TvdbId is > 0 ? item.TvdbId : null;
+
+            var kind = (item?.Kind ?? string.Empty).Trim().ToLowerInvariant() switch
+            {
+                "" or "movie" => "movie",
+                "series" or "tv" or "show" => "series",
+                _ => null
+            };
+
+            var row = new PlaceholderResultDto
+            {
+                ImdbId = imdb.Length <= MaxEchoedImdbIdLength ? imdb : imdb[..MaxEchoedImdbIdLength],
+                Kind = kind ?? "movie",
+                Status = PlaceholderResult.StatusError
+            };
+            rows[i] = row;
+
+            if (kind == null)
+            {
+                row.Reason = "invalid_kind";
+                continue;
+            }
+
+            // The id the item is known by; a movie has no use for a TVDB id.
+            row.Key = imdb.Length > 0 ? row.ImdbId
+                : tmdb.HasValue ? "tmdb:" + tmdb.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : kind == "series" && tvdb.HasValue ? "tvdb:" + tvdb.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : string.Empty;
+            if (row.Key.Length == 0)
+            {
+                row.Reason = PlaceholderResult.ReasonNoId;
+                continue;
+            }
+
+            if (kind == "series")
+            {
+                seriesRequests.Add(new SeriesPlaceholderRequest(item?.Category ?? string.Empty, item?.Title ?? string.Empty, item?.Year, imdb, tvdb, tmdb));
+                seriesRows.Add(i);
+            }
+            else
+            {
+                movieRequests.Add(new PlaceholderRequest(item?.Category ?? string.Empty, item?.Title ?? string.Empty, item?.Year, imdb, tmdb));
+                movieRows.Add(i);
+            }
+        }
 
         try
         {
-            var results = await _strmEngine.CreateMoviePlaceholdersAsync(requests, cancellationToken);
-            var response = new CreatePlaceholdersResponseDto();
-            for (var i = 0; i < results.Count; i++)
+            if (movieRequests.Count > 0)
             {
-                var imdb = requests[i].ImdbId.Trim();
-                response.Results.Add(new PlaceholderResultDto
+                var results = await _strmEngine.CreateMoviePlaceholdersAsync(movieRequests, cancellationToken);
+                for (var j = 0; j < results.Count; j++)
                 {
-                    ImdbId = imdb.Length <= MaxEchoedImdbIdLength ? imdb : imdb[..MaxEchoedImdbIdLength],
-                    Status = results[i].Status,
-                    Folder = results[i].Folder,
-                    Reason = results[i].Reason
-                });
+                    FillPlaceholderRow(rows[movieRows[j]], results[j]);
+                }
             }
 
-            return Ok(response);
+            if (seriesRequests.Count > 0)
+            {
+                var results = await _strmEngine.CreateSeriesPlaceholdersAsync(seriesRequests, cancellationToken);
+                for (var j = 0; j < results.Count; j++)
+                {
+                    FillPlaceholderRow(rows[seriesRows[j]], results[j]);
+                }
+            }
+
+            return Ok(new CreatePlaceholdersResponseDto { Results = rows.ToList() });
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -511,9 +576,133 @@ public class Torr2JellyApiController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating movie placeholders");
-            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Failed to create the placeholders; see the Jellyfin log for details." });
+            _logger.LogError(ex, "Error creating placeholders");
+            return ApiError(StatusCodes.Status500InternalServerError, "placeholders_failed", "Failed to create the placeholders; see the Jellyfin log for details.");
         }
+    }
+
+    private static void FillPlaceholderRow(PlaceholderResultDto row, PlaceholderResult result)
+    {
+        row.Status = result.Status;
+        row.Folder = result.Folder;
+        row.Reason = result.Reason;
+    }
+
+    /// <summary>
+    /// Creates placeholders from free-text title lines ("Dune (2021)"): each line is looked up on TMDb and resolved
+    /// only when unambiguous (otherwise it is reported as "ambiguous" with up to three candidates).
+    /// </summary>
+    [HttpPost("Placeholders/FromTitles")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<FromTitlesResponseDto>> CreatePlaceholdersFromTitles(
+        [FromBody] FromTitlesRequestDto req,
+        CancellationToken cancellationToken)
+    {
+        var lines = (req?.Lines ?? new List<string>()).Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+        if (lines.Count == 0)
+        {
+            return ApiError(StatusCodes.Status400BadRequest, "lines_required", "Lines is required.");
+        }
+
+        if (lines.Count > PlaceholderTitleResolver.MaxLines)
+        {
+            return ApiError(StatusCodes.Status400BadRequest, "too_many_lines", $"At most {PlaceholderTitleResolver.MaxLines} lines per request.");
+        }
+
+        try
+        {
+            var response = await _titleResolver.ResolveAsync(lines, req?.Kind, req?.Category, cancellationToken);
+            return Ok(response);
+        }
+        catch (TmdbException ex)
+        {
+            return TmdbError(ex);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating placeholders from titles");
+            return ApiError(StatusCodes.Status500InternalServerError, "placeholders_failed", "Failed to create the placeholders; see the Jellyfin log for details.");
+        }
+    }
+
+    /// <summary>Looks a title up on TMDb (movies and series), marking what is already in the library.</summary>
+    [HttpGet("Tmdb/Search")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<List<TmdbResultDto>>> TmdbSearch(
+        [FromQuery] string? query = null,
+        [FromQuery] string? type = null,
+        [FromQuery] int? year = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return Ok(new List<TmdbResultDto>());
+        }
+
+        if (year is < 1870 or > 2200)
+        {
+            year = null;
+        }
+
+        try
+        {
+            var matches = await _tmdb.SearchAsync(query, (type ?? string.Empty).Trim().ToLowerInvariant(), year, null, cancellationToken);
+
+            // Copies: the matches are cached and shared between requests.
+            var results = matches.Select(m => m.Dto.Clone()).ToList();
+            if (results.Count > 0)
+            {
+                var snapshot = await Task.Run(() => _strmEngine.BuildLibraryIdSnapshot(), cancellationToken);
+                PlaceholderTitleResolver.ApplyLibraryState(results, snapshot);
+            }
+
+            return Ok(results);
+        }
+        catch (TmdbException ex)
+        {
+            return TmdbError(ex);
+        }
+    }
+
+    /// <summary>Checks a TMDb key or token (the one in the body, else the stored one) with a single search.</summary>
+    [HttpPost("Tmdb/Test")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<TmdbTestResultDto>> TmdbTest(
+        [FromBody] TmdbTestRequestDto? req,
+        CancellationToken cancellationToken)
+    {
+        var apiKey = req?.ApiKey;
+        if (apiKey != null && apiKey.Length > MaxTmdbKeyLength)
+        {
+            return Ok(new TmdbTestResultDto { Ok = false, Code = TmdbClient.CodeKeyInvalid });
+        }
+
+        var code = await _tmdb.TestAsync(apiKey, cancellationToken);
+        return Ok(new TmdbTestResultDto { Ok = code == null, Code = code });
+    }
+
+    private ObjectResult TmdbError(TmdbException ex)
+    {
+        return ex.Code switch
+        {
+            TmdbClient.CodeKeyMissing => ApiError(StatusCodes.Status503ServiceUnavailable, ex.Code, "No TMDb API key is configured."),
+            TmdbClient.CodeKeyInvalid => ApiError(StatusCodes.Status502BadGateway, ex.Code, "TMDb rejected the API key."),
+            _ => ApiError(StatusCodes.Status502BadGateway, TmdbClient.CodeFailed, "TMDb could not be reached.")
+        };
+    }
+
+    private ObjectResult ApiError(int status, string code, string message)
+    {
+        return StatusCode(status, new { error = message, code });
     }
 
     [HttpGet("Items/{itemId}/Alternatives")]
@@ -582,7 +771,7 @@ public class Torr2JellyApiController : ControllerBase
     [HttpGet("Items/{itemId}/Streams")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult<List<MovieStreamInfoDto>> GetItemStreams([FromRoute] Guid itemId)
+    public async Task<ActionResult<List<MovieStreamInfoDto>>> GetItemStreams([FromRoute] Guid itemId, CancellationToken cancellationToken)
     {
         var item = _libraryManager.GetItemById(itemId);
         if (item == null)
@@ -597,6 +786,27 @@ public class Torr2JellyApiController : ControllerBase
         }
 
         var streams = _strmEngine.GetStreamsForDirectory(targetDir, item.Path);
+
+        // One TorrServer list call for all versions. TorrServer being slow or down must never fail or delay the page:
+        // the rows then simply carry no size / seeders.
+        if (streams.Any(s => !string.IsNullOrEmpty(s.TorrentHash)))
+        {
+            try
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(StreamsTorrServerTimeout);
+                StreamInfoEnricher.Apply(streams, await _torrClient.ListTorrentsAsync(cts.Token));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not enrich the versions of item {ItemId} from TorrServer", itemId);
+            }
+        }
+
         return Ok(streams);
     }
 

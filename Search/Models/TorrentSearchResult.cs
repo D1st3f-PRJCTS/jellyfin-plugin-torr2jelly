@@ -22,7 +22,16 @@ public class TorrentSearchResult
 
     /// <summary>Lowercase hex info-hash, or empty when unknown.</summary>
     public string InfoHash { get; set; } = string.Empty;
+
+    /// <summary>
+    /// True only when the download does not count against the tracker's statistics: a download volume factor of
+    /// exactly 0, or an exact <c>freeleech</c> flag. Half / silver / bronze / freeleech25|50|75 are not freeleech.
+    /// </summary>
     public bool IsFreeleech { get; set; }
+
+    /// <summary>The indexer's download volume factor (0 = free, 1 = full), when it reported one.</summary>
+    public double? DownloadVolumeFactor { get; set; }
+
     public bool IsGold { get; set; }
     public List<string> Tags { get; set; } = new();
     public DateTime? PublishDate { get; set; }

@@ -40,6 +40,16 @@
     #torr2jellyPage .t2j-torrent-row .selectContainer { order: 3; flex: 1 1 100%; width: auto; margin: 0 .5em .5em; }
 }
 
+/* Placeholders tab */
+#torr2jellyPage .t2j-ph-list { margin-top: .5em; }
+#torr2jellyPage .t2j-ph-bulk { margin-top: 2em; }
+#torr2jellyPage .t2j-ph-poster { flex: none; width: 2.6em; height: 3.9em; margin: 0 0 0 .9em; background-size: cover; background-position: center; background-repeat: no-repeat; }
+#torr2jellyPage .t2j-ph-overview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; }
+#torr2jellyPage .t2j-ph-kind { display: inline-flex; align-items: center; gap: .25em; }
+#torr2jellyPage .t2j-ph-cands { display: flex; flex-wrap: wrap; gap: 0 .5em; margin-top: .3em; }
+#torr2jellyPage .t2j-act-done { color: var(--jf-palette-success-main, #66bb6a); }
+#torr2jellyPage .t2j-act-error { color: var(--jf-palette-error-main, #c62828); }
+
 /* Settings: categories */
 #torr2jellyPage .t2j-cat-fields { display: flex; align-items: flex-end; flex-wrap: wrap; gap: .5em 1em; }
 #torr2jellyPage .t2j-cat-fields > * { margin: 0; }
@@ -52,9 +62,7 @@
 /* Settings: trackers */
 #torr2jellyPage .t2j-tracker-head { display: flex; align-items: center; flex-wrap: wrap; gap: .4em 1em; }
 #torr2jellyPage .t2j-tracker-head .listItemBodyText { flex: 1 1 8em; }
-#torr2jellyPage .t2j-tracker-head .checkboxContainer,
-#torr2jellyPage .t2j-tracker-tags-wrap .checkboxContainer { margin: 0; }
-#torr2jellyPage .t2j-tracker-tags-wrap { display: flex; flex-wrap: wrap; gap: 0 1.5em; margin-top: .3em; }
+#torr2jellyPage .t2j-tracker-head .checkboxContainer { flex: none; width: auto; margin: 0; }
 
 /* Settings: presets, test rows, save */
 #torr2jellyPage .t2j-presets { display: flex; flex-wrap: wrap; gap: 0 .2em; margin-top: .3em; }
@@ -75,6 +83,7 @@
     <div class="emby-tabs-slider t2j-tabs" role="tablist">
         <button type="button" is="emby-button" class="emby-tab-button emby-tab-button-active t2j-nav-btn" data-tab="search" role="tab" aria-selected="true"><div class="emby-button-foreground"><span id="tabSearchText">Search</span></div></button>
         <button type="button" is="emby-button" class="emby-tab-button t2j-nav-btn" data-tab="magnet" role="tab" aria-selected="false"><div class="emby-button-foreground"><span id="tabMagnetText">Add magnet</span></div></button>
+        <button type="button" is="emby-button" class="emby-tab-button t2j-nav-btn" data-tab="placeholders" role="tab" aria-selected="false"><div class="emby-button-foreground"><span id="tabPlaceholdersText">Placeholders</span></div></button>
         <button type="button" is="emby-button" class="emby-tab-button t2j-nav-btn" data-tab="dashboard" role="tab" aria-selected="false"><div class="emby-button-foreground"><span id="tabTorrentsText">Torrents</span></div></button>
         <button type="button" is="emby-button" class="emby-tab-button t2j-nav-btn" data-tab="settings" role="tab" aria-selected="false"><div class="emby-button-foreground"><span id="tabSettingsText">Settings</span></div></button>
     </div>
@@ -92,7 +101,6 @@
                         <option value="">All Categories</option>
                     </select>
                 </div>
-                <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="t2jSearchGoldOnlyCheck"><span id="t2jSearchGoldOnlyLabel">With Tags</span></label>
             </div>
             <button type="submit" is="emby-button" class="raised button-submit" id="t2jSubmitSearchBtn"><span id="t2jSearchBtnText">Search</span></button>
         </form>
@@ -107,14 +115,8 @@
                         <select is="emby-select" id="t2jAddCategorySelect" label="Add to"></select>
                     </div>
                     <div class="selectContainer">
-                        <select is="emby-select" id="filterSelect" label="Filter">
-                            <option value="all" id="filterOptAll">All</option>
-                            <option value="gold" id="filterOptGold">With tags</option>
-                        </select>
-                    </div>
-                    <div class="selectContainer">
                         <select is="emby-select" id="sortSelect" label="Sort">
-                            <option value="priority" id="sortOptPriority">Priority (Tagged first)</option>
+                            <option value="priority" id="sortOptPriority">Freeleech first</option>
                             <option value="seeders" id="sortOptSeeders">Seeders</option>
                             <option value="size_desc" id="sortOptSizeDesc">Size (Large first)</option>
                             <option value="size_asc" id="sortOptSizeAsc">Size (Small first)</option>
@@ -146,6 +148,54 @@
             <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="directSyncCheck" checked><span id="lblDirectSync">Generate .strm immediately and notify Jellyfin</span></label>
             <button type="submit" is="emby-button" class="raised button-submit" id="directSubmitBtn"><span id="btnDirectSubmitText">Add to Library</span></button>
         </form>
+    </div>
+
+    <!-- ==================== TAB: PLACEHOLDERS ==================== -->
+    <div id="t2jTabPlaceholders" class="t2j-tab-content hidden" role="tabpanel">
+        <form id="t2jPhForm" autocomplete="off">
+            <div class="inputContainer">
+                <input is="emby-input" type="text" id="t2jPhQuery" label="Look up a title on TMDb" placeholder="Dune, The Last of Us..." required>
+                <div class="fieldDescription" id="t2jPhDesc">Adds a placeholder for a title that has no stream yet: its poster and details appear in the library right away, and a release can be added later.</div>
+            </div>
+            <div class="t2j-fieldRow">
+                <div class="selectContainer">
+                    <select is="emby-select" id="t2jPhKind" label="Type">
+                        <option value="all" id="t2jPhKindAll">Movies and series</option>
+                        <option value="movie" id="t2jPhKindMovie">Movies</option>
+                        <option value="tv" id="t2jPhKindSeries">Series</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" is="emby-button" class="raised button-submit" id="t2jPhSearchBtn"><span id="t2jPhSearchBtnText">Search</span></button>
+        </form>
+        <div id="t2jPhMsg" class="fieldDescription hidden" role="status"></div>
+        <div class="paperList t2j-ph-list" id="t2jPhResults"></div>
+
+        <div class="verticalSection t2j-ph-bulk">
+            <h2 class="sectionTitle" id="t2jPhBulkTitle">Add several titles</h2>
+            <form id="t2jPhBulkForm" autocomplete="off">
+                <div class="inputContainer">
+                    <label class="textareaLabel" for="t2jPhBulkText">Titles</label>
+                    <textarea class="emby-textarea" id="t2jPhBulkText" rows="8" placeholder="Dune (2021)&#10;The Last of Us" spellcheck="false"></textarea>
+                    <div class="fieldDescription" id="t2jPhBulkDesc">One title per line, for example Dune (2021). A year makes the match exact; titles with several matches are listed so you can pick one.</div>
+                </div>
+                <div class="t2j-fieldRow">
+                    <div class="selectContainer">
+                        <select is="emby-select" id="t2jPhBulkKind" label="Type">
+                            <option value="auto" id="t2jPhBulkKindAuto">Detect automatically</option>
+                            <option value="movie" id="t2jPhBulkKindMovie">Movies</option>
+                            <option value="series" id="t2jPhBulkKindSeries">Series</option>
+                        </select>
+                    </div>
+                    <div class="selectContainer">
+                        <select is="emby-select" id="t2jPhBulkCategory" label="Category"></select>
+                    </div>
+                </div>
+                <button type="submit" is="emby-button" class="raised button-submit" id="t2jPhBulkBtn"><span id="t2jPhBulkBtnText">Add all</span></button>
+            </form>
+            <div id="t2jPhBulkSummary" class="fieldDescription hidden" role="status"></div>
+            <div class="paperList t2j-ph-list" id="t2jPhBulkResults"></div>
+        </div>
     </div>
 
     <!-- ==================== TAB: TORRENTS ==================== -->
@@ -233,6 +283,9 @@
             <div class="verticalSection">
                 <h2 class="sectionTitle" id="cfgIndexersTitle">Indexers</h2>
 
+                <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="cfgFreeleechOnlyCheck" checked><span id="lblCfgFreeleechOnly">Show only freeleech torrents</span></label>
+                <div class="fieldDescription checkboxFieldDescription" id="lblCfgFreeleechOnlySub">Hides every torrent that counts against your download statistics on the tracker. Turn it off to see all releases; freeleech ones are marked.</div>
+
                 <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="cfgEnableProwlarrCheck"><span id="lblCfgEnableProwlarr">Use Prowlarr</span></label>
                 <div class="inputContainer">
                     <input is="emby-input" type="text" id="cfgProwlarrUrlInput" label="Prowlarr URL">
@@ -261,6 +314,23 @@
                 </div>
             </div>
 
+            <!-- TMDb -->
+            <div class="verticalSection">
+                <h2 class="sectionTitle" id="cfgTmdbTitle">TMDb</h2>
+
+                <div class="inputContainer">
+                    <input is="emby-input" type="password" id="cfgTmdbKeyInput" label="TMDb API key" autocomplete="off">
+                    <div class="fieldDescription" id="descTmdbKey">Needed to look titles up by name. Get a free key at themoviedb.org (Settings, API). Either the API key or the read access token works.</div>
+                </div>
+                <div class="t2j-testRow">
+                    <button type="button" is="emby-button" class="raised" id="testTmdbBtn"><span id="btnTestTmdbText">Test TMDb key</span></button>
+                    <div class="t2j-inline-status" id="t2jTmdbStatusBadge">
+                        <span class="t2j-dot"></span>
+                        <span class="fieldDescription" id="t2jTmdbStatusText" data-idle="1">Not checked</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Library & categories -->
             <div class="verticalSection">
                 <h2 class="sectionTitle" id="cfgCategoriesTitle">Library &amp; categories</h2>
@@ -282,14 +352,12 @@
 
             <!-- Trackers & tags -->
             <div class="verticalSection">
-                <h2 class="sectionTitle" id="cfgTrackersTitle">Trackers &amp; tags</h2>
-                <div class="fieldDescription" id="lblCfgTrackersDesc">Enable/disable individual trackers and select which release tags to include in search.</div>
-
-                <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="cfgSearchOnlyGoldByDefaultCheck"><span id="lblCfgSearchGoldDefault">Search only releases with tags by default</span></label>
-                <div class="fieldDescription checkboxFieldDescription" id="lblCfgSearchGoldDefaultSub">When enabled, search queries automatically filter for releases with tracker tags or bonuses.</div>
-
-                <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="cfgOnlyGoldCheck"><span id="lblCfgOnlyGoldNonAdmin">Only tagged releases for regular non-admin users</span></label>
-                <div class="fieldDescription checkboxFieldDescription" id="lblCfgOnlyGoldNonAdminSub">Restricts non-admin users from generating torrents without tags/bonuses.</div>
+                <h2 class="sectionTitle" id="cfgTrackersTitle">Trackers</h2>
+                <div class="fieldDescription" id="lblCfgTrackersDesc">Enable or disable individual trackers for search.</div>
+                <div class="t2j-cat-actions">
+                    <button type="button" is="emby-button" class="button-flat" id="t2jTrackersAllBtn"><span id="btnTrackersAllText">Enable all</span></button>
+                    <button type="button" is="emby-button" class="button-flat" id="t2jTrackersNoneBtn"><span id="btnTrackersNoneText">Disable all</span></button>
+                </div>
 
                 <div id="cfgTrackersList">
                     <div class="fieldDescription" id="lblLoadingTrackers">Loading trackers from Prowlarr...</div>
@@ -356,7 +424,6 @@
         currentTab: 'search',
         searchResults: [],
         filteredResults: [],
-        activeFilter: 'all',
         currentSort: 'priority',
         showAll: false,
         torrents: [],
@@ -383,16 +450,11 @@
             searchDesc: 'Searches your connected indexers (Prowlarr, Torznab).',
             searchPlaceholder: 'Enter movie or series title (e.g. Dune, House of the Dragon, Inception)...',
             allCategories: 'All Categories',
-            goldOnly: 'With Tags',
             btnSearch: 'Search',
             searchingIndexers: 'Searching indexers...',
             releasesFound: 'releases found',
-            goldFreeleech: 'Tagged',
-            filter: 'Filter:',
-            filterAll: 'All',
-            filterGold: 'With tags',
             sort: 'Sort:',
-            sortPriority: 'Priority (Tagged first)',
+            sortPriority: 'Freeleech first',
             sortSeeders: 'Seeders',
             sortSizeDesc: 'Size (Large first)',
             sortSizeAsc: 'Size (Small first)',
@@ -456,14 +518,9 @@
             lblCfgDisconnectTimeoutSub: 'How long TorrServer keeps seeding the torrent after streaming stops (86400s = 24 hours). Disk cache remains permanently.',
             btnRestartTorrServer: 'Test Connection / Sync Cache',
             restarting: 'Restarting...',
-            cfgProwlarrTitle: 'Prowlarr & Trackers Customization',
-            cfgProwlarrSub: 'Enable/disable individual trackers and tag filters',
-            lblCfgSearchGoldDefault: 'Search only releases with tags by default (Gold, Bronze, Author, etc.)',
-            lblCfgSearchGoldDefaultSub: 'When enabled, search queries automatically filter for releases with tracker tags or bonuses.',
-            lblCfgOnlyGoldNonAdmin: 'Only tagged releases for regular non-admin users',
-            lblCfgOnlyGoldNonAdminSub: 'Restricts non-admin users from generating torrents without tags/bonuses.',
-            lblCfgTrackersList: 'Individual Trackers / Indexers:',
-            lblCfgTrackersDesc: 'Enable/disable individual trackers and select which release tags to include in search.',
+            lblCfgFreeleechOnly: 'Show only freeleech torrents',
+            lblCfgFreeleechOnlySub: 'Hides every torrent that counts against your download statistics on the tracker. Turn it off to see all releases; freeleech ones are marked.',
+            lblCfgTrackersDesc: 'Enable or disable individual trackers for search.',
             btnTestTorrServer: 'Test TorrServer',
             btnTestProwlarr: 'Test Prowlarr',
             lblLoadingTrackers: 'Loading trackers from Prowlarr...',
@@ -509,7 +566,7 @@
             catDetected: 'Detected server paths:',
             catChipTitle: 'Click to apply this path',
             cfgIndexersTitle: 'Indexers',
-            cfgTrackersTitle: 'Trackers & tags',
+            cfgTrackersTitle: 'Trackers',
             cfgNamingTitle: 'Naming',
             cfgLanguageTitle: 'Language',
             lblCfgEnableProwlarr: 'Use Prowlarr',
@@ -529,21 +586,68 @@
             prowlarrOff: 'Prowlarr: off',
             trackerEnabled: 'Enabled',
             trackerDisabled: 'Disabled',
-            tagsAll: 'All',
-            tagsNone: 'None',
             tagFreeleech: 'Freeleech',
-            tagGold: 'Gold',
-            tagSilver: 'Silver',
-            tagSilverHalf: 'Silver (50%)',
-            tagBronze: 'Bronze',
-            tagAuthor: 'Author',
-            tagExclusive: 'Exclusive',
-            tagDouble: '2x Upload',
-            tagUntagged: 'Untagged',
+            trackersAll: 'Enable all',
+            trackersNone: 'Disable all',
             unitHour: 'h',
             unitDay: 'd',
             unitSec: 's',
-            presetRecommended: 'rec.'
+            presetRecommended: 'rec.',
+            // --- TMDb key, placeholders ---
+            cfgTmdbTitle: 'TMDb',
+            lblCfgTmdbKey: 'TMDb API key',
+            descTmdbKey: 'Needed to look titles up by name. Get a free key at themoviedb.org (Settings, API). Either the API key or the read access token works.',
+            btnTestTmdb: 'Test TMDb key',
+            tmdbOk: 'Key accepted',
+            tmdbKeyMissing: 'Add a TMDb API key in the Settings tab',
+            tmdbKeyInvalid: 'The TMDb API key was rejected',
+            tmdbFailed: 'TMDb is not reachable right now',
+            tabPlaceholders: 'Placeholders',
+            phQueryLabel: 'Look up a title on TMDb',
+            phQueryPlaceholder: 'Dune, The Last of Us...',
+            phDesc: 'Adds a placeholder for a title that has no stream yet: its poster and details appear in the library right away, and a release can be added later.',
+            phKindLabel: 'Type',
+            phKindAll: 'Movies and series',
+            phSearching: 'Searching TMDb...',
+            phNothing: 'Nothing found on TMDb',
+            phAddTitle: 'Add placeholder',
+            phAddedTitle: 'Placeholder added',
+            phAddedToast: 'Placeholder added: {title}',
+            phExistsToast: 'Already in the library',
+            phNoCategory: 'No matching category in the settings',
+            phInLibrary: 'In library',
+            phInLibraryPlaceholder: 'Placeholder',
+            phOneMovie: 'Movie',
+            phOneSeries: 'Series',
+            bulkTitle: 'Add several titles',
+            bulkLabel: 'Titles',
+            bulkPlaceholder: 'Dune (2021)\nThe Last of Us',
+            bulkDesc: 'One title per line, for example Dune (2021). A year makes the match exact; titles with several matches are listed so you can pick one.',
+            bulkKindAuto: 'Detect automatically',
+            bulkCategoryAuto: 'Automatic (default category of the type)',
+            bulkBtn: 'Add all',
+            bulkWorking: 'Working...',
+            bulkEmpty: 'Enter at least one title',
+            bulkTooMany: 'At most 200 titles at a time',
+            bulkSummary: '{created} added, {exists} already in the library, {ambiguous} to choose, {notFound} not found, {failed} failed',
+            stCreated: 'Added',
+            stExists: 'Already in the library',
+            stAmbiguous: 'Several matches, pick one:',
+            stNotFound: 'Not found on TMDb',
+            stError: 'Failed',
+            phReasons: {
+                no_id: 'No id to create it from',
+                invalid_imdb: 'Invalid IMDb id',
+                invalid_title: 'Invalid title',
+                invalid_year: 'Invalid year',
+                unknown_category: 'Unknown category',
+                not_a_movie_category: 'Not a movie category',
+                not_a_show_category: 'Not a series category',
+                category_unavailable: 'The category folder is not available',
+                folder_has_stream: 'The folder already has a stream',
+                placeholder_exists: 'A placeholder already exists',
+                write_failed: 'Could not write the files'
+            }
         },
         uk: {
             search: 'Пошук',
@@ -555,16 +659,11 @@
             searchDesc: 'Шукає через підключені індексатори (Prowlarr, Torznab).',
             searchPlaceholder: 'Введіть назву фільму або серіалу (наприклад: Dune, Дім Дракона, Початок)...',
             allCategories: 'Усі категорії',
-            goldOnly: 'Тільки з тегами',
             btnSearch: 'Знайти',
             searchingIndexers: 'Шукаємо на трекерах...',
             releasesFound: 'роздач знайдено',
-            goldFreeleech: 'З тегами',
-            filter: 'Фільтр:',
-            filterAll: 'Всі',
-            filterGold: 'З тегами',
             sort: 'Сортування:',
-            sortPriority: 'Пріоритет (З тегами перші)',
+            sortPriority: 'Спочатку freeleech',
             sortSeeders: 'За роздаючими',
             sortSizeDesc: 'Розмір (спадання)',
             sortSizeAsc: 'Розмір (зростання)',
@@ -628,14 +727,9 @@
             lblCfgDisconnectTimeoutSub: 'Скільки часу TorrServer залишається на роздачі після зупинки плеєра (86400 с = 24 години). Кеш на диску зберігається постійно.',
             btnRestartTorrServer: 'Перевірити зв\'язок / Синхронізувати кеш',
             restarting: 'Перезапуск...',
-            cfgProwlarrTitle: 'Prowlarr та кастомізація трекерів',
-            cfgProwlarrSub: 'Увімкнення/вимкнення трекерів та фільтри роздач із тегами',
-            lblCfgSearchGoldDefault: 'Шукати лише релізи з тегами за замовчуванням',
-            lblCfgSearchGoldDefaultSub: 'Якщо увімкнено, пошукові запити фільтрують релізи з бонусами та тегами (Золоті, Бронзові, Авторські тощо).',
-            lblCfgOnlyGoldNonAdmin: 'Лише роздачі з тегами для звичайних користувачів',
-            lblCfgOnlyGoldNonAdminSub: 'Обмежує користувачів без прав адміна від завантаження торентів без тегів або бонусів.',
-            lblCfgTrackersList: 'Окремі трекери / Індексатори:',
-            lblCfgTrackersDesc: 'Увімкнення/вимкнення окремих трекерів та вибір тегів для пошуку.',
+            lblCfgFreeleechOnly: 'Показувати лише freeleech-торенти',
+            lblCfgFreeleechOnlySub: 'Приховує всі торенти, що враховуються в статистиці завантажень на трекері. Вимкніть, щоб бачити всі роздачі; freeleech-роздачі буде позначено.',
+            lblCfgTrackersDesc: 'Увімкнення або вимкнення окремих трекерів для пошуку.',
             btnTestTorrServer: 'Перевірити зв\'язок з TorrServer',
             btnTestProwlarr: 'Перевірити зв\'язок з Prowlarr',
             lblLoadingTrackers: 'Завантаження списку трекерів з Prowlarr...',
@@ -681,7 +775,7 @@
             catDetected: 'Виявлені шляхи на сервері:',
             catChipTitle: 'Натисніть, щоб застосувати цей шлях',
             cfgIndexersTitle: 'Індексатори',
-            cfgTrackersTitle: 'Трекери та теги',
+            cfgTrackersTitle: 'Трекери',
             cfgNamingTitle: 'Іменування',
             cfgLanguageTitle: 'Мова',
             lblCfgEnableProwlarr: 'Використовувати Prowlarr',
@@ -701,21 +795,68 @@
             prowlarrOff: 'Prowlarr: вимкнено',
             trackerEnabled: 'Увімкнено',
             trackerDisabled: 'Вимкнено',
-            tagsAll: 'Всі',
-            tagsNone: 'Зняти',
             tagFreeleech: 'Freeleech',
-            tagGold: 'Золота',
-            tagSilver: 'Срібна',
-            tagSilverHalf: 'Срібна (50%)',
-            tagBronze: 'Бронзова',
-            tagAuthor: 'Авторський',
-            tagExclusive: 'Ексклюзив',
-            tagDouble: '2x Аплоад',
-            tagUntagged: 'Без тегів',
+            trackersAll: 'Увімкнути всі',
+            trackersNone: 'Вимкнути всі',
             unitHour: 'год',
             unitDay: 'дн',
             unitSec: 'с',
-            presetRecommended: 'рек.'
+            presetRecommended: 'рек.',
+            // --- TMDb key, placeholders ---
+            cfgTmdbTitle: 'TMDb',
+            lblCfgTmdbKey: 'API-ключ TMDb',
+            descTmdbKey: 'Потрібен, щоб шукати назви за іменем. Безкоштовний ключ можна отримати на themoviedb.org (Settings, API). Підійде і API-ключ, і токен доступу на читання.',
+            btnTestTmdb: 'Перевірити ключ TMDb',
+            tmdbOk: 'Ключ прийнято',
+            tmdbKeyMissing: 'Додайте ключ TMDb API на вкладці «Налаштування»',
+            tmdbKeyInvalid: 'Ключ TMDb API відхилено',
+            tmdbFailed: 'TMDb зараз недоступний',
+            tabPlaceholders: 'Заглушки',
+            phQueryLabel: 'Знайти назву в TMDb',
+            phQueryPlaceholder: 'Dune, The Last of Us...',
+            phDesc: 'Додає заглушку для назви, якої ще немає у стрімах: постер і опис з\'являються в медіатеці одразу, а торент можна додати пізніше.',
+            phKindLabel: 'Тип',
+            phKindAll: 'Фільми та серіали',
+            phSearching: 'Шукаємо в TMDb...',
+            phNothing: 'У TMDb нічого не знайдено',
+            phAddTitle: 'Додати заглушку',
+            phAddedTitle: 'Заглушку додано',
+            phAddedToast: 'Заглушку додано: {title}',
+            phExistsToast: 'Вже є в медіатеці',
+            phNoCategory: 'У налаштуваннях немає відповідної категорії',
+            phInLibrary: 'У медіатеці',
+            phInLibraryPlaceholder: 'Заглушка',
+            phOneMovie: 'Фільм',
+            phOneSeries: 'Серіал',
+            bulkTitle: 'Додати кілька назв',
+            bulkLabel: 'Назви',
+            bulkPlaceholder: 'Dune (2021)\nThe Last of Us',
+            bulkDesc: 'Одна назва в рядку, наприклад Dune (2021). Рік робить збіг точним; назви з кількома збігами буде показано, щоб ви обрали потрібну.',
+            bulkKindAuto: 'Визначити автоматично',
+            bulkCategoryAuto: 'Автоматично (категорія за замовчуванням для типу)',
+            bulkBtn: 'Додати всі',
+            bulkWorking: 'Опрацьовуємо...',
+            bulkEmpty: 'Введіть хоча б одну назву',
+            bulkTooMany: 'Не більше 200 назв за раз',
+            bulkSummary: 'Додано: {created}, вже в медіатеці: {exists}, обрати: {ambiguous}, не знайдено: {notFound}, помилок: {failed}',
+            stCreated: 'Додано',
+            stExists: 'Вже в медіатеці',
+            stAmbiguous: 'Кілька збігів, оберіть:',
+            stNotFound: 'У TMDb не знайдено',
+            stError: 'Не вдалося',
+            phReasons: {
+                no_id: 'Немає жодного ідентифікатора',
+                invalid_imdb: 'Некоректний IMDb id',
+                invalid_title: 'Некоректна назва',
+                invalid_year: 'Некоректний рік',
+                unknown_category: 'Невідома категорія',
+                not_a_movie_category: 'Категорія не для фільмів',
+                not_a_show_category: 'Категорія не для серіалів',
+                category_unavailable: 'Папка категорії недоступна',
+                folder_has_stream: 'У папці вже є стрім',
+                placeholder_exists: 'Заглушка вже існує',
+                write_failed: 'Не вдалося записати файли'
+            }
         }
     };
 
@@ -921,9 +1062,26 @@
             tabMagnetText: t.magnet,
             tabTorrentsText: t.streams,
             tabSettingsText: t.settings,
+            tabPlaceholdersText: t.tabPlaceholders,
             t2jSearchDesc: t.searchDesc,
-            t2jSearchGoldOnlyLabel: t.goldOnly,
             t2jSearchBtnText: t.btnSearch,
+            t2jPhDesc: t.phDesc,
+            t2jPhKindAll: t.phKindAll,
+            t2jPhKindMovie: t.typeMovies,
+            t2jPhKindSeries: t.typeSeries,
+            t2jPhSearchBtnText: t.btnSearch,
+            t2jPhBulkTitle: t.bulkTitle,
+            t2jPhBulkDesc: t.bulkDesc,
+            t2jPhBulkKindAuto: t.bulkKindAuto,
+            t2jPhBulkKindMovie: t.typeMovies,
+            t2jPhBulkKindSeries: t.typeSeries,
+            cfgTmdbTitle: t.cfgTmdbTitle,
+            descTmdbKey: t.descTmdbKey,
+            btnTestTmdbText: t.btnTestTmdb,
+            lblCfgFreeleechOnly: t.lblCfgFreeleechOnly,
+            lblCfgFreeleechOnlySub: t.lblCfgFreeleechOnlySub,
+            btnTrackersAllText: t.trackersAll,
+            btnTrackersNoneText: t.trackersNone,
             t2jResultsLabel: t.resultsTitle,
             t2jMagnetDesc: t.magnetDesc,
             lblDirectSync: t.lblDirectSync,
@@ -962,10 +1120,6 @@
             lblLoadingTrackers: t.lblLoadingTrackers,
             cfgTrackersTitle: t.cfgTrackersTitle,
             lblCfgTrackersDesc: t.lblCfgTrackersDesc,
-            lblCfgSearchGoldDefault: t.lblCfgSearchGoldDefault,
-            lblCfgSearchGoldDefaultSub: t.lblCfgSearchGoldDefaultSub,
-            lblCfgOnlyGoldNonAdmin: t.lblCfgOnlyGoldNonAdmin,
-            lblCfgOnlyGoldNonAdminSub: t.lblCfgOnlyGoldNonAdminSub,
             cfgNamingTitle: t.cfgNamingTitle,
             cfgStrmStructureSub: t.cfgStrmStructureSub,
             lblTemplateTokensTitle: t.lblTemplateTokensTitle,
@@ -978,16 +1132,18 @@
             sortOptPriority: t.sortPriority,
             sortOptSeeders: t.sortSeeders,
             sortOptSizeDesc: t.sortSizeDesc,
-            sortOptSizeAsc: t.sortSizeAsc,
-            filterOptAll: t.filterAll
+            sortOptSizeAsc: t.sortSizeAsc
         };
         for (var id in texts) {
             var el = page.querySelector('#' + id);
             if (el) el.textContent = texts[id];
         }
+        // The bulk button shows "Working..." while a request runs.
+        var bulkBtnEl = page.querySelector('#t2jPhBulkBtn');
+        if (bulkBtnEl && !bulkBtnEl.disabled) setBtnText(bulkBtnEl, t.bulkBtn);
 
         // Test-connection badges keep their text once a test has run; only the idle one is translated.
-        ['t2jTorrServerStatusText', 't2jProwlarrStatusText'].forEach(function (sid) {
+        ['t2jTorrServerStatusText', 't2jProwlarrStatusText', 't2jTmdbStatusText'].forEach(function (sid) {
             var el = page.querySelector('#' + sid);
             if (el && el.getAttribute('data-idle') === '1') el.textContent = t.notChecked;
         });
@@ -996,8 +1152,13 @@
             t2jSearchInput: t.searchTitle,
             t2jSearchCategorySelect: t.categoryField,
             t2jAddCategorySelect: t.addTo,
-            filterSelect: t.filter,
             sortSelect: t.sort,
+            t2jPhQuery: t.phQueryLabel,
+            t2jPhKind: t.phKindLabel,
+            t2jPhBulkText: t.bulkLabel,
+            t2jPhBulkKind: t.phKindLabel,
+            t2jPhBulkCategory: t.categoryField,
+            cfgTmdbKeyInput: t.lblCfgTmdbKey,
             directLinkInput: t.lblDirectLink,
             directTitleInput: t.lblDirectTitle,
             directCategorySelect: t.lblDirectCat,
@@ -1026,8 +1187,11 @@
 
         var searchInput = page.querySelector('#t2jSearchInput');
         if (searchInput) searchInput.placeholder = t.searchPlaceholder;
+        var phQueryInput = page.querySelector('#t2jPhQuery');
+        if (phQueryInput) phQueryInput.placeholder = t.phQueryPlaceholder;
+        var phBulkText = page.querySelector('#t2jPhBulkText');
+        if (phBulkText) phBulkText.placeholder = t.bulkPlaceholder;
 
-        updateFilterOptionLabels();
         renderPresets();
         translateCategoryRows(t);
         updateCategorySelects();
@@ -1041,6 +1205,11 @@
             renderSearchResults();
         } else if (window.t2jState.currentTab === 'dashboard') {
             renderTorrentsList();
+        } else if (window.t2jState.currentTab === 'placeholders') {
+            if (window.t2jState.ph) {
+                renderPhResults();
+                renderPhBulk();
+            }
         }
     }
     window.t2jApplyTranslations = applyTranslations;
@@ -1192,6 +1361,17 @@
                 addHtml += optionHtml(c.Name, c.Name + ' (' + categoryTypeLabel(t, c.Type) + ')', c.Name === wantAdd);
             });
             addCategorySelect.innerHTML = addHtml;
+        }
+
+        var phBulkCategorySelect = page.querySelector('#t2jPhBulkCategory');
+        if (phBulkCategorySelect) {
+            var keptBulk = keep(phBulkCategorySelect, true);
+            var wantBulk = keptBulk !== null ? keptBulk : '';
+            var bulkHtml = optionHtml('', t.bulkCategoryAuto, wantBulk === '');
+            cats.forEach(function (c) {
+                bulkHtml += optionHtml(c.Name, c.Name + ' (' + categoryTypeLabel(t, c.Type) + ')', c.Name === wantBulk);
+            });
+            phBulkCategorySelect.innerHTML = bulkHtml;
         }
 
         if (directCategorySelect) {
@@ -1348,18 +1528,6 @@
     }
 
 
-    function trackerTagDefs(t) {
-        return [
-            { id: 'freeleech', label: t.tagGold },
-            { id: 'halfleech', label: t.tagSilver },
-            { id: 'bronze', label: t.tagBronze },
-            { id: 'internal', label: t.tagAuthor },
-            { id: 'exclusive', label: t.tagExclusive },
-            { id: 'doubleupload', label: t.tagDouble },
-            { id: 'regular', label: t.tagUntagged }
-        ];
-    }
-
     // What the tracker cards currently show: the rule per tracker plus the lists the save payload needs.
     function collectTrackerState() {
         var page = getPage();
@@ -1375,18 +1543,10 @@
             if (!enabled && tracker) {
                 state.disabled.push(tracker);
             }
-            var allowedTags = [];
-            card.querySelectorAll('.t2j-tracker-tag-check').forEach(function (tb) {
-                if (tb.checked) {
-                    var tag = tb.getAttribute('data-tag');
-                    if (tag) allowedTags.push(tag);
-                }
-            });
             if (tracker) {
                 state.rules.push({
                     Tracker: tracker,
-                    Enabled: enabled,
-                    AllowedTags: allowedTags
+                    Enabled: enabled
                 });
             }
         });
@@ -1409,20 +1569,10 @@
             return;
         }
 
-        var tagsList = trackerTagDefs(t);
-
         var html = '<div class="paperList">';
         indexers.forEach(function (idx) {
             var rule = rules.find(function (r) { return r.Tracker && r.Tracker.toLowerCase() === idx.Name.toLowerCase(); });
             var isEnabled = rule ? (rule.Enabled !== false) : !idx.DisabledInPlugin;
-            var allowedTags = (rule && Array.isArray(rule.AllowedTags) && rule.AllowedTags.length > 0)
-                ? rule.AllowedTags
-                : ['freeleech', 'halfleech', 'bronze', 'internal', 'exclusive', 'doubleupload', 'regular'];
-
-            var isTagChecked = function (tag) {
-                return allowedTags.some(function (a) { return a.toLowerCase() === tag.toLowerCase(); });
-            };
-            var dis = isEnabled ? '' : ' disabled';
 
             html += '<div class="listItem listItem-border t2j-tracker-card" data-tracker="' + escapeHtml(idx.Name) + '">';
             html += '<div class="listItemBody">';
@@ -1432,17 +1582,8 @@
             if (!idx.EnabledInProwlarr) {
                 html += '<div class="mediaInfoItem mediaInfoText">' + escapeHtml(t.prowlarrOff) + '</div>';
             }
-            html += '<button type="button" is="emby-button" class="button-flat t2j-tags-all"' + dis + '>' + escapeHtml(t.tagsAll) + '</button>';
-            html += '<button type="button" is="emby-button" class="button-flat t2j-tags-none"' + dis + '>' + escapeHtml(t.tagsNone) + '</button>';
             html += '<label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" data-tracker="' + escapeHtml(idx.Name) + '" class="t2j-tracker-checkbox"' + (isEnabled ? ' checked' : '') + '>' +
                 '<span class="t2j-tracker-status-label">' + escapeHtml(isEnabled ? t.trackerEnabled : t.trackerDisabled) + '</span></label>';
-            html += '</div>';
-
-            html += '<div class="t2j-tracker-tags-wrap">';
-            tagsList.forEach(function (tag) {
-                html += '<label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" data-tracker="' + escapeHtml(idx.Name) + '" data-tag="' + tag.id + '" class="t2j-tracker-tag-check"' +
-                    (isTagChecked(tag.id) ? ' checked' : '') + dis + '><span>' + escapeHtml(tag.label) + '</span></label>';
-            });
             html += '</div>';
             html += '</div>';
             html += '</div>';
@@ -1453,11 +1594,14 @@
     }
     window.renderIndexersUI = renderIndexersUI;
 
-    window.t2jSelectAllTrackerTags = function (btn, selectAll) {
-        var card = btn.closest('.t2j-tracker-card');
-        if (!card) return;
-        var checks = card.querySelectorAll('.t2j-tracker-tag-check');
-        checks.forEach(function (chk) { chk.checked = selectAll; });
+    // Enable / disable every tracker card at once.
+    window.t2jSetAllTrackers = function (enabled) {
+        var page = getPage();
+        if (!page) return;
+        page.querySelectorAll('.t2j-tracker-checkbox').forEach(function (chk) {
+            chk.checked = enabled;
+            window.t2jToggleTrackerActive(chk);
+        });
     };
 
     window.t2jToggleTrackerActive = function (chk) {
@@ -1465,10 +1609,6 @@
         if (!card) return;
         var t = tr();
         var label = card.querySelector('.t2j-tracker-status-label');
-        // A disabled tracker keeps its tag choices (they are still saved) but they can not be edited.
-        card.querySelectorAll('.t2j-tracker-tag-check, .t2j-tags-all, .t2j-tags-none').forEach(function (el) {
-            el.disabled = !chk.checked;
-        });
         if (label) label.textContent = chk.checked ? t.trackerEnabled : t.trackerDisabled;
     };
 
@@ -1590,73 +1730,12 @@
     // in JS, so the Cyrillic alternatives stay unbounded.
         var showTitleRegex = /(?:\bS\d{1,2}(?:E\d+)?\b|\bseasons?\b(?![\s._-]+of\b)|сезон|\b\d{1,2}x\d{1,2}\b|серій|серії|серії|\bep\d{1,3}\b)/i;
 
-    function hasTags(r) {
-        var tg = r.Tags || r.tags || [];
-        return tg.length > 0 || r.IsGold || r.isGold || r.IsFreeleech || r.isFreeleech;
-    }
-
-    function parseQuality(title) {
-        var s = String(title || '');
-        if (/(?:\b2160p\b|\b4k\b|\buhd\b)/i.test(s)) return '4K';
-        if (/\b1080[pi]\b/i.test(s)) return '1080p';
-        if (/\b720p\b/i.test(s)) return '720p';
-        if (/\b(?:480p|576p)\b/i.test(s)) return 'SD';
-        return '';
+    function isFreeleech(r) {
+        return !!(r && (r.IsFreeleech || r.isFreeleech));
     }
 
     function chipHtml(text, gold) {
         return '<div class="mediaInfoItem mediaInfoText' + (gold ? ' t2j-chip-gold' : '') + '">' + escapeHtml(text) + '</div>';
-    }
-
-    // Tag chips of one release. Discount levels are mutually exclusive (gold beats silver beats bronze).
-    function buildTagChips(item, t) {
-        var isGold = item.IsGold || item.isGold;
-        var rawTags = (item.Tags || item.tags || []).slice();
-        var hasFreeleech = isGold || rawTags.some(function (tg) { return /freeleech|gold/i.test(tg); });
-        var hasHalfleech = !hasFreeleech && rawTags.some(function (tg) { return /halfleech|silver|50%/i.test(tg); });
-        var hasBronze = !hasFreeleech && !hasHalfleech && rawTags.some(function (tg) { return /bronze/i.test(tg); });
-
-        rawTags = rawTags.filter(function (tg) {
-            return !/^(freeleech|gold|halfleech|silver|bronze)$/i.test(tg.trim());
-        });
-
-        if (hasFreeleech) {
-            rawTags.unshift('freeleech');
-        } else if (hasHalfleech) {
-            rawTags.unshift('halfleech');
-        } else if (hasBronze) {
-            rawTags.unshift('bronze');
-        }
-
-        var html = '';
-        rawTags.forEach(function (tg) {
-            var ltg = tg.toLowerCase();
-            if (ltg === 'freeleech' || ltg === 'gold') {
-                html += chipHtml(t.tagFreeleech, true);
-            } else if (ltg === 'halfleech' || ltg === 'silver') {
-                html += chipHtml(t.tagSilverHalf, false);
-            } else if (ltg === 'bronze') {
-                html += chipHtml(t.tagBronze, false);
-            } else if (ltg === 'internal' || ltg === 'author' || ltg.indexOf('автор') !== -1) {
-                html += chipHtml(t.tagAuthor, false);
-            } else if (ltg === 'exclusive' || ltg.indexOf('ексклюзив') !== -1) {
-                html += chipHtml(t.tagExclusive, false);
-            } else if (ltg === 'doubleupload' || ltg === '2xupload') {
-                html += chipHtml(t.tagDouble, false);
-            } else {
-                html += chipHtml(tg, false);
-            }
-        });
-        return html;
-    }
-
-    function updateFilterOptionLabels() {
-        var page = getPage();
-        if (!page) return;
-        var t = tr();
-        var items = window.t2jState.searchResults || [];
-        var opt = page.querySelector('#filterOptGold');
-        if (opt) opt.textContent = t.filterGold + ' (' + items.filter(hasTags).length + ')';
     }
 
     // Which category an add button uses: the single "Add to" picker above the results; with "Auto" a series goes
@@ -1692,18 +1771,12 @@
         var resultsList = page.querySelector('#t2jResultsList');
         var resultsWrapper = page.querySelector('#t2jResultsWrapper');
         var showAllBtn = page.querySelector('#t2jShowAllBtn');
-        var filterSelect = page.querySelector('#filterSelect');
         var sortSelect = page.querySelector('#sortSelect');
         var st = window.t2jState;
 
+        // Freeleech-only is a server setting: the list shown is the list received.
         var items = (st.searchResults || []).slice();
-        updateFilterOptionLabels();
-        if (filterSelect && filterSelect.value !== st.activeFilter) filterSelect.value = st.activeFilter;
         if (sortSelect && sortSelect.value !== st.currentSort) sortSelect.value = st.currentSort;
-
-        if (st.activeFilter === 'gold') {
-            items = items.filter(hasTags);
-        }
 
         if (st.currentSort === 'seeders') {
             items.sort(function (a, b) { return (b.Seeders || b.seeders || 0) - (a.Seeders || a.seeders || 0); });
@@ -1712,10 +1785,10 @@
         } else if (st.currentSort === 'size_asc') {
             items.sort(function (a, b) { return (a.Size || a.size || 0) - (b.Size || b.size || 0); });
         } else {
-            // priority: items with tags first, then seeders
+            // priority: freeleech first, then seeders
             items.sort(function (a, b) {
-                var aHas = hasTags(a) ? 1 : 0;
-                var bHas = hasTags(b) ? 1 : 0;
+                var aHas = isFreeleech(a) ? 1 : 0;
+                var bHas = isFreeleech(b) ? 1 : 0;
                 if (aHas !== bHas) return bHas - aHas;
                 return (b.Seeders || b.seeders || 0) - (a.Seeders || a.seeders || 0);
             });
@@ -1729,8 +1802,7 @@
         if (items.length === 0) {
             if (resultsList) resultsList.innerHTML = '';
             showSearchMsg(t.emptySearchMsg, false);
-            // Nothing found at all: no list header. Filtered to nothing: keep the header so the filter can be changed.
-            if (resultsWrapper) resultsWrapper.classList.toggle('hidden', (st.searchResults || []).length === 0);
+            if (resultsWrapper) resultsWrapper.classList.add('hidden');
             return;
         }
         hideSearchMsg();
@@ -1746,9 +1818,6 @@
             var peers = parseInt(item.Peers || item.peers, 10) || 0;
             var indexer = item.Indexer || item.indexer || 'Tracker';
             var isShowRelease = showTitleRegex.test(title);
-            var quality = parseQuality(title);
-            var imdbId = item.ImdbId || item.imdbId;
-            var tmdbId = item.TmdbId || item.tmdbId;
 
             html += '<div class="listItem listItem-border t2j-result-row" data-index="' + i + '">';
             html += mi(isShowRelease ? 'tv' : 'movie', 'listItemIcon');
@@ -1760,10 +1829,7 @@
             html += '<span>' + escapeHtml(size) + '</span>';
             html += '<span>·</span>';
             html += '<span title="' + escapeHtml(seeders + ' ' + t.seeds + ' / ' + peers + ' ' + t.peers) + '">' + mi('arrow_upward', 't2j-ic') + seeders + '</span>';
-            if (quality) html += chipHtml(quality, false);
-            html += buildTagChips(item, t);
-            if (imdbId) html += chipHtml('IMDb ' + imdbId, false);
-            if (tmdbId) html += chipHtml('TMDb ' + tmdbId, false);
+            if (isFreeleech(item)) html += chipHtml(t.tagFreeleech, true);
             html += '</div>';
             html += '</div>';
             html += '<button type="button" is="paper-icon-button-light" class="paper-icon-button-light t2j-add-row-btn" data-index="' + i + '" title="' + escapeHtml(t.addToLibrary) + '">' + mi('add') + '</button>';
@@ -1789,7 +1855,6 @@
 
         var searchInput = page.querySelector('#t2jSearchInput');
         var searchCategorySelect = page.querySelector('#t2jSearchCategorySelect');
-        var searchGoldOnlyCheck = page.querySelector('#t2jSearchGoldOnlyCheck');
         var resultsWrapper = page.querySelector('#t2jResultsWrapper');
         var resultsList = page.querySelector('#t2jResultsList');
         var searchBtn = page.querySelector('#t2jSubmitSearchBtn');
@@ -1807,11 +1872,9 @@
 
         try {
             var cat = searchCategorySelect ? searchCategorySelect.value : '';
-            var isGoldOnly = searchGoldOnlyCheck ? searchGoldOnlyCheck.checked : false;
 
             var url = getApiUrl('Plugins/Torr2Jelly/Search?query=' + encodeURIComponent(query));
             if (cat) url += '&category=' + encodeURIComponent(cat);
-            if (isGoldOnly) url += '&onlyGold=true&onlyTags=true';
 
             var res = await fetch(url, { headers: getAuthHeaders() });
             if (!res.ok) {
@@ -2286,16 +2349,14 @@
             renderIndexersUI(cfg.TrackerRules);
             updateCategorySelects();
 
-            var cfgSearchOnlyGoldByDefaultCheck = page.querySelector('#cfgSearchOnlyGoldByDefaultCheck');
-            var cfgOnlyGoldCheck = page.querySelector('#cfgOnlyGoldCheck');
-            if (cfgSearchOnlyGoldByDefaultCheck) cfgSearchOnlyGoldByDefaultCheck.checked = !!cfg.SearchOnlyGoldByDefault;
-            if (cfgOnlyGoldCheck) cfgOnlyGoldCheck.checked = !!cfg.OnlyGoldTorrentsForNonAdmins;
+            // On unless the stored configuration explicitly turned it off (a missing value means the default, on).
+            var cfgFreeleechOnlyCheck = page.querySelector('#cfgFreeleechOnlyCheck');
+            if (cfgFreeleechOnlyCheck) cfgFreeleechOnlyCheck.checked = cfg.FreeleechOnly !== false;
 
-            var searchGoldOnlyCheck = page.querySelector('#t2jSearchGoldOnlyCheck');
-            if (searchGoldOnlyCheck && searchGoldOnlyCheck._init !== true) {
-                searchGoldOnlyCheck._init = true;
-                searchGoldOnlyCheck.checked = !!cfg.SearchOnlyGoldByDefault;
-            }
+            // The TMDb key is only sent on save when the user changed it.
+            var cfgTmdbKeyInput = page.querySelector('#cfgTmdbKeyInput');
+            window.t2jState.tmdbKeyLoaded = String(cfg.TmdbApiKey || '');
+            if (cfgTmdbKeyInput) cfgTmdbKeyInput.value = window.t2jState.tmdbKeyLoaded;
 
             // Everything was read and applied: only now may the user save.
             window.t2jState.settingsLoaded = true;
@@ -2386,9 +2447,6 @@
             });
         }
 
-        var cfgSearchOnlyGoldByDefaultCheck = page.querySelector('#cfgSearchOnlyGoldByDefaultCheck');
-        var cfgOnlyGoldCheck = page.querySelector('#cfgOnlyGoldCheck');
-
         // Collect user-edited categories from UI
         var categories = collectCategoriesFromUI();
         if (categories.length === 0) {
@@ -2430,8 +2488,13 @@
         putStr('TorznabUrl', cfgTorznabUrlInput);
         putStr('TorznabApiKey', cfgTorznabKeyInput);
         putStr('MediaRootPath', cfgMediaDirInput);
-        putBool('SearchOnlyGoldByDefault', cfgSearchOnlyGoldByDefaultCheck);
-        putBool('OnlyGoldTorrentsForNonAdmins', cfgOnlyGoldCheck);
+        putBool('FreeleechOnly', page.querySelector('#cfgFreeleechOnlyCheck'));
+        // The TMDb key is a secret that the server returns on load; it is only sent when the user changed it.
+        var cfgTmdbKeyInput = page.querySelector('#cfgTmdbKeyInput');
+        var tmdbKeyNow = cfgTmdbKeyInput ? String(cfgTmdbKeyInput.value || '').trim() : null;
+        if (tmdbKeyNow !== null && tmdbKeyNow !== String(window.t2jState.tmdbKeyLoaded || '')) {
+            payload.TmdbApiKey = tmdbKeyNow;
+        }
         if (trackerCardCount > 0) {
             payload.DisabledTrackers = disabledTrackers;
             payload.TrackerRules = trackerRules;
@@ -2456,6 +2519,7 @@
                 // Keep the cached copy of the stored configuration in sync with what was just saved.
                 var cachedCfg = window.t2jState.config || (window.t2jState.config = {});
                 Object.keys(payload).forEach(function (k) { cachedCfg[k] = payload[k]; });
+                if (payload.TmdbApiKey !== undefined) window.t2jState.tmdbKeyLoaded = payload.TmdbApiKey;
                 setLang(selectedLang);
                 updateCategorySelects();
 
@@ -2659,13 +2723,487 @@
     }
     window.t2jTestProwlarr = testProwlarr;
 
-    // Filter & Sort handlers
-    window.t2jFilter = function (filterType) {
-        window.t2jState.activeFilter = filterType;
-        window.t2jState.showAll = false;
-        renderSearchResults();
+    // ---- TMDb key test -------------------------------------------------------------------------------------
+
+    function tmdbCodeText(code, t) {
+        if (code === 'tmdb_key_missing') return t.tmdbKeyMissing;
+        if (code === 'tmdb_key_invalid') return t.tmdbKeyInvalid;
+        return t.tmdbFailed;
+    }
+
+    // Tests the key typed in the field (or the stored one when the field is empty); the key itself is never echoed.
+    async function testTmdb() {
+        var page = getPage();
+        if (!page) return;
+        var btn = page.querySelector('#testTmdbBtn');
+        var input = page.querySelector('#cfgTmdbKeyInput');
+        var t = tr();
+        if (btn) {
+            btn.disabled = true;
+            setBtnText(btn, t.testing);
+        }
+        var typed = input ? String(input.value || '').trim() : '';
+        var ok = false;
+        var text = t.tmdbFailed;
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Tmdb/Test'), {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(typed ? { ApiKey: typed } : {})
+            });
+            if (res.ok) {
+                var data = await res.json().catch(function () { return {}; });
+                if (data.Ok === true || data.ok === true) {
+                    ok = true;
+                    text = t.tmdbOk;
+                } else {
+                    text = tmdbCodeText(data.Code || data.code, t);
+                }
+            } else if (res.status === 401 || res.status === 403) {
+                text = await readHttpError(res);
+            }
+        } catch (e) {
+            text = t.tmdbFailed;
+        }
+        if (btn) {
+            btn.disabled = false;
+            setBtnText(btn, tr().btnTestTmdb);
+        }
+        renderInlineStatus('t2jTmdbStatusBadge', 't2jTmdbStatusText', ok, text);
+    }
+    window.t2jTestTmdb = testTmdb;
+
+    // ---- placeholders tab ----------------------------------------------------------------------------------
+
+    function phState() {
+        if (!window.t2jState.ph) {
+            window.t2jState.ph = { seq: 0, results: null, states: {}, bulkSeq: 0, bulkRows: null, bulkBusy: false };
+        }
+        return window.t2jState.ph;
+    }
+
+    function pick(obj, name) {
+        if (!obj) return undefined;
+        if (obj[name] !== undefined) return obj[name];
+        return obj[name.charAt(0).toLowerCase() + name.slice(1)];
+    }
+
+    // True when the text has only Latin-script letters (digits, punctuation and spaces do not count).
+    function isLatinTitle(text) {
+        var s = String(text || '');
+        if (!s) return false;
+        return s.replace(/[\u0000-ɏḀ-ỿ -⁯℀-⅏]/g, '') === '';
+    }
+
+    // The title a placeholder folder is named after: the original title when it is Latin-script, else the TMDb title.
+    function placeholderTitle(item) {
+        var original = String(pick(item, 'OriginalTitle') || '').trim();
+        if (original && isLatinTitle(original)) return original;
+        return String(pick(item, 'Title') || original || '').trim();
+    }
+
+    // Posters come from TMDb's image host only; anything else is dropped.
+    function safePosterUrl(url) {
+        var u = String(url || '');
+        return /^https:\/\/image\.tmdb\.org\/t\/p\/[A-Za-z0-9_\/.\-]+$/.test(u) ? u : '';
+    }
+
+    // The category a placeholder of this kind goes to: the preferred one when its type fits, else the first default
+    // category of the type, else the first one of the type.
+    function phCategoryFor(kind, preferred) {
+        var wantShow = (kind === 'series');
+        var cats = getCategoriesList();
+        function fits(c) { return (c.Type === 'show') === wantShow; }
+        if (preferred) {
+            var chosen = cats.find(function (c) { return c.Name === preferred; });
+            if (chosen && fits(chosen)) return chosen.Name;
+        }
+        var typed = cats.filter(fits);
+        var def = typed.find(function (c) { return c.IsDefault; });
+        return def ? def.Name : (typed.length > 0 ? typed[0].Name : '');
+    }
+
+    function phKey(item) {
+        return (pick(item, 'Kind') === 'series' ? 'tv' : 'movie') + ':' + pick(item, 'TmdbId');
+    }
+
+    // Text for a failed TMDb call: fixed text for the known codes, else the server's generic error.
+    async function tmdbFailureText(res) {
+        var t = tr();
+        var body = await res.json().catch(function () { return {}; });
+        var code = body && body.code ? String(body.code) : '';
+        if (code === 'tmdb_key_missing' || (res.status === 503 && !code)) return t.tmdbKeyMissing;
+        if (code === 'tmdb_key_invalid') return t.tmdbKeyInvalid;
+        if (code === 'tmdb_failed') return t.tmdbFailed;
+        return (body && body.error) ? String(body.error) : ('HTTP ' + res.status);
+    }
+
+    function showPhMsg(text, isError) {
+        var page = getPage();
+        var box = page ? page.querySelector('#t2jPhMsg') : null;
+        if (!box) return;
+        box.textContent = text;
+        box.classList.toggle('t2j-error', !!isError);
+        box.classList.remove('hidden');
+    }
+
+    function hidePhMsg() {
+        var page = getPage();
+        var box = page ? page.querySelector('#t2jPhMsg') : null;
+        if (!box) return;
+        box.textContent = '';
+        box.classList.remove('t2j-error');
+        box.classList.add('hidden');
+    }
+
+    // Creates one placeholder through POST Placeholders. Resolves { state: 'created' | 'exists' | 'error', text }.
+    async function postPlaceholder(item, preferredCategory) {
+        var t = tr();
+        var kind = pick(item, 'Kind') === 'series' ? 'series' : 'movie';
+        var tmdbId = parseInt(pick(item, 'TmdbId'), 10) || 0;
+        if (tmdbId <= 0) return { state: 'error', text: t.stError };
+        var category = phCategoryFor(kind, preferredCategory);
+        if (!category) return { state: 'error', text: t.phNoCategory };
+        var year = parseInt(pick(item, 'Year'), 10);
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Placeholders'), {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    Items: [{
+                        Kind: kind,
+                        TmdbId: tmdbId,
+                        Title: placeholderTitle(item),
+                        Year: year > 0 ? year : null,
+                        Category: category
+                    }]
+                })
+            });
+            if (!res.ok) return { state: 'error', text: await readHttpError(res) };
+            var data = await res.json().catch(function () { return null; });
+            var rows = (data && (data.Results || data.results)) || [];
+            var row = rows[0] || {};
+            var status = String(pick(row, 'Status') || '').toLowerCase();
+            if (status === 'created') return { state: 'created', text: '' };
+            if (status === 'exists') return { state: 'exists', text: '' };
+            var reason = String(pick(row, 'Reason') || '');
+            return { state: 'error', text: t.phReasons[reason] || reason || t.stError };
+        } catch (e) {
+            return { state: 'error', text: e && e.message ? e.message : t.stError };
+        }
+    }
+
+    // One TMDb match as a native list row: poster (or kind icon), "Title (year)", kind / original title / library chips.
+    function phResultRowHtml(item, idx, t) {
+        var ph = phState();
+        var isSeries = pick(item, 'Kind') === 'series';
+        var title = pick(item, 'Title') || pick(item, 'OriginalTitle') || '';
+        var original = pick(item, 'OriginalTitle') || '';
+        var year = pick(item, 'Year');
+        var heading = title + (year ? ' (' + year + ')' : '');
+        var poster = safePosterUrl(pick(item, 'PosterUrl'));
+        var lead = poster
+            ? '<div class="listItemImage t2j-ph-poster" style="background-image:url(\'' + escapeHtml(poster) + '\')" aria-hidden="true"></div>'
+            : mi(isSeries ? 'tv' : 'movie', 'listItemIcon listItemIcon-transparent');
+
+        var meta = '<span class="t2j-ph-kind">' + mi(isSeries ? 'tv' : 'movie', 't2j-ic') + escapeHtml(isSeries ? t.phOneSeries : t.phOneMovie) + '</span>';
+        if (original && original !== title) meta += '<span>·</span><span>' + escapeHtml(original) + '</span>';
+        var inLibrary = !!pick(item, 'InLibrary');
+        if (inLibrary) meta += chipHtml(pick(item, 'InLibraryAs') === 'placeholder' ? t.phInLibraryPlaceholder : t.phInLibrary, false);
+
+        var state = ph.states[phKey(item)] || (inLibrary ? 'libdone' : 'idle');
+        var icon = 'bookmark_add';
+        var cls = '';
+        var label = t.phAddTitle;
+        var disabled = '';
+        if (state === 'busy') { icon = 'hourglass_empty'; disabled = ' disabled'; label = t.adding; }
+        else if (state === 'done') { icon = 'check'; cls = ' t2j-act-done'; label = t.phAddedTitle; }
+        else if (state === 'libdone') { icon = 'check'; cls = ' t2j-act-done'; label = t.phInLibrary; }
+        else if (state === 'error') { icon = 'error_outline'; cls = ' t2j-act-error'; }
+
+        var overview = pick(item, 'Overview');
+        return '<div class="listItem listItem-border t2j-ph-row">'
+            + lead
+            + '<div class="listItemBody">'
+            + '<div class="listItemBodyText" title="' + escapeHtml(heading) + '">' + escapeHtml(heading) + '</div>'
+            + '<div class="listItemBodyText secondary t2j-meta">' + meta + '</div>'
+            + (overview ? '<div class="listItemBodyText secondary t2j-ph-overview">' + escapeHtml(overview) + '</div>' : '')
+            + '</div>'
+            + '<button type="button" is="paper-icon-button-light" class="paper-icon-button-light t2j-ph-add-btn' + cls + '" data-index="' + idx + '" data-state="' + state + '" title="' + escapeHtml(label) + '" aria-label="' + escapeHtml(label) + '"' + disabled + '>' + mi(icon) + '</button>'
+            + '</div>';
+    }
+
+    function renderPhResults() {
+        var page = getPage();
+        var list = page ? page.querySelector('#t2jPhResults') : null;
+        if (!list) return;
+        var t = tr();
+        var results = phState().results;
+        if (!results) {
+            list.innerHTML = '';
+            return;
+        }
+        if (results.length === 0) {
+            list.innerHTML = '';
+            showPhMsg(t.phNothing, false);
+            return;
+        }
+        hidePhMsg();
+        var html = '';
+        results.forEach(function (item, idx) { html += phResultRowHtml(item, idx, t); });
+        list.innerHTML = html;
+    }
+
+    window.t2jPhSearch = async function () {
+        var page = getPage();
+        if (!page) return;
+        var input = page.querySelector('#t2jPhQuery');
+        var kindSel = page.querySelector('#t2jPhKind');
+        var btn = page.querySelector('#t2jPhSearchBtn');
+        var query = (input ? input.value : '').trim();
+        if (!query) return;
+
+        var t = tr();
+        var ph = phState();
+        var mySeq = ++ph.seq;
+        ph.results = null;
+        ph.states = {};
+        renderPhResults();
+        showPhMsg(t.phSearching, false);
+        if (btn) btn.disabled = true;
+
+        try {
+            var type = kindSel && kindSel.value ? kindSel.value : 'all';
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Tmdb/Search?query=' + encodeURIComponent(query) + '&type=' + encodeURIComponent(type)), { headers: getAuthHeaders() });
+            if (mySeq !== ph.seq) return;
+            if (res.ok) {
+                var list = await res.json();
+                if (mySeq !== ph.seq) return;
+                ph.results = Array.isArray(list) ? list : [];
+                renderPhResults();
+            } else {
+                var failure = await tmdbFailureText(res);
+                if (mySeq !== ph.seq) return;
+                showPhMsg(failure, res.status !== 503);
+            }
+        } catch (err) {
+            if (mySeq === ph.seq) showPhMsg(err && err.message ? err.message : String(err), true);
+        } finally {
+            if (btn && mySeq === ph.seq) btn.disabled = false;
+        }
     };
 
+    window.t2jPhAdd = async function (btn) {
+        if (!btn) return;
+        var ph = phState();
+        var results = ph.results;
+        var item = results ? results[parseInt(btn.getAttribute('data-index') || '-1', 10)] : null;
+        if (!item) return;
+        var key = phKey(item);
+        var current = ph.states[key] || (pick(item, 'InLibrary') ? 'libdone' : 'idle');
+        if (current === 'busy' || current === 'done' || current === 'libdone') return;
+
+        var t = tr();
+        ph.states[key] = 'busy';
+        renderPhResults();
+        var result = await postPlaceholder(item, '');
+        if (result.state === 'created' || result.state === 'exists') {
+            ph.states[key] = 'done';
+            showToast(result.state === 'created' ? fmt(t.phAddedToast, { title: placeholderTitle(item) }) : t.phExistsToast);
+            checkStatus();
+        } else {
+            ph.states[key] = 'error';
+            showToast(t.stError + ': ' + result.text);
+        }
+        if (ph.results === results) renderPhResults();
+    };
+
+    // ---- bulk: one title per line ----
+
+    var PH_BULK_MAX = 200;
+
+    function phStatusIcon(status) {
+        if (status === 'created') return mi('check_circle', 'listItemIcon listItemIcon-transparent t2j-act-done');
+        if (status === 'exists') return mi('library_add_check', 'listItemIcon listItemIcon-transparent');
+        if (status === 'ambiguous') return mi('help_outline', 'listItemIcon listItemIcon-transparent');
+        if (status === 'not_found') return mi('search_off', 'listItemIcon listItemIcon-transparent');
+        return mi('error_outline', 'listItemIcon listItemIcon-transparent t2j-act-error');
+    }
+
+    function renderPhBulk() {
+        var page = getPage();
+        if (!page) return;
+        var list = page.querySelector('#t2jPhBulkResults');
+        var summary = page.querySelector('#t2jPhBulkSummary');
+        if (!list || !summary) return;
+        var t = tr();
+        var rows = phState().bulkRows;
+        if (!rows) {
+            list.innerHTML = '';
+            summary.classList.add('hidden');
+            return;
+        }
+
+        var counts = { created: 0, exists: 0, ambiguous: 0, not_found: 0, error: 0 };
+        var html = '';
+        rows.forEach(function (row, ri) {
+            var status = String(pick(row, 'Status') || 'error').toLowerCase();
+            if (counts[status] === undefined) status = 'error';
+            counts[status]++;
+
+            var title = pick(row, 'Title') || '';
+            var year = pick(row, 'Year');
+            var found = title ? title + (year ? ' (' + year + ')' : '') : '';
+            var statusText = status === 'created' ? t.stCreated
+                : (status === 'exists' ? t.stExists
+                : (status === 'ambiguous' ? t.stAmbiguous
+                : (status === 'not_found' ? t.stNotFound : t.stError)));
+            var secondary = statusText;
+            if (found && (status === 'created' || status === 'exists')) secondary += ' · ' + found;
+            var reason = String(pick(row, 'Reason') || '');
+            if (status === 'error' && reason) secondary += ' · ' + (t.phReasons[reason] || reason);
+
+            var cands = '';
+            if (status === 'ambiguous') {
+                var candidates = (pick(row, 'Candidates') || []).slice(0, 3);
+                candidates.forEach(function (cand, ci) {
+                    var cTitle = pick(cand, 'Title') || pick(cand, 'OriginalTitle') || '';
+                    var cYear = pick(cand, 'Year');
+                    var isSeries = pick(cand, 'Kind') === 'series';
+                    var busy = !!(row._busy && row._busy[ci]);
+                    cands += '<button type="button" is="emby-button" class="button-flat t2j-ph-cand-btn" data-row="' + ri + '" data-cand="' + ci + '"' + (busy ? ' disabled' : '') + '>'
+                        + mi(busy ? 'hourglass_empty' : (isSeries ? 'tv' : 'movie'), 't2j-btn-icon')
+                        + '<span>' + escapeHtml(cTitle + (cYear ? ' (' + cYear + ')' : '') + ' · ' + (isSeries ? t.phOneSeries : t.phOneMovie)) + '</span></button>';
+                });
+            }
+
+            html += '<div class="listItem listItem-border">'
+                + phStatusIcon(status)
+                + '<div class="listItemBody">'
+                + '<div class="listItemBodyText" title="' + escapeHtml(pick(row, 'Line') || '') + '">' + escapeHtml(pick(row, 'Line') || '') + '</div>'
+                + '<div class="listItemBodyText secondary">' + escapeHtml(secondary) + '</div>'
+                + (cands ? '<div class="t2j-ph-cands">' + cands + '</div>' : '')
+                + '</div>'
+                + '</div>';
+        });
+        list.innerHTML = html;
+        summary.textContent = fmt(t.bulkSummary, {
+            created: counts.created, exists: counts.exists, ambiguous: counts.ambiguous,
+            notFound: counts.not_found, failed: counts.error
+        });
+        summary.classList.remove('hidden');
+    }
+
+    window.t2jPhBulk = async function () {
+        var page = getPage();
+        if (!page) return;
+        var ph = phState();
+        if (ph.bulkBusy) return;
+        var textarea = page.querySelector('#t2jPhBulkText');
+        var kindSel = page.querySelector('#t2jPhBulkKind');
+        var catSel = page.querySelector('#t2jPhBulkCategory');
+        var btn = page.querySelector('#t2jPhBulkBtn');
+        var summary = page.querySelector('#t2jPhBulkSummary');
+        var t = tr();
+
+        var lines = String(textarea ? textarea.value : '').split(/\r?\n/).map(function (l) { return l.trim(); }).filter(function (l) { return l; });
+        if (lines.length === 0) {
+            showToast(t.bulkEmpty);
+            return;
+        }
+        if (lines.length > PH_BULK_MAX) {
+            showToast(t.bulkTooMany);
+            return;
+        }
+
+        var mySeq = ++ph.bulkSeq;
+        ph.bulkBusy = true;
+        ph.bulkRows = null;
+        renderPhBulk();
+        if (btn) {
+            btn.disabled = true;
+            setBtnText(btn, t.bulkWorking);
+        }
+        if (summary) {
+            summary.textContent = t.bulkWorking;
+            summary.classList.remove('t2j-error');
+            summary.classList.remove('hidden');
+        }
+
+        var body = { Lines: lines, Kind: kindSel && kindSel.value ? kindSel.value : 'auto' };
+        if (catSel && catSel.value) body.Category = catSel.value;
+
+        try {
+            var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Placeholders/FromTitles'), {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(body)
+            });
+            if (mySeq !== ph.bulkSeq) return;
+            if (res.ok) {
+                var data = await res.json();
+                if (mySeq !== ph.bulkSeq) return;
+                ph.bulkRows = (data && (data.Results || data.results)) || [];
+                renderPhBulk();
+                checkStatus();
+            } else {
+                var failure = await tmdbFailureText(res);
+                if (mySeq !== ph.bulkSeq) return;
+                if (summary) {
+                    summary.textContent = failure;
+                    summary.classList.toggle('t2j-error', res.status !== 503);
+                }
+            }
+        } catch (err) {
+            if (mySeq === ph.bulkSeq && summary) {
+                summary.textContent = err && err.message ? err.message : String(err);
+                summary.classList.add('t2j-error');
+            }
+        } finally {
+            if (mySeq === ph.bulkSeq) {
+                ph.bulkBusy = false;
+                if (btn) {
+                    btn.disabled = false;
+                    setBtnText(btn, tr().bulkBtn);
+                }
+            }
+        }
+    };
+
+    // An ambiguous line: the picked candidate is created through POST Placeholders and replaces the line's outcome.
+    window.t2jPhPick = async function (btn) {
+        if (!btn) return;
+        var ph = phState();
+        var rows = ph.bulkRows;
+        var row = rows ? rows[parseInt(btn.getAttribute('data-row') || '-1', 10)] : null;
+        var ci = parseInt(btn.getAttribute('data-cand') || '-1', 10);
+        var cand = row ? (pick(row, 'Candidates') || [])[ci] : null;
+        if (!row || !cand) return;
+        if (row._busy && row._busy[ci]) return;
+
+        var t = tr();
+        var page = getPage();
+        var catSel = page ? page.querySelector('#t2jPhBulkCategory') : null;
+        row._busy = row._busy || {};
+        row._busy[ci] = true;
+        renderPhBulk();
+        var result = await postPlaceholder(cand, catSel ? catSel.value : '');
+        row._busy[ci] = false;
+        if (result.state === 'created' || result.state === 'exists') {
+            row.Status = result.state;
+            row.Title = pick(cand, 'Title') || pick(cand, 'OriginalTitle') || '';
+            row.Year = pick(cand, 'Year') || null;
+            row.Kind = pick(cand, 'Kind') || null;
+            row.Candidates = [];
+            showToast(result.state === 'created' ? fmt(t.phAddedToast, { title: placeholderTitle(cand) }) : t.phExistsToast);
+            checkStatus();
+        } else {
+            showToast(t.stError + ': ' + result.text);
+        }
+        if (ph.bulkRows === rows) renderPhBulk();
+    };
+
+    // Sort handler
     window.t2jSort = function (sortType) {
         window.t2jState.currentSort = sortType;
         window.t2jState.showAll = false;
@@ -2774,6 +3312,10 @@
             var m = page.querySelector('#t2jTabMagnet');
             if (m) m.classList.remove('hidden');
             stopPolling();
+        } else if (tab === 'placeholders') {
+            var p = page.querySelector('#t2jTabPlaceholders');
+            if (p) p.classList.remove('hidden');
+            stopPolling();
         } else if (tab === 'dashboard') {
             var d = page.querySelector('#t2jTabDashboard');
             if (d) d.classList.remove('hidden');
@@ -2797,10 +3339,21 @@
 
         on(q('#t2jSearchForm'), 'submit', function (e) { e.preventDefault(); window.t2jDoSearch(); });
         on(q('#directAddForm'), 'submit', function (e) { e.preventDefault(); window.t2jSubmitDirect(); });
+
+        // Placeholders
+        on(q('#t2jPhForm'), 'submit', function (e) { e.preventDefault(); window.t2jPhSearch(); });
+        on(q('#t2jPhBulkForm'), 'submit', function (e) { e.preventDefault(); window.t2jPhBulk(); });
+        on(q('#t2jPhResults'), 'click', function (e) {
+            var btn = e.target.closest ? e.target.closest('.t2j-ph-add-btn') : null;
+            if (btn && !btn.disabled) window.t2jPhAdd(btn);
+        });
+        on(q('#t2jPhBulkResults'), 'click', function (e) {
+            var btn = e.target.closest ? e.target.closest('.t2j-ph-cand-btn') : null;
+            if (btn && !btn.disabled) window.t2jPhPick(btn);
+        });
         on(q('#t2jSettingsForm'), 'submit', function (e) { e.preventDefault(); window.t2jSaveSettings(); });
 
         // Search results
-        on(q('#filterSelect'), 'change', function () { window.t2jFilter(this.value); });
         on(q('#sortSelect'), 'change', function () { window.t2jSort(this.value); });
         on(q('#t2jShowAllBtn'), 'click', function () {
             window.t2jState.showAll = true;
@@ -2811,7 +3364,7 @@
             if (btn && !btn.disabled) window.t2jAddResult(btn);
         });
         // A category the user picked is remembered across redraws of the pickers.
-        ['#t2jSearchCategorySelect', '#t2jAddCategorySelect', '#directCategorySelect'].forEach(function (sel) {
+        ['#t2jSearchCategorySelect', '#t2jAddCategorySelect', '#directCategorySelect', '#t2jPhBulkCategory'].forEach(function (sel) {
             on(q(sel), 'change', function () { this.setAttribute('data-user', '1'); });
         });
 
@@ -2854,12 +3407,9 @@
             var chip = e.target.closest ? e.target.closest('.t2j-chip-path') : null;
             if (chip) window.t2jApplyChipPath(chip);
         });
-        on(q('#cfgTrackersList'), 'click', function (e) {
-            var all = e.target.closest ? e.target.closest('.t2j-tags-all') : null;
-            var none = e.target.closest ? e.target.closest('.t2j-tags-none') : null;
-            if (all && !all.disabled) window.t2jSelectAllTrackerTags(all, true);
-            else if (none && !none.disabled) window.t2jSelectAllTrackerTags(none, false);
-        });
+        on(q('#t2jTrackersAllBtn'), 'click', function () { window.t2jSetAllTrackers(true); });
+        on(q('#t2jTrackersNoneBtn'), 'click', function () { window.t2jSetAllTrackers(false); });
+        on(q('#testTmdbBtn'), 'click', function () { window.t2jTestTmdb(); });
         on(q('#cfgTrackersList'), 'change', function (e) {
             var chk = e.target.closest ? e.target.closest('.t2j-tracker-checkbox') : null;
             if (chk) window.t2jToggleTrackerActive(chk);

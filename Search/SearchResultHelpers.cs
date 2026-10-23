@@ -104,11 +104,29 @@ internal sealed class TagCollector
     private bool _internal;
     private bool _exclusive;
 
+    private bool _exactFreeleechFlag;
+    private double? _downloadFactor;
+
     public bool IsFreeleech => _tier == DiscountTier.Freeleech;
+
+    /// <summary>
+    /// Strict freeleech: a download volume factor of exactly 0, or an exact "freeleech" flag. Unlike
+    /// <see cref="IsFreeleech"/> (the "gold" tier, which also accepts the "gold" alias) it never reflects a
+    /// partial discount.
+    /// </summary>
+    public bool IsStrictFreeleech => _exactFreeleechFlag || (_downloadFactor.HasValue && _downloadFactor.Value < 1e-9);
+
+    /// <summary>The smallest valid download volume factor seen, or null when the indexer reported none.</summary>
+    public double? DownloadVolumeFactor => _downloadFactor;
 
     /// <summary>Adds a raw indexer tag or flag. Unknown values are ignored.</summary>
     public void AddRaw(string? raw)
     {
+        if (string.Equals(TorrentTags.NormalizeKey(raw), TorrentTags.Freeleech, StringComparison.Ordinal))
+        {
+            _exactFreeleechFlag = true;
+        }
+
         if (!TorrentTags.TryCanonicalize(raw, out var tag))
         {
             return;
@@ -150,6 +168,7 @@ internal sealed class TagCollector
         }
 
         var f = factor.Value;
+        _downloadFactor = _downloadFactor.HasValue ? Math.Min(_downloadFactor.Value, f) : f;
         if (f < 1e-9)
         {
             Raise(DiscountTier.Freeleech);

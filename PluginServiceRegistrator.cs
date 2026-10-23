@@ -32,6 +32,8 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<TorrClientService>();
         serviceCollection.AddSingleton<TorrentLinkResolver>();
         serviceCollection.AddSingleton<StrmEngine>();
+        serviceCollection.AddSingleton<TmdbClient>();
+        serviceCollection.AddSingleton<PlaceholderTitleResolver>();
         serviceCollection.AddSingleton<ProwlarrSearchProvider>();
         serviceCollection.AddSingleton<TorznabSearchProvider>();
         serviceCollection.AddSingleton<TorrentSearchService>();

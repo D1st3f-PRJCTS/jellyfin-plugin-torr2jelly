@@ -135,6 +135,11 @@ public class PlaceholderItemDto
     public int? Year { get; set; }
     public string ImdbId { get; set; } = string.Empty;
     public int? TmdbId { get; set; }
+
+    /// <summary>"movie" (default) or "series".</summary>
+    public string? Kind { get; set; }
+
+    public int? TvdbId { get; set; }
 }
 
 public class CreatePlaceholdersResponseDto
@@ -142,13 +147,86 @@ public class CreatePlaceholdersResponseDto
     public List<PlaceholderResultDto> Results { get; set; } = new();
 }
 
-/// <summary>Per-movie outcome: <see cref="Status"/> is "created", "exists" or "error"; <see cref="Reason"/> is a fixed code.</summary>
+/// <summary>
+/// Per-item outcome: <see cref="Status"/> is "created", "exists" or "error"; <see cref="Reason"/> is a fixed code.
+/// <see cref="ImdbId"/> echoes the request's IMDb id (kept for compatibility); <see cref="Key"/> is whichever id was used.
+/// </summary>
 public class PlaceholderResultDto
 {
     public string ImdbId { get; set; } = string.Empty;
+    public string Key { get; set; } = string.Empty;
+    public string Kind { get; set; } = "movie";
     public string Status { get; set; } = string.Empty;
     public string? Folder { get; set; }
     public string? Reason { get; set; }
+}
+
+/// <summary>One TMDb match (<c>GET Tmdb/Search</c>).</summary>
+public class TmdbResultDto
+{
+    public int TmdbId { get; set; }
+
+    /// <summary>"movie" or "series".</summary>
+    public string Kind { get; set; } = "movie";
+
+    public string Title { get; set; } = string.Empty;
+    public string? OriginalTitle { get; set; }
+    public int? Year { get; set; }
+    public string? Overview { get; set; }
+    public string? PosterUrl { get; set; }
+    public bool InLibrary { get; set; }
+
+    /// <summary>"stream", "placeholder" or null.</summary>
+    public string? InLibraryAs { get; set; }
+
+    /// <summary>A copy that can be annotated without touching a cached original.</summary>
+    public TmdbResultDto Clone() => (TmdbResultDto)MemberwiseClone();
+}
+
+public class TmdbTestRequestDto
+{
+    public string? ApiKey { get; set; }
+}
+
+public class TmdbTestResultDto
+{
+    public bool Ok { get; set; }
+    public string? Code { get; set; }
+}
+
+public class FromTitlesRequestDto
+{
+    public List<string> Lines { get; set; } = new();
+
+    /// <summary>"auto" (default), "movie" or "series".</summary>
+    public string? Kind { get; set; }
+
+    public string? Category { get; set; }
+}
+
+public class FromTitlesResponseDto
+{
+    public List<FromTitlesLineResultDto> Results { get; set; } = new();
+}
+
+public class FromTitlesLineResultDto
+{
+    public string Line { get; set; } = string.Empty;
+
+    /// <summary>"created", "exists", "ambiguous", "not_found" or "error".</summary>
+    public string Status { get; set; } = string.Empty;
+
+    /// <summary>"movie", "series" or null.</summary>
+    public string? Kind { get; set; }
+
+    public int TmdbId { get; set; }
+    public string? Title { get; set; }
+    public int? Year { get; set; }
+    public string? Folder { get; set; }
+    public string? Reason { get; set; }
+
+    /// <summary>Only for "ambiguous": up to 3 candidates.</summary>
+    public List<TmdbResultDto>? Candidates { get; set; }
 }
 
 public class MovieStreamInfoDto
@@ -158,6 +236,18 @@ public class MovieStreamInfoDto
     public string? TorrentHash { get; set; }
     public string VersionLabel { get; set; } = string.Empty;
     public bool IsPrimary { get; set; }
+
+    /// <summary>Size of the torrent in TorrServer; null when TorrServer is unreachable or does not know the hash.</summary>
+    public long? SizeBytes { get; set; }
+
+    /// <summary>Connected seeders reported by TorrServer; null when 0 or unknown.</summary>
+    public int? Seeders { get; set; }
+
+    /// <summary>Peers reported by TorrServer; null when 0 or unknown.</summary>
+    public int? Peers { get; set; }
+
+    /// <summary>The torrent's title in TorrServer; null when unknown.</summary>
+    public string? TorrentTitle { get; set; }
 }
 
 public class MovieAlternativesResponseDto

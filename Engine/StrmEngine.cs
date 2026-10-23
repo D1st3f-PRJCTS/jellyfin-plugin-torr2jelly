@@ -68,6 +68,8 @@ public class PlaceholderResult
     public const string ReasonInvalidYear = "invalid_year";
     public const string ReasonUnknownCategory = "unknown_category";
     public const string ReasonNotMovieCategory = "not_a_movie_category";
+    public const string ReasonNotShowCategory = "not_a_show_category";
+    public const string ReasonNoId = "no_id";
     public const string ReasonCategoryUnavailable = "category_unavailable";
     public const string ReasonFolderHasStream = "folder_has_stream";
     public const string ReasonPlaceholderExists = "placeholder_exists";
@@ -86,6 +88,61 @@ public class PlaceholderResult
 /// <summary>One movie to create a placeholder for (see <see cref="StrmEngine.CreateMoviePlaceholdersAsync"/>).</summary>
 public sealed record PlaceholderRequest(string Category, string Title, int? Year, string ImdbId, int? TmdbId);
 
+/// <summary>One series to create a placeholder for (see <see cref="StrmEngine.CreateSeriesPlaceholdersAsync"/>).</summary>
+public sealed record SeriesPlaceholderRequest(string Category, string Title, int? Year, string? ImdbId, int? TvdbId, int? TmdbId);
+
+/// <summary>
+/// What is already in the library, by external id, as found on disk (NFO files and placeholder .strm files in the
+/// category folders) and in Jellyfin's own library. See <see cref="StrmEngine.BuildLibraryIdSnapshot"/>.
+/// </summary>
+public sealed class LibraryIdSnapshot
+{
+    public const string AsStream = "stream";
+    public const string AsPlaceholder = "placeholder";
+
+    private readonly Dictionary<string, string> _entries = new(StringComparer.Ordinal);
+
+    internal void Add(string key, string status)
+    {
+        // A real stream wins over a placeholder for the same id.
+        if (!_entries.TryGetValue(key, out var existing) || (existing == AsPlaceholder && status == AsStream))
+        {
+            _entries[key] = status;
+        }
+    }
+
+    /// <summary>"stream" / "placeholder" when a movie ("movie") or series ("series") with one of the ids exists; otherwise null.</summary>
+    public string? Lookup(string kind, int? tmdbId, string? imdbId, int? tvdbId = null)
+    {
+        string? best = null;
+        void Take(string key)
+        {
+            if (_entries.TryGetValue(key, out var status) && (best == null || status == AsStream))
+            {
+                best = status;
+            }
+        }
+
+        var series = string.Equals(kind, "series", StringComparison.OrdinalIgnoreCase);
+        if (tmdbId.HasValue && tmdbId.Value > 0)
+        {
+            Take((series ? "series-tmdb:" : "movie-tmdb:") + tmdbId.Value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (series && tvdbId.HasValue && tvdbId.Value > 0)
+        {
+            Take("series-tvdb:" + tvdbId.Value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (!string.IsNullOrWhiteSpace(imdbId))
+        {
+            Take("imdb:" + imdbId.Trim().ToLowerInvariant());
+        }
+
+        return best;
+    }
+}
+
 public class StrmEngine
 {
     /// <summary><see cref="StrmSyncResult.ErrorMessage"/> used when a torrent's file list is not available yet.</summary>
@@ -101,11 +158,16 @@ public class StrmEngine
     private const int MinPlaceholderYear = 1870;
     private const int MaxPlaceholderYear = 2200;
 
-    // The imdb id inside a placeholder URL ("...t2j-placeholder?imdb=tt0096874").
-    private static readonly Regex PlaceholderImdbRegex =
-        new(Regex.Escape(PlaceholderMarker) + @"\?imdb=(tt[0-9]{1,10})(?=[&#\s]|$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // The query of a placeholder URL ("...t2j-placeholder?imdb=tt0096874", "...?tmdb=1399&kind=tv", "...?tvdb=121361").
+    private static readonly Regex PlaceholderQueryRegex =
+        new(Regex.Escape(PlaceholderMarker) + @"\?(?<q>[^\s#]*)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex PlaceholderRequestImdbRegex = new(@"^tt[0-9]{1,10}$", RegexOptions.Compiled);
+
+    // Index keys of the ids a placeholder or NFO carries: "tt0096874", "tmdb:603" (movie), "tmdbtv:1399", "tvdb:121361".
+    private const string KeyTmdbMovie = "tmdb:";
+    private const string KeyTmdbSeries = "tmdbtv:";
+    private const string KeyTvdb = "tvdb:";
 
     private const int MaxReportedErrors = 100;
     private const int MaxPruneLevels = 3;
@@ -1315,7 +1377,14 @@ public class StrmEngine
         Directory.CreateDirectory(seriesDir);
         result.FolderPath = seriesDir;
 
-        changed |= await WriteShowEpisodesAsync(config, hash, showTokens, seriesDir, videoFiles, result.CreatedStrmFiles, tracker: null, ct);
+        var wroteEpisodes = await WriteShowEpisodesAsync(config, hash, showTokens, seriesDir, videoFiles, result.CreatedStrmFiles, tracker: null, ct);
+        changed |= wroteEpisodes;
+
+        // Real episodes took the place of a series placeholder in this folder (if there is one).
+        if (wroteEpisodes)
+        {
+            changed |= RemoveSeriesPlaceholders(seriesDir, categoryDir);
+        }
 
         // Write Series tvshow.nfo so Jellyfin identifies the series properly
         changed |= await WriteShowNfoAsync(seriesDir, cleanTitle, originalTitle, extractedYear, tmdbId, imdbId, ct);
@@ -2658,7 +2727,52 @@ public class StrmEngine
     private static PlaceholderResult PlaceholderError(string reason) =>
         new() { Status = PlaceholderResult.StatusError, Reason = reason };
 
-    // Maps the IMDb id of every placeholder .strm in the category folders to the folder it sits in (first one wins).
+    // The index keys of the ids in a placeholder .strm line (see PlaceholderQueryRegex).
+    private static List<string> PlaceholderKeysFromText(string? text)
+    {
+        var keys = new List<string>();
+        if (string.IsNullOrEmpty(text))
+        {
+            return keys;
+        }
+
+        var match = PlaceholderQueryRegex.Match(text);
+        if (!match.Success)
+        {
+            return keys;
+        }
+
+        var pairs = match.Groups["q"].Value.Split('&', StringSplitOptions.RemoveEmptyEntries);
+        var isSeries = pairs.Any(p => p.Equals("kind=tv", StringComparison.OrdinalIgnoreCase));
+        foreach (var pair in pairs)
+        {
+            var eq = pair.IndexOf('=');
+            if (eq <= 0)
+            {
+                continue;
+            }
+
+            var name = pair[..eq].ToLowerInvariant();
+            var value = pair[(eq + 1)..];
+            if (name == "imdb" && PlaceholderRequestImdbRegex.IsMatch(value.ToLowerInvariant()))
+            {
+                keys.Add(value);
+            }
+            else if (name == "tmdb" && value.Length is > 0 and <= 10 && value.All(char.IsAsciiDigit))
+            {
+                keys.Add((isSeries ? KeyTmdbSeries : KeyTmdbMovie) + value);
+            }
+            else if (name == "tvdb" && value.Length is > 0 and <= 10 && value.All(char.IsAsciiDigit))
+            {
+                keys.Add(KeyTvdb + value);
+            }
+        }
+
+        return keys;
+    }
+
+    // Maps the ids (see PlaceholderKeysFromText) of every placeholder .strm in the category folders to the folder it
+    // sits in (first one wins).
     private Dictionary<string, string> BuildPlaceholderIndex(IReadOnlyList<CategoryRoot> roots)
     {
         var index = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -2679,11 +2793,18 @@ public class StrmEngine
                         continue;
                     }
 
-                    var match = PlaceholderImdbRegex.Match(text!);
                     var dir = Path.GetDirectoryName(file);
-                    if (match.Success && !string.IsNullOrEmpty(dir))
+                    if (string.IsNullOrEmpty(dir))
                     {
-                        index.TryAdd(match.Groups[1].Value, dir);
+                        continue;
+                    }
+
+                    // A series placeholder's episode sits in "Season 01" below the series folder: the series folder
+                    // is the one that holds the tvshow.nfo.
+                    var folder = FindSeriesFolderOfPlaceholder(dir, root) ?? dir;
+                    foreach (var key in PlaceholderKeysFromText(text))
+                    {
+                        index.TryAdd(key, folder);
                     }
                 }
             }
@@ -2694,6 +2815,32 @@ public class StrmEngine
         }
 
         return index;
+    }
+
+    // For a placeholder episode in <series>/<season>: the series folder (the parent of the season folder when that
+    // holds a tvshow.nfo and the season folder lies below the scan root), otherwise null.
+    private static string? FindSeriesFolderOfPlaceholder(string strmDir, string scanRoot)
+    {
+        try
+        {
+            if (File.Exists(Path.Combine(strmDir, "tvshow.nfo")))
+            {
+                return strmDir;
+            }
+
+            var parent = Path.GetDirectoryName(strmDir);
+            if (!string.IsNullOrEmpty(parent) && !PathEquals(parent, scanRoot) && IsInsideOrEqual(scanRoot, parent) &&
+                File.Exists(Path.Combine(parent, "tvshow.nfo")))
+            {
+                return parent;
+            }
+        }
+        catch (Exception)
+        {
+            // unreadable: treat as a plain folder
+        }
+
+        return null;
     }
 
     // True when the folder (or anything below it) holds a .strm or a video file.
@@ -2721,10 +2868,17 @@ public class StrmEngine
         CancellationToken ct)
     {
         var imdb = request?.ImdbId?.Trim() ?? string.Empty;
-        if (request == null || !PlaceholderRequestImdbRegex.IsMatch(imdb))
+        var tmdbId = request?.TmdbId is > 0 ? request.TmdbId : null;
+
+        // An IMDb id is optional when a TMDb id is given; one that is given must be well-formed.
+        if (request == null || (imdb.Length > 0 ? !PlaceholderRequestImdbRegex.IsMatch(imdb) : !tmdbId.HasValue))
         {
             return PlaceholderError(PlaceholderResult.ReasonInvalidImdb);
         }
+
+        // The ids the placeholder is known by: the IMDb id when there is one (as before), otherwise the TMDb id.
+        var keyId = imdb.Length > 0 ? imdb : KeyTmdbMovie + tmdbId!.Value.ToString(CultureInfo.InvariantCulture);
+        var folderSeed = imdb.Length > 0 ? imdb : tmdbId!.Value.ToString(CultureInfo.InvariantCulture);
 
         var title = (request.Title ?? string.Empty).Trim();
         if (title.Length == 0 || title.Length > MaxPlaceholderTitleLength)
@@ -2752,7 +2906,7 @@ public class StrmEngine
         // The category folder must be one of the (safe) managed roots; otherwise nothing is written.
         if (!TryResolveCategoryRoot(category, out var categoryDir) || !roots.Any(r => PathEquals(r.Dir, categoryDir)))
         {
-            _logger.LogWarning("Category '{Category}' has no permitted root folder; not creating a placeholder for {Imdb}", category.Name, imdb);
+            _logger.LogWarning("Category '{Category}' has no permitted root folder; not creating a placeholder for {Id}", category.Name, keyId);
             return PlaceholderError(PlaceholderResult.ReasonCategoryUnavailable);
         }
 
@@ -2765,8 +2919,8 @@ public class StrmEngine
         }
 
         var tokens = BuildMovieTokens(fileTitle, null, year, rawTitle);
-        var folderName = ResolveMovieFolderName(config, tokens, rawTitle, fileTitle, year, imdb);
-        var strmName = BuildSingleMovieStrmName(config, tokens, rawTitle, null, folderName, imdb);
+        var folderName = ResolveMovieFolderName(config, tokens, rawTitle, fileTitle, year, folderSeed);
+        var strmName = BuildSingleMovieStrmName(config, tokens, rawTitle, null, folderName, folderSeed);
 
         var movieDir = Path.Combine(categoryDir, folderName);
         var canonicalMovieDir = Canonicalize(movieDir);
@@ -2782,7 +2936,7 @@ public class StrmEngine
         }
 
         var known = getKnownPlaceholders();
-        if (known.TryGetValue(imdb, out var knownFolder) && Directory.Exists(knownFolder))
+        if (known.TryGetValue(keyId, out var knownFolder) && Directory.Exists(knownFolder))
         {
             return new PlaceholderResult { Status = PlaceholderResult.StatusExists, Folder = knownFolder, Reason = PlaceholderResult.ReasonPlaceholderExists };
         }
@@ -2793,11 +2947,12 @@ public class StrmEngine
         {
             Directory.CreateDirectory(canonicalMovieDir);
 
-            var url = $"{_daemonManager.GetStreamBaseUrl()}/{PlaceholderMarker}?imdb={imdb}\n";
+            var idQuery = imdb.Length > 0 ? $"imdb={imdb}" : $"tmdb={tmdbId!.Value.ToString(CultureInfo.InvariantCulture)}";
+            var url = $"{_daemonManager.GetStreamBaseUrl()}/{PlaceholderMarker}?{idQuery}\n";
             await WriteTextIfChangedAsync(strmPath, url, ct);
 
             // Jellyfin fetches poster and metadata from the ids; an NFO that already exists is never replaced.
-            await WriteMovieNfoAsync(canonicalMovieDir, folderName, title, null, year, request.TmdbId, imdb, createOnly: true, ct);
+            await WriteMovieNfoAsync(canonicalMovieDir, folderName, title, null, year, request.TmdbId, imdb.Length > 0 ? imdb : null, createOnly: true, ct);
         }
         catch (Exception ex)
         {
@@ -2824,14 +2979,668 @@ public class StrmEngine
                 throw;
             }
 
-            _logger.LogError(ex, "Failed to write the placeholder for {Imdb} in {Dir}", imdb, canonicalMovieDir);
+            _logger.LogError(ex, "Failed to write the placeholder for {Id} in {Dir}", keyId, canonicalMovieDir);
             return PlaceholderError(PlaceholderResult.ReasonWriteFailed);
         }
 
-        known[imdb] = canonicalMovieDir;
+        known[keyId] = canonicalMovieDir;
         NotifyPathChanged(canonicalMovieDir);
-        _logger.LogInformation("Created a movie placeholder for {Imdb} in {Dir}", imdb, canonicalMovieDir);
+        _logger.LogInformation("Created a movie placeholder for {Id} in {Dir}", keyId, canonicalMovieDir);
         return new PlaceholderResult { Status = PlaceholderResult.StatusCreated, Folder = canonicalMovieDir };
+    }
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Series placeholders: a library series (poster / metadata from its ids) without a real stream yet. The series
+    // folder gets tvshow.nfo (create-only) and one placeholder episode "Season 01/{episode template for S01E01}.strm"
+    // (one line: {streamBase}/t2j-placeholder?imdb=... / ?tmdb=...&kind=tv / ?tvdb=...). Real episodes written into the
+    // folder later (AddTorrentToSeriesAsync, SyncShowAsync) take the placeholder's place (RemoveSeriesPlaceholders).
+    // ------------------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Creates the placeholder of one series in <paramref name="categoryName"/> (see
+    /// <see cref="CreateSeriesPlaceholdersAsync"/>, which this wraps).
+    /// </summary>
+    public async Task<PlaceholderResult> CreateSeriesPlaceholderAsync(
+        string categoryName,
+        string title,
+        int? year,
+        string? imdbId,
+        int? tvdbId,
+        int? tmdbId,
+        CancellationToken ct = default)
+    {
+        var results = await CreateSeriesPlaceholdersAsync(
+            new[] { new SeriesPlaceholderRequest(categoryName, title, year, imdbId, tvdbId, tmdbId) }, ct);
+        return results[0];
+    }
+
+    /// <summary>
+    /// Creates the placeholder files for each series, in order, under one hold of the engine lock. Same rules as
+    /// <see cref="CreateMoviePlaceholdersAsync"/>: one result per request, a failing request never stops the others,
+    /// idempotent and non-destructive. A series folder that already holds a .strm or video file, or a placeholder or
+    /// show NFO with one of the same ids anywhere in the category folders, yields
+    /// <see cref="PlaceholderResult.StatusExists"/> and nothing is written. The folder name comes from the same
+    /// template and sanitising as a real series, so a real sync lands in the same folder.
+    /// </summary>
+    public async Task<IReadOnlyList<PlaceholderResult>> CreateSeriesPlaceholdersAsync(
+        IReadOnlyList<SeriesPlaceholderRequest> items,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+
+        var results = new List<PlaceholderResult>(items.Count);
+        if (items.Count == 0)
+        {
+            return results;
+        }
+
+        await _lock.WaitAsync(ct);
+        try
+        {
+            var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+            var categories = GetEffectiveCategories(config);
+            var roots = GetCategoryRoots();
+            Dictionary<string, string>? known = null;
+
+            foreach (var item in items)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                try
+                {
+                    results.Add(await CreateSeriesPlaceholderCoreAsync(
+                        item, config, categories, roots, () => known ??= BuildSeriesKnownIndex(roots, categories), ct));
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to create a series placeholder");
+                    results.Add(new PlaceholderResult { Status = PlaceholderResult.StatusError, Reason = PlaceholderResult.ReasonWriteFailed });
+                }
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+
+        return results;
+    }
+
+    // Placeholders (by their .strm) plus the ids of every show NFO directly below a show category folder, mapped to
+    // the series folder (first one wins).
+    private Dictionary<string, string> BuildSeriesKnownIndex(IReadOnlyList<CategoryRoot> roots, IReadOnlyList<CategoryMapping> categories)
+    {
+        var index = BuildPlaceholderIndex(roots);
+        foreach (var category in categories.Where(c => string.Equals(c.Type, "show", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!TryResolveCategoryRoot(category, out var categoryDir) || !Directory.Exists(categoryDir))
+            {
+                continue;
+            }
+
+            try
+            {
+                foreach (var nfo in Directory.EnumerateFiles(categoryDir, "tvshow.nfo", SeriesNfoEnumeration))
+                {
+                    var dir = Path.GetDirectoryName(nfo);
+                    if (string.IsNullOrEmpty(dir))
+                    {
+                        continue;
+                    }
+
+                    foreach (var key in NfoIdKeys(TryReadSmallText(nfo), isSeries: true))
+                    {
+                        index.TryAdd(key, dir);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not enumerate show NFO files in {Dir}", categoryDir);
+            }
+        }
+
+        return index;
+    }
+
+    // Callers hold the engine lock.
+    private async Task<PlaceholderResult> CreateSeriesPlaceholderCoreAsync(
+        SeriesPlaceholderRequest? request,
+        PluginConfiguration config,
+        IReadOnlyList<CategoryMapping> categories,
+        IReadOnlyList<CategoryRoot> roots,
+        Func<Dictionary<string, string>> getKnownIds,
+        CancellationToken ct)
+    {
+        if (request == null)
+        {
+            return PlaceholderError(PlaceholderResult.ReasonNoId);
+        }
+
+        var imdb = request.ImdbId?.Trim() ?? string.Empty;
+        var tmdb = request.TmdbId is > 0 ? request.TmdbId : null;
+        var tvdb = request.TvdbId is > 0 ? request.TvdbId : null;
+        if (imdb.Length > 0 && !PlaceholderRequestImdbRegex.IsMatch(imdb))
+        {
+            return PlaceholderError(PlaceholderResult.ReasonInvalidImdb);
+        }
+
+        if (imdb.Length == 0 && !tmdb.HasValue && !tvdb.HasValue)
+        {
+            return PlaceholderError(PlaceholderResult.ReasonNoId);
+        }
+
+        var title = (request.Title ?? string.Empty).Trim();
+        if (title.Length == 0 || title.Length > MaxPlaceholderTitleLength)
+        {
+            return PlaceholderError(PlaceholderResult.ReasonInvalidTitle);
+        }
+
+        var year = request.Year;
+        if (year.HasValue && (year.Value < MinPlaceholderYear || year.Value > MaxPlaceholderYear))
+        {
+            return PlaceholderError(PlaceholderResult.ReasonInvalidYear);
+        }
+
+        var category = categories.FirstOrDefault(c => c.Name.Equals(request.Category?.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (category == null)
+        {
+            return PlaceholderError(PlaceholderResult.ReasonUnknownCategory);
+        }
+
+        if (!string.Equals(category.Type, "show", StringComparison.OrdinalIgnoreCase))
+        {
+            return PlaceholderError(PlaceholderResult.ReasonNotShowCategory);
+        }
+
+        // The category folder must be one of the (safe) managed roots; otherwise nothing is written.
+        var keys = new List<string>();
+        if (imdb.Length > 0) keys.Add(imdb);
+        if (tmdb.HasValue) keys.Add(KeyTmdbSeries + tmdb.Value.ToString(CultureInfo.InvariantCulture));
+        if (tvdb.HasValue) keys.Add(KeyTvdb + tvdb.Value.ToString(CultureInfo.InvariantCulture));
+
+        if (!TryResolveCategoryRoot(category, out var categoryDir) || !roots.Any(r => PathEquals(r.Dir, categoryDir)))
+        {
+            _logger.LogWarning("Category '{Category}' has no permitted root folder; not creating a series placeholder for {Id}", category.Name, keys[0]);
+            return PlaceholderError(PlaceholderResult.ReasonCategoryUnavailable);
+        }
+
+        // Same names as a real series of this title / year.
+        var rawTitle = TitleCleaner.FormatFolderTitle(title, year);
+        var fileTitle = TitleCleaner.GetEnglishOrLatinTitle(title, null);
+        if (TitleCleaner.SanitizeFilenameOrEmpty(fileTitle).Length == 0)
+        {
+            return PlaceholderError(PlaceholderResult.ReasonInvalidTitle);
+        }
+
+        var folderSeed = imdb.Length > 0 ? imdb : (tmdb ?? tvdb)!.Value.ToString(CultureInfo.InvariantCulture);
+        var showTokens = BuildShowTokens(fileTitle, null, year, rawTitle);
+        var showFolderTemplate = !string.IsNullOrWhiteSpace(config.ShowFolderTemplate) ? config.ShowFolderTemplate : "{Title} ({Year})";
+        var folderName = ResolveFolderName(config.EnableShowRenaming, showFolderTemplate, showTokens, rawTitle, fileTitle, year, folderSeed);
+
+        var seriesDir = Path.Combine(categoryDir, folderName);
+        var canonicalSeriesDir = Canonicalize(seriesDir);
+        if (canonicalSeriesDir == null || PathEquals(canonicalSeriesDir, categoryDir) || !IsInsideOrEqual(categoryDir, canonicalSeriesDir))
+        {
+            return PlaceholderError(PlaceholderResult.ReasonCategoryUnavailable);
+        }
+
+        var folderExisted = Directory.Exists(canonicalSeriesDir);
+        if (folderExisted && HoldsStreamOrVideo(canonicalSeriesDir))
+        {
+            return new PlaceholderResult { Status = PlaceholderResult.StatusExists, Folder = canonicalSeriesDir, Reason = PlaceholderResult.ReasonFolderHasStream };
+        }
+
+        var known = getKnownIds();
+        foreach (var key in keys)
+        {
+            if (known.TryGetValue(key, out var knownFolder) && Directory.Exists(knownFolder))
+            {
+                return new PlaceholderResult { Status = PlaceholderResult.StatusExists, Folder = knownFolder, Reason = PlaceholderResult.ReasonPlaceholderExists };
+            }
+        }
+
+        // The placeholder episode: S01E01, named by the same templates as a real episode.
+        var seasonFolderTemplate = !string.IsNullOrWhiteSpace(config.ShowSeasonFolderTemplate) ? config.ShowSeasonFolderTemplate : "Season {Season:00}";
+        var epFileTemplate = !string.IsNullOrWhiteSpace(config.ShowEpisodeFileTemplate) ? config.ShowEpisodeFileTemplate : "{Title} - {EpisodeTag}.strm";
+        var epInfo = EpisodeMatcher.ParseEpisodeInfo("S01E01.mkv", 0);
+        var seasonTokens = new Dictionary<string, string>(showTokens)
+        {
+            ["Season"] = epInfo.SeasonNumber.ToString(CultureInfo.InvariantCulture),
+            ["Season:00"] = epInfo.SeasonNumber.ToString("D2", CultureInfo.InvariantCulture),
+            ["SeasonFolder"] = epInfo.FormatSeasonFolder()
+        };
+
+        var seasonFolderName = TitleCleaner.SanitizeFilenameOrEmpty(FormatTemplate(seasonFolderTemplate, seasonTokens));
+        if (seasonFolderName.Length == 0)
+        {
+            seasonFolderName = epInfo.FormatSeasonFolder();
+        }
+
+        var epTag = epInfo.FormatEpisodeTag();
+        var epTokens = new Dictionary<string, string>(seasonTokens)
+        {
+            ["Episode"] = epInfo.EpisodeNumber.ToString(CultureInfo.InvariantCulture),
+            ["Episode:00"] = epInfo.EpisodeNumber.ToString("D2", CultureInfo.InvariantCulture),
+            ["EpisodeTag"] = epTag
+        };
+
+        var strmName = BuildStrmFileName(FormatTemplate(epFileTemplate, epTokens), epTag, folderSeed, wholeNameSanitized: true);
+        var seasonDir = Path.Combine(canonicalSeriesDir, seasonFolderName);
+        var strmPath = Path.Combine(seasonDir, strmName);
+        var canonicalStrm = Canonicalize(strmPath);
+        if (canonicalStrm == null || !IsInsideOrEqual(canonicalSeriesDir, canonicalStrm))
+        {
+            return PlaceholderError(PlaceholderResult.ReasonCategoryUnavailable);
+        }
+
+        // Remembers what this call creates, so a failure takes back exactly that and nothing else.
+        var tracker = new WriteTracker();
+        try
+        {
+            tracker.NoteDirectory(canonicalSeriesDir);
+            tracker.NoteDirectory(seasonDir);
+            Directory.CreateDirectory(seasonDir);
+
+            tracker.NoteFile(strmPath);
+            var idQuery = BuildSeriesPlaceholderQuery(imdb, tmdb, tvdb);
+            await WriteTextIfChangedAsync(strmPath, $"{_daemonManager.GetStreamBaseUrl()}/{PlaceholderMarker}?{idQuery}\n", ct);
+
+            // Jellyfin fetches poster and metadata from the ids; an NFO that already exists is never replaced.
+            tracker.NoteFile(Path.Combine(canonicalSeriesDir, "tvshow.nfo"));
+            await WriteShowNfoAsync(canonicalSeriesDir, title, null, year, tmdb, imdb.Length > 0 ? imdb : null, ct, tvdb, createOnly: true);
+        }
+        catch (Exception ex)
+        {
+            RollbackSeriesAdd(tracker, string.Empty, registeredByThisCall: false);
+
+            if (ex is OperationCanceledException && ct.IsCancellationRequested)
+            {
+                throw;
+            }
+
+            _logger.LogError(ex, "Failed to write the series placeholder for {Id} in {Dir}", keys[0], canonicalSeriesDir);
+            return PlaceholderError(PlaceholderResult.ReasonWriteFailed);
+        }
+
+        foreach (var key in keys)
+        {
+            known[key] = canonicalSeriesDir;
+        }
+
+        NotifyPathChanged(canonicalSeriesDir);
+        _logger.LogInformation("Created a series placeholder for {Id} in {Dir}", keys[0], canonicalSeriesDir);
+        return new PlaceholderResult { Status = PlaceholderResult.StatusCreated, Folder = canonicalSeriesDir };
+    }
+
+    // "imdb=tt1&tmdb=2&tvdb=3&kind=tv": every id that is known; "kind=tv" only where a TMDb id needs it.
+    private static string BuildSeriesPlaceholderQuery(string imdb, int? tmdb, int? tvdb)
+    {
+        var parts = new List<string>();
+        if (imdb.Length > 0) parts.Add("imdb=" + imdb);
+        if (tmdb.HasValue) parts.Add("tmdb=" + tmdb.Value.ToString(CultureInfo.InvariantCulture));
+        if (tvdb.HasValue) parts.Add("tvdb=" + tvdb.Value.ToString(CultureInfo.InvariantCulture));
+        if (tmdb.HasValue) parts.Add("kind=tv");
+        return string.Join('&', parts);
+    }
+
+    // Enumeration used by every delete below: reparse points (symlinks, junctions) are never entered or followed.
+    private static readonly EnumerationOptions SafeTreeEnumeration = new()
+    {
+        RecurseSubdirectories = true,
+        IgnoreInaccessible = true,
+        AttributesToSkip = FileAttributes.ReparsePoint,
+        MatchCasing = MatchCasing.CaseInsensitive
+    };
+
+    // show NFOs directly below a category folder or one level deeper (<category>/<series>/tvshow.nfo)
+    private static readonly EnumerationOptions SeriesNfoEnumeration = new()
+    {
+        RecurseSubdirectories = true,
+        MaxRecursionDepth = 2,
+        IgnoreInaccessible = true,
+        AttributesToSkip = FileAttributes.ReparsePoint,
+        MatchCasing = MatchCasing.CaseInsensitive
+    };
+
+    /// <summary>
+    /// Once real episodes of the series exist in <paramref name="seriesDir"/>, removes the series placeholder: the
+    /// .strm files there that carry the placeholder marker and no torrent hash, nothing else (no NFO, no poster, no
+    /// real stream). Does nothing unless at least one real (hash-bearing) .strm is present. Then prunes season folders
+    /// that this left empty, only when they lie strictly inside the series folder. The series folder must lie
+    /// strictly inside <paramref name="rootDir"/> (a managed root), reparse points are never entered, and the engine
+    /// lock is held by the caller. Returns true when a file was deleted.
+    /// </summary>
+    private bool RemoveSeriesPlaceholders(string seriesDir, string rootDir)
+    {
+        var dir = Canonicalize(seriesDir);
+        var root = Canonicalize(rootDir);
+        if (dir == null || root == null || PathEquals(dir, root) || !IsInsideOrEqual(root, dir) || !Directory.Exists(dir))
+        {
+            return false;
+        }
+
+        var placeholders = new List<string>();
+        var hasRealEpisode = false;
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(dir, "*.strm", SafeTreeEnumeration))
+            {
+                var canonical = Canonicalize(file);
+                if (canonical == null || !IsInsideOrEqual(dir, canonical))
+                {
+                    continue;
+                }
+
+                var text = TryReadStrmText(file);
+                if (IsPlaceholderText(text))
+                {
+                    placeholders.Add(canonical);
+                }
+                else if (TorrentHash.TryExtractFromStrm(text, out _))
+                {
+                    hasRealEpisode = true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not look for series placeholders in {Dir}", dir);
+            return false;
+        }
+
+        if (!hasRealEpisode || placeholders.Count == 0)
+        {
+            return false;
+        }
+
+        var deleted = false;
+        var parents = new HashSet<string>(PathComparer);
+        foreach (var file in placeholders)
+        {
+            try
+            {
+                File.Delete(file);
+                deleted = true;
+                _logger.LogInformation("Removed series placeholder {File}: real episodes took its place", file);
+                var parent = Path.GetDirectoryName(file);
+                if (!string.IsNullOrEmpty(parent))
+                {
+                    parents.Add(parent);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete series placeholder {File}", file);
+            }
+        }
+
+        // Emptied folders only (a sidecar or anything else keeps its folder), deepest first, never the series folder.
+        foreach (var parent in parents.OrderByDescending(p => p.Length))
+        {
+            try
+            {
+                if (!PathEquals(parent, dir) && IsInsideOrEqual(dir, parent) && Directory.Exists(parent) &&
+                    !Directory.EnumerateFileSystemEntries(parent).Any())
+                {
+                    Directory.Delete(parent, recursive: false);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not remove the emptied folder {Dir}", parent);
+            }
+        }
+
+        return deleted;
+    }
+
+    // ------------------------------------------------------------------------------------------------------------
+    // What is already in the library, by id (TMDb search "in library" marker)
+    // ------------------------------------------------------------------------------------------------------------
+
+    private static readonly Regex NfoIdRegex = new(
+        @"<uniqueid[^>]*\btype\s*=\s*""(?<t>tmdb|tvdb|imdb)""[^>]*>\s*(?<v>[A-Za-z0-9]+)\s*</uniqueid>|<(?<t2>tmdbid|tvdbid|imdbid|imdb_id|id)>\s*(?<v2>[A-Za-z0-9]+)\s*</(?:tmdbid|tvdbid|imdbid|imdb_id|id)>",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // The index keys (see PlaceholderKeysFromText) of the ids an NFO carries.
+    private static List<string> NfoIdKeys(string? nfo, bool isSeries)
+    {
+        var keys = new List<string>();
+        if (string.IsNullOrEmpty(nfo))
+        {
+            return keys;
+        }
+
+        foreach (Match m in NfoIdRegex.Matches(nfo))
+        {
+            var type = (m.Groups["t"].Success ? m.Groups["t"].Value : m.Groups["t2"].Value).ToLowerInvariant();
+            var value = m.Groups["v"].Success ? m.Groups["v"].Value : m.Groups["v2"].Value;
+            var isNumber = value.Length is > 0 and <= 10 && value.All(char.IsAsciiDigit);
+            switch (type)
+            {
+                case "tmdb" or "tmdbid" when isNumber:
+                    keys.Add((isSeries ? KeyTmdbSeries : KeyTmdbMovie) + value);
+                    break;
+                case "tvdb" or "tvdbid" when isNumber && isSeries:
+                    keys.Add(KeyTvdb + value);
+                    break;
+                case "imdb" or "imdbid" or "imdb_id" or "id" when PlaceholderRequestImdbRegex.IsMatch(value.ToLowerInvariant()):
+                    keys.Add(value.ToLowerInvariant());
+                    break;
+            }
+        }
+
+        return keys;
+    }
+
+    private static string? TryReadSmallText(string path)
+    {
+        try
+        {
+            using var reader = new StreamReader(path, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+            var buffer = new char[16384];
+            var read = reader.ReadBlock(buffer, 0, buffer.Length);
+            return new string(buffer, 0, read);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    // "placeholder" when the folder holds a placeholder .strm and nothing real, otherwise "stream" (a real stream, a
+    // video file, or just a folder).
+    private static string ClassifyLibraryDirectory(string dir)
+    {
+        var sawPlaceholder = false;
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(dir, "*.strm", SafeTreeEnumeration))
+            {
+                if (IsPlaceholderStrmFile(file))
+                {
+                    sawPlaceholder = true;
+                }
+                else
+                {
+                    return LibraryIdSnapshot.AsStream;
+                }
+            }
+
+            if (sawPlaceholder && Directory.EnumerateFiles(dir, "*", SafeTreeEnumeration).Any(EpisodeMatcher.IsVideoFile))
+            {
+                return LibraryIdSnapshot.AsStream;
+            }
+        }
+        catch (Exception)
+        {
+            return LibraryIdSnapshot.AsStream;
+        }
+
+        return sawPlaceholder ? LibraryIdSnapshot.AsPlaceholder : LibraryIdSnapshot.AsStream;
+    }
+
+    /// <summary>
+    /// The movies and series that exist by external id: found on disk (movie.nfo / tvshow.nfo and placeholder .strm
+    /// files in the category folders) and in Jellyfin's library. Read-only; any failure only leaves entries out.
+    /// </summary>
+    public LibraryIdSnapshot BuildLibraryIdSnapshot()
+    {
+        var snapshot = new LibraryIdSnapshot();
+        try
+        {
+            AddDiskEntries(snapshot);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not read the library ids from disk");
+        }
+
+        try
+        {
+            AddJellyfinEntries(snapshot);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not read the library ids from Jellyfin");
+        }
+
+        return snapshot;
+    }
+
+    private static void AddKeys(LibraryIdSnapshot snapshot, IEnumerable<string> keys, string status)
+    {
+        foreach (var key in keys)
+        {
+            if (key.StartsWith(KeyTmdbSeries, StringComparison.Ordinal))
+            {
+                snapshot.Add("series-tmdb:" + key[KeyTmdbSeries.Length..], status);
+            }
+            else if (key.StartsWith(KeyTmdbMovie, StringComparison.Ordinal))
+            {
+                snapshot.Add("movie-tmdb:" + key[KeyTmdbMovie.Length..], status);
+            }
+            else if (key.StartsWith(KeyTvdb, StringComparison.Ordinal))
+            {
+                snapshot.Add("series-tvdb:" + key[KeyTvdb.Length..], status);
+            }
+            else
+            {
+                snapshot.Add("imdb:" + key.ToLowerInvariant(), status);
+            }
+        }
+    }
+
+    private void AddDiskEntries(LibraryIdSnapshot snapshot)
+    {
+        var roots = GetCategoryRoots();
+
+        foreach (var root in GetScanRoots(roots))
+        {
+            if (!Directory.Exists(root))
+            {
+                continue;
+            }
+
+            foreach (var nfo in Directory.EnumerateFiles(root, "*.nfo", SafeTreeEnumeration))
+            {
+                var name = Path.GetFileName(nfo);
+                var isSeries = name.Equals("tvshow.nfo", StringComparison.OrdinalIgnoreCase);
+                if (!isSeries && !name.Equals("movie.nfo", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var dir = Path.GetDirectoryName(nfo);
+                var keys = NfoIdKeys(TryReadSmallText(nfo), isSeries);
+                if (!string.IsNullOrEmpty(dir) && keys.Count > 0)
+                {
+                    AddKeys(snapshot, keys, ClassifyLibraryDirectory(dir));
+                }
+            }
+        }
+
+        // Placeholders whose NFO is missing or carries no ids.
+        foreach (var (key, folder) in BuildPlaceholderIndex(roots))
+        {
+            AddKeys(snapshot, new[] { key }, ClassifyLibraryDirectory(folder));
+        }
+    }
+
+    // Kept apart (and never inlined) so that a Jellyfin version without these members only fails inside the caller's try.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private void AddJellyfinEntries(LibraryIdSnapshot snapshot)
+    {
+        var items = _libraryManager.GetItemList(new MediaBrowser.Controller.Entities.InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Movie, Jellyfin.Data.Enums.BaseItemKind.Series },
+            Recursive = true
+        });
+
+        foreach (var item in items ?? new List<MediaBrowser.Controller.Entities.BaseItem>())
+        {
+            var isSeries = item is MediaBrowser.Controller.Entities.TV.Series;
+            var keys = new List<string>();
+            var tmdb = MediaBrowser.Model.Entities.ProviderIdsExtensions.GetProviderId(item, MediaBrowser.Model.Entities.MetadataProvider.Tmdb);
+            var tvdb = MediaBrowser.Model.Entities.ProviderIdsExtensions.GetProviderId(item, MediaBrowser.Model.Entities.MetadataProvider.Tvdb);
+            var imdb = MediaBrowser.Model.Entities.ProviderIdsExtensions.GetProviderId(item, MediaBrowser.Model.Entities.MetadataProvider.Imdb);
+            if (!string.IsNullOrEmpty(tmdb) && tmdb.All(char.IsAsciiDigit))
+            {
+                keys.Add((isSeries ? KeyTmdbSeries : KeyTmdbMovie) + tmdb);
+            }
+
+            if (isSeries && !string.IsNullOrEmpty(tvdb) && tvdb.All(char.IsAsciiDigit))
+            {
+                keys.Add(KeyTvdb + tvdb);
+            }
+
+            if (!string.IsNullOrEmpty(imdb) && PlaceholderRequestImdbRegex.IsMatch(imdb.ToLowerInvariant()))
+            {
+                keys.Add(imdb);
+            }
+
+            if (keys.Count == 0)
+            {
+                continue;
+            }
+
+            var status = LibraryIdSnapshot.AsStream;
+            var path = item.Path;
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                if (isSeries && Directory.Exists(path))
+                {
+                    status = ClassifyLibraryDirectory(path);
+                }
+                else if (File.Exists(path) && path.EndsWith(".strm", StringComparison.OrdinalIgnoreCase) && IsPlaceholderStrmFile(path))
+                {
+                    status = LibraryIdSnapshot.AsPlaceholder;
+                }
+            }
+
+            AddKeys(snapshot, keys, status);
+        }
+    }
+
+    /// <summary>The name of the default category of <paramref name="type"/> ("movie" or "show"): the first default one, else the first of that type.</summary>
+    public string? GetDefaultCategoryName(string type)
+    {
+        var categories = GetEffectiveCategories(Plugin.Instance?.Configuration ?? new PluginConfiguration());
+        var ofType = categories.Where(c => string.Equals(c.Type, type, StringComparison.OrdinalIgnoreCase)).ToList();
+        return (ofType.FirstOrDefault(c => c.IsDefault) ?? ofType.FirstOrDefault())?.Name;
+    }
+
+    /// <summary>The type ("movie" or "show") of the category called <paramref name="name"/>; null when there is none.</summary>
+    public string? GetCategoryType(string? name)
+    {
+        var categories = GetEffectiveCategories(Plugin.Instance?.Configuration ?? new PluginConfiguration());
+        var category = categories.FirstOrDefault(c => c.Name.Equals(name?.Trim(), StringComparison.OrdinalIgnoreCase));
+        return category == null ? null : (string.Equals(category.Type, "show", StringComparison.OrdinalIgnoreCase) ? "show" : "movie");
     }
 
     // ------------------------------------------------------------------------------------------------------------
@@ -3179,6 +3988,16 @@ public class StrmEngine
             outcome.Changed = true;
         }
 
+        // Real episodes took the place of a series placeholder in this folder (if there is one).
+        if (outcome.Changed)
+        {
+            var containingRoot = FindContainingRoot(managedRoots, seriesDir);
+            if (containingRoot != null && RemoveSeriesPlaceholders(seriesDir, containingRoot.Dir))
+            {
+                outcome.Changed = true;
+            }
+        }
+
         if (outcome.Changed)
         {
             NotifyPathChanged(seriesDir);
@@ -3441,13 +4260,16 @@ public class StrmEngine
         int? year,
         int? tmdbId,
         string? imdbId,
-        CancellationToken ct)
+        CancellationToken ct,
+        int? tvdbId = null,
+        bool createOnly = false)
     {
         try
         {
             var tmdb = tmdbId.HasValue && tmdbId.Value > 0 ? tmdbId : null;
+            var tvdb = tvdbId.HasValue && tvdbId.Value > 0 ? tvdbId : null;
             var imdb = NormalizeImdbId(imdbId);
-            var hasId = tmdb.HasValue || imdb != null;
+            var hasId = tmdb.HasValue || tvdb.HasValue || imdb != null;
 
             var sb = new StringBuilder();
             AppendLine(sb, "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>");
@@ -3458,16 +4280,21 @@ public class StrmEngine
                 AppendLine(sb, $"  <uniqueid type=\"tmdb\" default=\"true\">{tmdb.Value.ToString(CultureInfo.InvariantCulture)}</uniqueid>");
                 AppendLine(sb, $"  <tmdbid>{tmdb.Value.ToString(CultureInfo.InvariantCulture)}</tmdbid>");
             }
+            if (tvdb.HasValue)
+            {
+                AppendLine(sb, $"  <uniqueid type=\"tvdb\"{(tmdb.HasValue ? string.Empty : " default=\"true\"")}>{tvdb.Value.ToString(CultureInfo.InvariantCulture)}</uniqueid>");
+                AppendLine(sb, $"  <tvdbid>{tvdb.Value.ToString(CultureInfo.InvariantCulture)}</tvdbid>");
+            }
             if (imdb != null)
             {
                 // Never a bare <id>: Jellyfin reads that as the TVDB id of a series.
-                AppendLine(sb, $"  <uniqueid type=\"imdb\"{(tmdb.HasValue ? string.Empty : " default=\"true\"")}>{Xml(imdb)}</uniqueid>");
+                AppendLine(sb, $"  <uniqueid type=\"imdb\"{(tmdb.HasValue || tvdb.HasValue ? string.Empty : " default=\"true\"")}>{Xml(imdb)}</uniqueid>");
                 AppendLine(sb, $"  <imdb_id>{Xml(imdb)}</imdb_id>");
             }
             AppendLine(sb, "</tvshow>");
 
             var nfoPath = Path.Combine(showDir, "tvshow.nfo");
-            return await WriteNfoAsync(nfoPath, sb.ToString(), preserveExisting: !hasId, ct);
+            return await WriteNfoAsync(nfoPath, sb.ToString(), preserveExisting: createOnly || !hasId, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

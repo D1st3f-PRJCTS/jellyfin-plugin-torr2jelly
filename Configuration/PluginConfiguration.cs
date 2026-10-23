@@ -8,6 +8,9 @@ public class TrackerRule
 {
     public string Tracker { get; set; } = string.Empty;
     public bool Enabled { get; set; } = true;
+
+    // Obsolete: tag allow-lists no longer influence any search result (see PluginConfiguration.FreeleechOnly). Kept so
+    // configurations written by older versions still deserialize.
     public List<string> AllowedTags { get; set; } = new();
 
     public TrackerRule()
@@ -61,7 +64,18 @@ public class PluginConfiguration : BasePluginConfiguration
     public string TorznabUrl { get; set; } = string.Empty;
     public string TorznabApiKey { get; set; } = string.Empty;
 
+    // TMDb (title lookup for placeholders): a v3 API key or a v4 read-access token (starts with "eyJ"). A secret.
+    public string TmdbApiKey { get; set; } = string.Empty;
+
     // Permissions & Filters
+    /// <summary>
+    /// When true (the default, also for installations whose stored configuration lacks the element) searches return
+    /// only freeleech releases (download volume factor 0 or an exact "freeleech" flag), for every user.
+    /// </summary>
+    public bool FreeleechOnly { get; set; } = true;
+
+    // Obsolete: no longer influence any search result (superseded by FreeleechOnly). Kept so configurations written
+    // by older versions still deserialize.
     public bool SearchOnlyGoldByDefault { get; set; } = false;
     public bool OnlyGoldTorrentsForNonAdmins { get; set; } = false;
     public List<string> DisabledTrackers { get; set; } = new();
@@ -132,6 +146,7 @@ public class PluginConfiguration : BasePluginConfiguration
         Categories = unique.Count > 0 ? unique : GetDefaultCategories();
     }
 
+    // Keeps the obsolete AllowedTags of stored rules populated (they no longer filter anything).
     public void NormalizeTrackerRules()
     {
         if (TrackerRules == null)

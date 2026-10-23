@@ -214,7 +214,7 @@ Update to 1.0.19.1 or newer. Newer Jellyfin servers disable legacy authorization
 **An item appears but does not play.**
 The Stream URL must be reachable from the device that plays (or from the Jellyfin server, if it transcodes), and TorrServer must be running. A quick test is to open the URL stored in the `.strm` file from that device.
 
-**A newly added torrent shows a single placeholder file.**
+**A newly added torrent shows a single temporary file.**
 TorrServer is still loading the torrent's metadata. The real files appear on the next sync: wait for the scheduled task or press **Scan Library**.
 
 **No files are created when Jellyfin runs in Docker.**

@@ -3,6 +3,11 @@
 /* Layout glue only (flex, gaps, widths, visibility). Everything visual comes from Jellyfin's own classes and
    theme variables; the few colors below are theme variables with a fallback. */
 #torr2jellyPage .hidden { display: none !important; }
+/* emby-textarea is not registered on a cold dashboard load, so its stylesheet is missing: give the textareas the same
+   look as the native text input (same theme variables) */
+#torr2jellyPage .textareaLabel { display: block; margin: 0 0 .35em; font-size: .9em; color: var(--jf-palette-text-secondary, rgba(255, 255, 255, .7)); }
+#torr2jellyPage textarea.emby-textarea { display: block; width: 100%; box-sizing: border-box; resize: vertical; margin: 0; padding: .6em .8em; font: inherit; color: inherit; background: var(--jf-palette-action-hover, rgba(255, 255, 255, .09)); border: 2px solid var(--jf-palette-action-hover, rgba(255, 255, 255, .09)); border-radius: var(--jf-shape-borderRadius, 4px); outline: none; }
+#torr2jellyPage textarea.emby-textarea:focus { border-color: var(--jf-palette-primary-main, #00a4dc); }
 
 /* Header status line */
 #torr2jellyPage .t2j-status { display: flex; align-items: center; gap: .6em; margin: 0 0 .5em; }

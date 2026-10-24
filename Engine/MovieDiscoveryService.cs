@@ -269,11 +269,23 @@ public sealed class MovieDiscoveryService(TmdbClient tmdb, ImdbRatings ratings, 
         return buffer.ToArray();
     }
 
-    private Guid? FindItem(int tmdbId, string? imdbId) => library.GetItemList(new InternalItemsQuery
+    private Guid? FindItem(int tmdbId, string? imdbId)
     {
-        IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Movie }, Recursive = true
-    })?.FirstOrDefault(item => item.GetProviderId(MetadataProvider.Tmdb) == tmdbId.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
-        (imdbId != null && item.GetProviderId(MetadataProvider.Imdb) == imdbId))?.Id;
+        try
+        {
+            return LibraryItems.Query(library, new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Movie }, Recursive = true
+            }).FirstOrDefault(item => item.GetProviderId(MetadataProvider.Tmdb) == tmdbId.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
+                (imdbId != null && item.GetProviderId(MetadataProvider.Imdb) == imdbId))?.Id;
+        }
+        catch (Exception ex)
+        {
+            // Linking to an existing library item is optional; TMDB details and Add remain usable.
+            logger.LogWarning(ex, "Discovery library item lookup is unavailable");
+            return null;
+        }
+    }
 
     private static void Reject(DiscoveryAddResultDto result, string reason)
     {

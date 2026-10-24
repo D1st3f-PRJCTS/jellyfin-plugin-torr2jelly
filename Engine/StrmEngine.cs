@@ -3767,7 +3767,7 @@ public class StrmEngine
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     private void AddJellyfinEntries(LibraryIdSnapshot snapshot)
     {
-        var items = _libraryManager.GetItemList(new MediaBrowser.Controller.Entities.InternalItemsQuery
+        var items = LibraryItems.Query(_libraryManager, new MediaBrowser.Controller.Entities.InternalItemsQuery
         {
             IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Movie, Jellyfin.Data.Enums.BaseItemKind.Series },
             Recursive = true

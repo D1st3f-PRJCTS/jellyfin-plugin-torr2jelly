@@ -110,6 +110,20 @@ using (var f = new Fixture())
     var nfo = Directory.GetFiles(f.Root, "movie.nfo", SearchOption.AllDirectories).Single();
     Check(File.ReadAllText(nfo).Contains("tt0133093") && File.ReadAllText(nfo).Contains("603"), "canonical provider ids survive sync");
 }
+using (var f = new Fixture { LibraryLookupFails = true })
+{
+    var details = await f.Service.DetailsAsync(603, default);
+    Check(details.Title == "Матриця" && details.Actors.Count == 1 && details.ItemId == null, "unavailable Jellyfin library API cannot break movie details or cast");
+    var added = await f.Service.AddAsync(603, default);
+    Check(added.Status == "stream", "unavailable optional item lookup cannot fail an otherwise verified add");
+}
+using (var f = new Fixture())
+{
+    f.LibraryMovie = new MediaBrowser.Controller.Entities.Movies.Movie { Id = Guid.NewGuid() };
+    MediaBrowser.Model.Entities.ProviderIdsExtensions.SetProviderId(f.LibraryMovie, MediaBrowser.Model.Entities.MetadataProvider.Tmdb, "603");
+    var details = await f.Service.DetailsAsync(603, default);
+    Check(details.ItemId == f.LibraryMovie.Id && details.InLibraryAs == "stream", "compatible library lookup preserves existing movie links and library detection");
+}
 using (var f = new Fixture { MissingIds = true })
 {
     var result = await f.Service.AddAsync(603, default);
@@ -388,6 +402,8 @@ public sealed class Fixture : HttpMessageHandler, IHttpClientFactory, IDisposabl
     public bool SearchFails, MissingIds, WrongActualFile, RemoveFails, Present, WrongSearchHash, ServerUnavailable;
     public bool IgnoreUploadCategory, IgnoreSetCategory, FailFinalCategory;
     public bool QueueManualAfterUpload;
+    public bool LibraryLookupFails;
+    public BaseItem? LibraryMovie;
     public Task<TorrTorrent?>? SlowManualAdd;
     public TaskCompletionSource? ManualAddStarted, ReleaseManualAdd;
     public string ActualCategory = "Movies";
@@ -420,7 +436,7 @@ public sealed class Fixture : HttpMessageHandler, IHttpClientFactory, IDisposabl
         cfg.ProwlarrUrl = "http://indexer.test"; cfg.ProwlarrApiKey = "private-test-key";
         cfg.ExternalTorrServerUrl = "http://torrserver.test"; cfg.TorrServerStreamUrl = "http://torrserver.test";
         var lib = DispatchProxy.Create<ILibraryManager, Proxy>();
-        ((Proxy)(object)lib).Handler = (m, _) => m.Name switch { "GetItemList" => new List<BaseItem>(), "GetVirtualFolders" => new List<MediaBrowser.Model.Entities.VirtualFolderInfo>(), _ => null };
+        ((Proxy)(object)lib).Handler = (m, _) => m.Name switch { "GetItemList" => LibraryLookupFails ? throw new MissingMethodException("GetItemList ABI changed") : LibraryMovie == null ? new List<BaseItem>() : new List<BaseItem> { LibraryMovie }, "GetVirtualFolders" => new List<MediaBrowser.Model.Entities.VirtualFolderInfo>(), _ => null };
         var daemon = new TorrServerDaemonManager(NullLogger<TorrServerDaemonManager>.Instance, this, paths);
         Engine = new StrmEngine(NullLogger<StrmEngine>.Instance, lib, DispatchProxy.Create<ILibraryMonitor, Proxy>(), paths, daemon, this);
         Ratings = new ImdbRatings(paths, this, NullLogger<ImdbRatings>.Instance);

@@ -231,6 +231,13 @@ window._t2jCreateDiscovery = function (host) {
         if (section) section.remove();
         section = null; cache = {}; busy = {}; outcomes = {}; loading = false;
     }
+    function position(home) {
+        var container = home.querySelector('.homeSectionsContainer, .sections, .pageContent') || home;
+        var folders = container.querySelector('[data-type="CollectionFolder"], [data-type="UserView"]');
+        while (folders && folders.parentElement !== container) folders = folders.parentElement;
+        var before = folders ? folders.nextElementSibling : container.firstElementChild;
+        if (before !== section) container.insertBefore(section, before);
+    }
     function check() {
         if (stopped) return;
         var currentUser = host.user();
@@ -245,7 +252,7 @@ window._t2jCreateDiscovery = function (host) {
             section.className = 'verticalSection padded-left padded-right t2j-discovery';
             section.innerHTML = '<div class="t2j-discovery-head"><h2 class="sectionTitle sectionTitle-cards">' + esc(t('Популярне зараз', 'Trending now')) + '</h2><div class="emby-tabs-slider" role="group" aria-label="' + esc(t('Період популярності', 'Trending period')) + '">'
                 + '<button type="button" is="emby-button" class="emby-tab-button" data-window="day">' + esc(t('Сьогодні', 'Today')) + '</button><button type="button" is="emby-button" class="emby-tab-button" data-window="week">' + esc(t('За тиждень', 'This week')) + '</button></div></div><div class="t2j-discovery-row"></div>';
-            (home.querySelector('.homeSectionsContainer, .sections, .pageContent') || home).appendChild(section);
+            position(home);
             section.querySelectorAll('[data-window]').forEach(function (btn) { btn.onclick = function () {
                 if (windowName === btn.getAttribute('data-window')) return;
                 windowName = btn.getAttribute('data-window');
@@ -259,6 +266,8 @@ window._t2jCreateDiscovery = function (host) {
             else if (!loading) load();
         }
         else if (!loading && Date.now() - lastLoadAt >= 600000) load();
+        // Jellyfin may insert the library folders after this module's first check.
+        position(home);
     }
     return { check: check, close: close, dispose: function () { stopped = true; reset(); style.remove(); } };
 };

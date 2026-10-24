@@ -14,6 +14,7 @@ public sealed class MovieDiscoveryService(TmdbClient tmdb, ImdbRatings ratings, 
     ILibraryManager library, ILogger<MovieDiscoveryService> logger)
 {
     private readonly SemaphoreSlim _addLock = new(1, 1);
+    private int _lookupWarningLogged;
 
     public async Task<List<DiscoveryMovieDto>> TrendingAsync(string window, CancellationToken ct)
     {
@@ -273,19 +274,23 @@ public sealed class MovieDiscoveryService(TmdbClient tmdb, ImdbRatings ratings, 
     {
         try
         {
-            return LibraryItems.Query(library, new InternalItemsQuery
-            {
-                IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Movie }, Recursive = true
-            }).FirstOrDefault(item => item.GetProviderId(MetadataProvider.Tmdb) == tmdbId.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
-                (imdbId != null && item.GetProviderId(MetadataProvider.Imdb) == imdbId))?.Id;
+            return FindItemCore(tmdbId, imdbId);
         }
         catch (Exception ex)
         {
             // Linking to an existing library item is optional; TMDB details and Add remain usable.
-            logger.LogWarning(ex, "Discovery library item lookup is unavailable");
+            if (Interlocked.Exchange(ref _lookupWarningLogged, 1) == 0)
+                logger.LogWarning(ex, "Discovery library item lookup is unavailable");
             return null;
         }
     }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private Guid? FindItemCore(int tmdbId, string? imdbId) => LibraryItems.Query(library, new InternalItemsQuery
+    {
+        IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Movie }, Recursive = true
+    }).FirstOrDefault(item => item.GetProviderId(MetadataProvider.Tmdb) == tmdbId.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
+        (imdbId != null && item.GetProviderId(MetadataProvider.Imdb) == imdbId))?.Id;
 
     private static void Reject(DiscoveryAddResultDto result, string reason)
     {

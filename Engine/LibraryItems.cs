@@ -12,5 +12,8 @@ internal static class LibraryItems
     private static readonly MethodInfo? GetItems = typeof(ILibraryManager).GetMethod("GetItemList", new[] { typeof(InternalItemsQuery) });
 
     internal static IEnumerable<BaseItem> Query(ILibraryManager library, InternalItemsQuery query)
-        => GetItems?.Invoke(library, new object[] { query }) as IEnumerable<BaseItem> ?? Enumerable.Empty<BaseItem>();
+    {
+        var method = GetItems ?? throw new MissingMethodException("Jellyfin library item query is unavailable.");
+        return method.Invoke(library, new object[] { query }) as IEnumerable<BaseItem> ?? Enumerable.Empty<BaseItem>();
+    }
 }

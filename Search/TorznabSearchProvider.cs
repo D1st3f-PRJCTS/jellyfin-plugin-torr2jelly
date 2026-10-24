@@ -116,14 +116,22 @@ public class TorznabSearchProvider : ITorrentSearchProvider
         }
     }
 
-    public async Task<List<TorrentSearchResult>> SearchAsync(
+    public Task<List<TorrentSearchResult>> SearchAsync(string query, IEnumerable<int>? categories = null, CancellationToken cancellationToken = default)
+        => SearchCoreAsync(query, categories, cancellationToken, false);
+
+    public Task<List<TorrentSearchResult>> SearchCheckedAsync(string query, IEnumerable<int>? categories, CancellationToken cancellationToken)
+        => SearchCoreAsync(query, categories, cancellationToken, true);
+
+    private async Task<List<TorrentSearchResult>> SearchCoreAsync(
         string query,
-        IEnumerable<int>? categories = null,
-        CancellationToken cancellationToken = default)
+        IEnumerable<int>? categories,
+        CancellationToken cancellationToken,
+        bool reportErrors)
     {
         var (baseUrl, apiKey) = GetConfig();
         if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(query))
         {
+            if (reportErrors) throw new InvalidOperationException("search_unavailable");
             return new List<TorrentSearchResult>();
         }
 
@@ -152,6 +160,7 @@ public class TorznabSearchProvider : ITorrentSearchProvider
 
             if (string.Equals(doc.Root?.Name.LocalName, "error", StringComparison.OrdinalIgnoreCase))
             {
+                if (reportErrors) throw new InvalidOperationException("search_failed");
                 _logger.LogWarning(
                     "Torznab returned an error: {Code} {Description}",
                     doc.Root?.Attribute("code")?.Value,
@@ -194,11 +203,13 @@ public class TorznabSearchProvider : ITorrentSearchProvider
         }
         catch (OperationCanceledException)
         {
+            if (reportErrors) throw;
             _logger.LogWarning("Torznab search timed out at {Url}", ProwlarrLinks.RedactForLog(url));
             return new List<TorrentSearchResult>();
         }
         catch (Exception ex)
         {
+            if (reportErrors) throw;
             // The request URL carries the API key; never log it unredacted.
             _logger.LogError(ex, "Failed to search Torznab at {Url}", ProwlarrLinks.RedactForLog(url));
             return new List<TorrentSearchResult>();

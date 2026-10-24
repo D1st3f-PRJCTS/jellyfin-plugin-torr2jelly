@@ -43,7 +43,7 @@ public sealed record TmdbExternalIds(string? ImdbId, int? TvdbId);
 /// Minimal TMDb v3 client: title search, external ids, an English title lookup and a key check. The API key is a
 /// secret: it is never logged, never part of an exception, and request URLs are never logged (only the path).
 /// </summary>
-public class TmdbClient
+public partial class TmdbClient
 {
     public const string CodeKeyMissing = "tmdb_key_missing";
     public const string CodeKeyInvalid = "tmdb_key_invalid";

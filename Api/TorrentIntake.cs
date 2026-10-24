@@ -82,7 +82,8 @@ internal static class TorrentIntake
                     tmdbId: tmdbId,
                     imdbId: imdbId,
                     forceCategory: category != null,
-                    cancellationToken: cancellationToken);
+                    cancellationToken: cancellationToken,
+                    manualIntake: true);
 
                 // The torrent is in TorrServer, but without .strm files it is not in the library: that is a failure.
                 // "Metadata not ready" is the exception: the files follow with the next sync, so it stays a 200.

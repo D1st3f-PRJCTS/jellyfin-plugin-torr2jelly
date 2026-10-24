@@ -69,6 +69,20 @@ public sealed class AlternateStreamStore
         _logger = logger;
     }
 
+    internal bool IsPersisted(string hash)
+    {
+        lock (_gate)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(_filePath));
+                return doc.RootElement.TryGetProperty(TorrentHash.Normalize(hash), out var entry) &&
+                    entry.TryGetProperty("strmPath", out var path) && !string.IsNullOrWhiteSpace(path.GetString());
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return false; }
+        }
+    }
+
     public bool Contains(string hash)
     {
         lock (_gate)

@@ -31,6 +31,9 @@ jobs:
       - name: Build Release
         run: dotnet build -c Release --no-restore
 
+      - name: Verify discovery safety
+        run: dotnet run --project Tests/DiscoveryTests.csproj -c Release
+
       - name: Package Plugin Zip
         id: package
         run: |

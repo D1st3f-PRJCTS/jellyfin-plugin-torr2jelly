@@ -104,21 +104,8 @@ public class TorrSyncScheduledTask : IScheduledTask
 
         try
         {
-            var torrents = await _torrClient.ListTorrentsAsync(cancellationToken);
-            if (torrents == null)
-            {
-                // Thrown (not returned) so Jellyfin shows the run as failed; nothing on disk has been touched.
-                throw new InvalidOperationException("TorrServer did not return its torrent list; the sync was skipped.");
-            }
-
-            if (torrents.Count == 0)
-            {
-                _logger.LogInformation("No active torrents found in TorrServer.");
-                return;
-            }
-
             // Orphans are never purged by the scheduled run: that is left to the explicit Library/Scan.
-            var report = await _strmEngine.FullSyncAsync(torrents, purgeOrphans: false, cancellationToken, progress);
+            var report = await _strmEngine.FullSyncFromServerAsync(_torrClient, purgeOrphans: false, cancellationToken, progress);
 
             _logger.LogInformation(
                 "Torr2Jelly scheduled sync completed: {Synced} synced, {Failed} failed, {NotReady} waiting for metadata.",

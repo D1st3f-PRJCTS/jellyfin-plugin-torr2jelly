@@ -121,6 +121,15 @@ public class TorrClientService
     private readonly ILogger<TorrClientService> _logger;
     private readonly HttpClient _httpClient;
     private readonly TorrServerDaemonManager _daemonManager;
+    private readonly SemaphoreSlim _mutationGate = new(1, 1);
+    private readonly DiscoveryMarkerStore? _discoveryMarkers;
+
+    public TorrClientService(ILogger<TorrClientService> logger, IHttpClientFactory httpClientFactory,
+        TorrServerDaemonManager daemonManager, MediaBrowser.Common.Configuration.IApplicationPaths paths)
+        : this(logger, httpClientFactory, daemonManager)
+    {
+        _discoveryMarkers = new DiscoveryMarkerStore(paths.DataPath);
+    }
 
     public TorrClientService(
         ILogger<TorrClientService> logger,
@@ -246,7 +255,7 @@ public class TorrClientService
     /// Adds a torrent (magnet, http(s) .torrent link or hash) to TorrServer. Returns <c>null</c> when TorrServer
     /// could not be reached or did not accept the torrent; the cause is logged, never returned to the caller.
     /// </summary>
-    public async Task<TorrTorrent?> AddTorrentAsync(
+    private async Task<TorrTorrent?> AddTorrentCoreAsync(
         string link,
         string? title = null,
         string? poster = null,
@@ -292,7 +301,7 @@ public class TorrClientService
     /// <c>null</c> when TorrServer could not be reached or did not accept the file. When the answer carries no
     /// info-hash, the v1 hash is computed from the file and the torrent is fetched with <c>get</c>.
     /// </summary>
-    public async Task<TorrTorrent?> AddTorrentFileAsync(
+    private async Task<TorrTorrent?> AddTorrentFileCoreAsync(
         byte[] file,
         string? title = null,
         string? poster = null,
@@ -379,7 +388,7 @@ public class TorrClientService
         }
     }
 
-    public async Task<bool> SetTorrentCategoryAsync(
+    private async Task<bool> SetTorrentCategoryCoreAsync(
         string hash,
         string category,
         string? title = null,
@@ -411,7 +420,7 @@ public class TorrClientService
         }
     }
 
-    public async Task<bool> RemoveTorrentAsync(string hash, CancellationToken cancellationToken = default)
+    private async Task<bool> RemoveTorrentCoreAsync(string hash, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -427,5 +436,131 @@ public class TorrClientService
             _logger.LogError(ex, "Failed to remove torrent {Hash} from TorrServer", hash);
             return false;
         }
+    }
+
+    // Every plugin mutation shares this gate. Manual intake revokes discovery's lease before
+    // releasing it, including adds that intentionally skip library sync or have no category.
+    public async Task<TorrTorrent?> AddTorrentAsync(string link, string? title = null, string? poster = null,
+        string? category = null, bool saveToDb = true, CancellationToken cancellationToken = default)
+    {
+        await _mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            var knownHash = TorrentHash.IsValid(link) ? link : Search.InfoHashHelper.FromMagnet(link);
+            if (TorrentHash.IsValid(knownHash)) _discoveryMarkers?.ClearForManual(knownHash);
+            var added = await AddTorrentCoreAsync(link, title, poster, category, saveToDb, cancellationToken);
+            if (added != null && TorrentHash.IsValid(added.Hash)) _discoveryMarkers?.ClearForManual(added.Hash);
+            return added;
+        }
+        finally { _mutationGate.Release(); }
+    }
+
+    public async Task<TorrTorrent?> AddTorrentFileAsync(byte[] file, string? title = null, string? poster = null,
+        string? category = null, bool saveToDb = true, CancellationToken cancellationToken = default)
+    {
+        await _mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (TorrentFile.TryGetInfoHash(file, out var hash)) _discoveryMarkers?.ClearForManual(hash);
+            var added = await AddTorrentFileCoreAsync(file, title, poster, category, saveToDb, cancellationToken);
+            if (added != null && TorrentHash.IsValid(added.Hash)) _discoveryMarkers?.ClearForManual(added.Hash);
+            return added;
+        }
+        finally { _mutationGate.Release(); }
+    }
+
+    public async Task<bool> SetTorrentCategoryAsync(string hash, string category, string? title = null,
+        string? poster = null, CancellationToken cancellationToken = default)
+    {
+        await _mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (TorrentHash.IsValid(hash)) _discoveryMarkers?.ClearForManual(hash);
+            return await SetTorrentCategoryCoreAsync(hash, category, title, poster, cancellationToken);
+        }
+        finally { _mutationGate.Release(); }
+    }
+
+    public async Task<bool> RemoveTorrentAsync(string hash, CancellationToken cancellationToken = default)
+    {
+        await _mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (TorrentHash.IsValid(hash)) _discoveryMarkers?.ClearForManual(hash);
+            return await RemoveTorrentCoreAsync(hash, cancellationToken);
+        }
+        finally { _mutationGate.Release(); }
+    }
+
+    internal async Task<bool> BackfillTorrentCategoryAsync(string hash, string category, CancellationToken ct)
+    {
+        if (!TorrentHash.IsValid(hash)) return false;
+        await _mutationGate.WaitAsync(ct);
+        try
+        {
+            // Automatic housekeeping is not manual adoption. Never revoke a lease or
+            // overwrite a category set since the controller captured its original list.
+            if (_discoveryMarkers?.Read(hash) != null) return false;
+            var current = await GetTorrentAsync(hash, ct);
+            if (current == null || !string.IsNullOrWhiteSpace(current.Category)) return false;
+            return await SetTorrentCategoryCoreAsync(hash, category, current.Title, current.Poster, ct);
+        }
+        finally { _mutationGate.Release(); }
+    }
+
+    internal async Task<TorrTorrent?> UploadDiscoveryAsync(byte[] file, string hash, DiscoveryMarker attempt,
+        string title, string? poster, CancellationToken ct)
+    {
+        await _mutationGate.WaitAsync(ct);
+        try
+        {
+            var current = await ListTorrentsAsync(ct);
+            if (_discoveryMarkers?.IsCurrent(hash, attempt.Nonce) != true || current == null || current.Any(t => TorrentHash.Equal(t.Hash, hash))) return null;
+            var added = await AddTorrentFileCoreAsync(file, title, poster, attempt.OwnerCategory, true, ct);
+            if (added == null || !TorrentHash.Equal(added.Hash, hash)) return null;
+            // Some server versions may ignore multipart category. Assign it explicitly and
+            // require a fresh readback before treating the server instance as ours.
+            if (!await SetTorrentCategoryCoreAsync(hash, attempt.OwnerCategory, title, poster, ct)) return null;
+            var stored = (await ListTorrentsAsync(ct))?.FirstOrDefault(t => TorrentHash.Equal(t.Hash, hash));
+            return stored != null && attempt.Owns(stored) ? stored : null;
+        }
+        finally { _mutationGate.Release(); }
+    }
+
+    internal async Task FinalizeDiscoveryAsync(string hash, DiscoveryMarker attempt, string category, CancellationToken ct)
+    {
+        await _mutationGate.WaitAsync(ct);
+        try
+        {
+            if (_discoveryMarkers?.IsCurrent(hash, attempt.Nonce) != true) return;
+            var stored = (await ListTorrentsAsync(ct))?.FirstOrDefault(t => TorrentHash.Equal(t.Hash, hash));
+            if (stored == null) return;
+            // A foreign category is never overwritten. A committed STRM already proves that
+            // this hash is safe to sync; only its old temporary category needs reconciliation.
+            if (attempt.Owns(stored))
+            {
+                if (!await SetTorrentCategoryCoreAsync(hash, category, stored.Title, stored.Poster, ct)) return;
+                stored = (await ListTorrentsAsync(ct))?.FirstOrDefault(t => TorrentHash.Equal(t.Hash, hash));
+                if (stored == null || stored.Category != category) return;
+            }
+            _discoveryMarkers.Complete(hash, attempt.Nonce);
+        }
+        finally { _mutationGate.Release(); }
+    }
+
+    internal async Task CleanupDiscoveryAsync(string hash, DiscoveryMarker attempt, Func<bool> isReferenced, CancellationToken ct)
+    {
+        await _mutationGate.WaitAsync(ct);
+        try
+        {
+            if (_discoveryMarkers?.IsCurrent(hash, attempt.Nonce) != true || isReferenced()) return;
+            var current = await ListTorrentsAsync(ct);
+            if (current == null) return;
+            var stored = current.FirstOrDefault(t => TorrentHash.Equal(t.Hash, hash));
+            // Unproven ownership keeps non-expiring suppression. Manual intake can adopt it.
+            if (stored != null && (!attempt.Owns(stored) || !await RemoveTorrentCoreAsync(hash, ct))) return;
+            _discoveryMarkers.Reject(hash, attempt.Nonce);
+        }
+        finally { _mutationGate.Release(); }
     }
 }

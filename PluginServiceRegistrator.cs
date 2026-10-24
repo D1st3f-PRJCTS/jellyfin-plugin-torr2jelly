@@ -18,6 +18,8 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
         serviceCollection.AddHttpClient();
+        serviceCollection.AddHttpClient("DiscoveryMetadata", client => client.Timeout = TimeSpan.FromSeconds(20))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 
         // Link resolution must see a redirect to a magnet link instead of following it (nothing can fetch "magnet:").
         serviceCollection.AddHttpClient(TorrentLinkResolver.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(20))
@@ -33,6 +35,11 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<TorrentLinkResolver>();
         serviceCollection.AddSingleton<StrmEngine>();
         serviceCollection.AddSingleton<TmdbClient>();
+        serviceCollection.AddSingleton<ImdbRatings>();
+        serviceCollection.AddHostedService(sp => sp.GetRequiredService<ImdbRatings>());
+        serviceCollection.AddSingleton<MovieDiscoveryService>();
+        serviceCollection.AddSingleton<DiscoveryJobs>();
+        serviceCollection.AddHostedService(sp => sp.GetRequiredService<DiscoveryJobs>());
         serviceCollection.AddSingleton<PlaceholderTitleResolver>();
         serviceCollection.AddSingleton<ProwlarrSearchProvider>();
         serviceCollection.AddSingleton<TorznabSearchProvider>();

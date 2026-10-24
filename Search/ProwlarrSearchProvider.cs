@@ -181,14 +181,22 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
         }
     }
 
-    public async Task<List<TorrentSearchResult>> SearchAsync(
+    public Task<List<TorrentSearchResult>> SearchAsync(string query, IEnumerable<int>? categories = null, CancellationToken cancellationToken = default)
+        => SearchCoreAsync(query, categories, cancellationToken, false);
+
+    public Task<List<TorrentSearchResult>> SearchCheckedAsync(string query, IEnumerable<int>? categories, CancellationToken cancellationToken)
+        => SearchCoreAsync(query, categories, cancellationToken, true);
+
+    private async Task<List<TorrentSearchResult>> SearchCoreAsync(
         string query,
-        IEnumerable<int>? categories = null,
-        CancellationToken cancellationToken = default)
+        IEnumerable<int>? categories,
+        CancellationToken cancellationToken,
+        bool reportErrors)
     {
         var (baseUrl, apiKey) = GetConfig();
         if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(query))
         {
+            if (reportErrors) throw new InvalidOperationException("search_unavailable");
             return new List<TorrentSearchResult>();
         }
 
@@ -222,6 +230,7 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
             if (doc.RootElement.ValueKind != JsonValueKind.Array)
             {
+                if (reportErrors) throw new InvalidOperationException("search_failed");
                 _logger.LogWarning("Prowlarr search returned unexpected JSON ({Kind}), ignoring", doc.RootElement.ValueKind);
                 return new List<TorrentSearchResult>();
             }
@@ -279,11 +288,13 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
         }
         catch (OperationCanceledException)
         {
+            if (reportErrors) throw;
             _logger.LogWarning("Prowlarr search timed out at {Url}", fullUrl);
             return new List<TorrentSearchResult>();
         }
         catch (Exception ex)
         {
+            if (reportErrors) throw;
             _logger.LogError(ex, "Failed to search Prowlarr at {Url}", fullUrl);
             return new List<TorrentSearchResult>();
         }

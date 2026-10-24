@@ -193,7 +193,7 @@ public class Torr2JellyApiController : ControllerBase
             await gate.WaitAsync();
             try
             {
-                await _torrClient.SetTorrentCategoryAsync(t.Hash, t.Category, t.Title, t.Poster, CancellationToken.None);
+                await _torrClient.BackfillTorrentCategoryAsync(t.Hash, t.Category, CancellationToken.None);
             }
             finally
             {
@@ -246,7 +246,8 @@ public class Torr2JellyApiController : ControllerBase
             category: category.Name,
             customTitle: req.CustomTitle,
             forceCategory: true,
-            cancellationToken: cancellationToken);
+            cancellationToken: cancellationToken,
+            manualIntake: true);
 
         // The category is saved, but the files were not moved: report it instead of a success. "Metadata not ready"
         // stays a 200: the stored category is honoured by the next sync, which moves the files.
@@ -411,7 +412,9 @@ public class Torr2JellyApiController : ControllerBase
         }
 
         using var reader = new StreamReader(stream);
-        _searchScript = reader.ReadToEnd();
+        using var discovery = assembly.GetManifestResourceStream($"{typeof(Plugin).Namespace}.Web.torr2jellydiscovery.js");
+        using var discoveryReader = discovery == null ? null : new StreamReader(discovery);
+        _searchScript = (discoveryReader?.ReadToEnd() ?? string.Empty) + "\n" + reader.ReadToEnd();
         return _searchScript;
     }
 
@@ -422,23 +425,18 @@ public class Torr2JellyApiController : ControllerBase
     {
         // Only a list TorrServer really returned may drive the purge: a failed request must never look like
         // "there are no torrents".
-        var torrents = await _torrClient.ListTorrentsAsync(cancellationToken);
-        if (torrents == null)
-        {
-            return StatusCode(StatusCodes.Status502BadGateway, new
-            {
-                error = "TorrServer is not reachable or returned an error; nothing was synced or removed."
-            });
-        }
-
         FullSyncReport report;
         try
         {
-            report = await _strmEngine.FullSyncAsync(torrents, purgeOrphans: true, cancellationToken);
+            report = await _strmEngine.FullSyncFromServerAsync(_torrClient, purgeOrphans: true, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (InvalidOperationException)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = "TorrServer did not return its list; nothing was synced or removed." });
         }
         catch (Exception ex)
         {
@@ -448,7 +446,7 @@ public class Torr2JellyApiController : ControllerBase
 
         _strmEngine.TriggerLibraryScan();
 
-        var message = torrents.Count == 0
+        var message = report.Synced + report.Failed + report.SkippedNotReady == 0
             ? "TorrServer has no torrents; nothing was synced and no files were removed. Library scan triggered."
             : "Library synced and scan triggered.";
 

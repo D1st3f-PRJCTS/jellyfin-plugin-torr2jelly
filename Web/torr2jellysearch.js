@@ -2543,14 +2543,26 @@
     }
 
     // Page watchers
+    var discovery = null;
+    try { discovery = typeof window._t2jCreateDiscovery === 'function' ? window._t2jCreateDiscovery({
+        escape: escapeHtml, lang: getLang, auth: getAuthHeaders, url: getApiUrl,
+        user: getCurrentUserIdSafe, admin: getIsAdminCached, toast: showToast,
+        lock: lockBodyScroll, unlock: unlockBodyScroll, focusables: getDialogFocusables,
+        closeOther: function () { closeStreamsDialog(true); }
+    }) : null; } catch (error) { console.warn('[Torr2Jelly] Discovery initialization failed', error); }
+
     function checkAllPages() {
         if (disposed) return;
+        if (discovery) {
+            try { discovery.check(); } catch (error) { console.warn('[Torr2Jelly] Discovery update failed', error); }
+        }
         checkSearchPage();
         checkItemDetailPage();
     }
 
     function onHashChange() {
         if (disposed) return;
+        if (discovery) discovery.close(true);
         // A dialog belongs to the page it was opened on.
         closeStreamsDialog(true);
         // Navigating away from the search route: forget the previous query/results immediately.
@@ -2573,6 +2585,7 @@
     // Lets a newer copy of this script take over (see the top of the file).
     window._t2jSearchDispose = function () {
         disposed = true;
+        if (discovery) discovery.dispose();
         clearInterval(pollTimer);
         clearTimeout(debounceTimer);
         cancelPendingSearch();

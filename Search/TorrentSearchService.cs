@@ -63,6 +63,16 @@ public class TorrentSearchService
         bool? onlyGold = null, // obsolete: accepted for compatibility, ignored (see PluginConfiguration.FreeleechOnly)
         bool isUserAdmin = true,
         CancellationToken cancellationToken = default)
+        => await SearchCoreAsync(query, category, isUserAdmin, cancellationToken, false);
+
+    public async Task<CheckedSearchResult> SearchCheckedAsync(string query, string category, CancellationToken ct)
+    {
+        var failed = false;
+        var results = await SearchCoreAsync(query, category, true, ct, true, () => failed = true);
+        return new CheckedSearchResult(results, failed);
+    }
+
+    private async Task<List<TorrentSearchResult>> SearchCoreAsync(string query, string? category, bool isUserAdmin, CancellationToken cancellationToken, bool reportErrors, Action? onFailure = null)
     {
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
 
@@ -82,15 +92,23 @@ public class TorrentSearchService
         var searches = new List<Task<List<TorrentSearchResult>>>();
         if (config.EnableProwlarr)
         {
-            searches.Add(SearchProviderAsync(_prowlarr, query, categoryIds, cancellationToken));
+            searches.Add(reportErrors ? _prowlarr.SearchCheckedAsync(query, categoryIds, cancellationToken) : SearchProviderAsync(_prowlarr, query, categoryIds, cancellationToken));
         }
 
         if (config.EnableTorznab)
         {
-            searches.Add(SearchProviderAsync(_torznab, query, categoryIds, cancellationToken));
+            searches.Add(reportErrors ? _torznab.SearchCheckedAsync(query, categoryIds, cancellationToken) : SearchProviderAsync(_torznab, query, categoryIds, cancellationToken));
         }
 
-        var perProvider = await Task.WhenAll(searches);
+        if (reportErrors && searches.Count == 0) throw new InvalidOperationException("search_unavailable");
+
+        async Task<List<TorrentSearchResult>> Observe(Task<List<TorrentSearchResult>> task)
+        {
+            try { return await task; }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception) { onFailure?.Invoke(); return new List<TorrentSearchResult>(); }
+        }
+        var perProvider = await Task.WhenAll(searches.Select(task => reportErrors ? Observe(task) : task));
         var results = perProvider
             .SelectMany(r => r)
             .Where(r => r != null)
@@ -112,7 +130,7 @@ public class TorrentSearchService
             results = results.Where(r => r.IsFreeleech).ToList();
         }
 
-        var deduped = DeduplicateByHash(results);
+        var deduped = reportErrors ? results : DeduplicateByHash(results);
 
         return deduped
             .OrderByDescending(r => r.Seeders)

@@ -29,6 +29,24 @@ Torr2Jelly is a Jellyfin plugin that turns torrents into a streamable Jellyfin l
 
 ## How it works
 
+### Trending movies on the home screen
+
+Administrators using Jellyfin Web get a **Trending now** row with today's or this week's TMDB movies. Open a poster for the overview, cast, year, runtime, genres, and separately labeled TMDB and IMDb ratings. Configure the existing TMDB API key in Torr2Jelly settings first. IMDb ratings use IMDb's [daily non-commercial dataset](https://data.imdb.com/non-commercial-datasets/), refreshed in the background and kept compressed on disk. Missing or unavailable ratings are shown as unavailable.
+
+**Add** first creates a library placeholder, then searches the configured trackers. Automatic selection requires a matching IMDb or TMDB ID in the search result, a matching known title and release year, freeleech, and at least one seeder. A conflicting ID always rejects the release. Only candidates that pass these gates are ranked: explicit Ukrainian audio hints first, then seeders. There is no size or resolution limit; Remux releases are allowed. Audio hints come from tracker titles and are not a technical inspection of the audio tracks.
+
+Before TorrServer receives a candidate, the plugin downloads only its `.torrent` metadata (up to 4 MiB), checks the info-hash when provided, and requires one identifiable main movie file. Collections, episode releases and ambiguous files are rejected. There is no minimum movie-file size or camera-source filter in this unlimited profile. Magnet-only releases without inspectable `.torrent` metadata, disc images, v2/hybrid metadata and metadata links requiring redirects need manual selection. After upload, TorrServer's actual file list and file index are checked again before writing a stream. Tracker metadata can be wrong; these checks reduce mistaken matches but cannot certify the audiovisual contents.
+
+When no candidate passes, the placeholder stays and **Find manually** opens the existing release search. Tracker failures are reported separately from empty searches; a failed provider does not discard a healthy provider's results. Repeated adds do not duplicate a movie. Adds run as background jobs with a five-minute budget. Closing or reloading the page does not cancel a job; reopening the movie resumes status polling. Job history is held in memory for up to an hour and is lost on a server restart; retry after checking the library if the job has expired.
+
+Failed or interrupted intakes remain excluded from scheduled sync. Durable markers and rollback journals live under the Jellyfin data directory in `torr2jelly-discovery-pending/`. Startup and periodic recovery restore interrupted placeholder writes even while TorrServer is offline. A `pending` lease grants cleanup rights only while its unique temporary category still matches the torrent in TorrServer and no library stream references it. The category is explicitly set and read back after upload. Unprovable ownership keeps non-expiring suppression; a `rejected` marker is written only after confirmed absence or removal, suppresses stale sync for 15 minutes, and never grants removal rights. Explicit manual intake clears the suppression at the add step, including adds without library sync or a category; server mutations are serialized with automatic cleanup. Discovery never takes over a pre-existing torrent. A newer stream in a folder supersedes an old rollback journal, and a completed registered stream is preserved. Failure to finalize its normal category is retried in recovery without reporting the completed add as a failure. Scheduled and explicit sync fetch a fresh torrent list while holding the engine gate. Do not delete these recovery files manually.
+
+This row is an extension of Jellyfin Web; native clients need their own discovery UI. Library items and streams created by it work through the normal Jellyfin library.
+
+Server mutations are serialized to keep manual adoption and automatic cleanup consistent. A slow magnet add can delay another add, category change or removal for up to its 60-second server timeout. A cleanup that times out leaves its suppression marker for periodic recovery and preserves the original verification result. Automatic category backfill skips suppressed hashes and rechecks the current category before writing.
+
+Run the isolated safety checks with `.NET 8`: `dotnet run --project Tests/DiscoveryTests.csproj -c Release`. They use fake HTTP responses and temporary library folders, without touching a live Jellyfin or tracker.
+
 ```mermaid
 flowchart LR
     IDX["Prowlarr / Torznab"] -->|search results| T2J["Torr2Jelly plugin<br/>(inside Jellyfin)"]

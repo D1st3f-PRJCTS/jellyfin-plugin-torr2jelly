@@ -233,6 +233,7 @@ public class StrmEngine
     // Serialises every operation that writes or deletes .strm / .nfo files.
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly AlternateStreamStore _altStore;
+    private readonly DiscoveryMarkerStore _discoveryMarkers;
     private readonly ConcurrentDictionary<string, byte> _warnedRoots = new(StringComparer.Ordinal);
 
     public StrmEngine(
@@ -251,6 +252,7 @@ public class StrmEngine
         _httpClient = httpClientFactory.CreateClient("StrmHttpClient");
         _httpClient.Timeout = TimeSpan.FromSeconds(15);
         _altStore = new AlternateStreamStore(appPaths.DataPath, logger);
+        _discoveryMarkers = new DiscoveryMarkerStore(appPaths.DataPath);
     }
 
     public static string FormatFileSize(long bytes)
@@ -865,7 +867,8 @@ public class StrmEngine
         int? tmdbId = null,
         string? imdbId = null,
         bool forceCategory = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool manualIntake = false)
     {
         ArgumentNullException.ThrowIfNull(torrent);
 
@@ -877,6 +880,12 @@ public class StrmEngine
         await _lock.WaitAsync(cancellationToken);
         try
         {
+            if (manualIntake)
+            {
+                if (!RecoverDiscoveryJournal(TorrentHash.Normalize(torrent.Hash ?? string.Empty)))
+                    return new StrmSyncResult { ErrorMessage = "discovery recovery pending" };
+                _discoveryMarkers.ClearForManual(torrent.Hash ?? string.Empty);
+            }
             var roots = GetCategoryRoots();
             var index = BuildStrmIndexCore(roots);
             return await SyncTorrentCoreAsync(
@@ -910,6 +919,20 @@ public class StrmEngine
         {
             _lock.Release();
         }
+    }
+
+    /// <summary>Fetch inside the engine gate: a caller's stale list must not create or purge files after an intake.</summary>
+    public async Task<FullSyncReport> FullSyncFromServerAsync(TorrClientService client, bool purgeOrphans,
+        CancellationToken ct = default, IProgress<double>? progress = null)
+    {
+        await _lock.WaitAsync(ct);
+        try
+        {
+            var torrents = await client.ListTorrentsAsync(ct)
+                ?? throw new InvalidOperationException("TorrServer did not return its torrent list; nothing was changed.");
+            return await FullSyncCoreAsync(torrents, purgeOrphans, progress, ct);
+        }
+        finally { _lock.Release(); }
     }
 
     private async Task<FullSyncReport> FullSyncCoreAsync(
@@ -1046,6 +1069,9 @@ public class StrmEngine
         {
             return RejectInvalidHash(torrent);
         }
+
+        if (IsDiscoveryPending(hash))
+            return new StrmSyncResult { TorrentHash = hash, ErrorMessage = "discovery verification pending; automatic sync suppressed" };
 
         var result = new StrmSyncResult
         {
@@ -2461,6 +2487,165 @@ public class StrmEngine
         TorrTorrent torrent,
         AddAlternateStreamRequestDto request,
         CancellationToken cancellationToken = default)
+        => await AddAlternateStreamCoreAsync(targetDir, torrent, request, false, cancellationToken);
+
+    // Disk commit/registration only. Uploads stay outside this gate and are protected by durable markers.
+    internal async Task<T> WithDiscoveryCommitLockAsync<T>(Func<Task<T>> commit, CancellationToken ct)
+    {
+        await _lock.WaitAsync(ct);
+        try { return await commit(); }
+        finally { _lock.Release(); }
+    }
+
+    internal async Task<AlternateStreamResultDto> CommitDiscoveryStreamAsync(string dir, TorrTorrent torrent, AddAlternateStreamRequestDto request, CancellationToken ct)
+    {
+        if (!RecoverDiscoveryFolder(dir)) return new AlternateStreamResultDto { ErrorMessage = "discovery recovery pending" };
+        // A failed NFO/store write must not leave a broken stream in place of the placeholder.
+        string[] RelevantFiles() => Directory.GetFiles(dir).Where(p =>
+            Path.GetExtension(p).Equals(".strm", StringComparison.OrdinalIgnoreCase) ||
+            Path.GetExtension(p).Equals(".nfo", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var before = RelevantFiles().ToDictionary(p => p, File.ReadAllBytes, PathComparer);
+        var journal = DiscoveryPendingPath(torrent.Hash) + ".rollback.json";
+        var backup = new DiscoveryRollback(dir, before.ToDictionary(p => Path.GetFileName(p.Key), p => p.Value));
+        var json = System.Text.Json.JsonSerializer.Serialize(backup);
+        if (json.Length > 4 * 1024 * 1024) return new AlternateStreamResultDto { ErrorMessage = "discovery backup is too large" };
+        File.WriteAllText(journal + ".tmp", json);
+        File.Move(journal + ".tmp", journal, true);
+        var success = false;
+        try
+        {
+            var result = await AddAlternateStreamCoreAsync(dir, torrent, request, true, ct);
+            if (result.Success && !_altStore.IsPersisted(torrent.Hash))
+            {
+                result.Success = false;
+                result.ErrorMessage = "Could not persist discovery stream registration.";
+            }
+            success = result.Success;
+            if (success)
+                try { File.Delete(journal); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _logger.LogWarning("Discovery journal cleanup deferred for {Hash}", torrent.Hash); }
+            return result;
+        }
+        finally
+        {
+            if (!success)
+            {
+                _altStore.Unregister(torrent.Hash);
+                RecoverDiscoveryJournal(torrent.Hash);
+            }
+        }
+    }
+
+    private string DiscoveryPendingPath(string hash)
+        => _discoveryMarkers.PathFor(hash);
+
+    internal bool IsDiscoveryPending(string hash) => _discoveryMarkers.Read(hash) != null;
+    internal DiscoveryMarker? GetDiscoveryMarker(string hash) => _discoveryMarkers.Read(hash);
+    internal DiscoveryMarker BeginDiscoveryAttempt(string hash) => _discoveryMarkers.Begin(hash);
+    internal bool IsCurrentDiscoveryAttempt(string hash, Guid nonce) => _discoveryMarkers.IsCurrent(hash, nonce);
+    internal void RejectDiscoveryAttempt(string hash, Guid nonce) => _discoveryMarkers.Reject(hash, nonce);
+    internal void CompleteDiscoveryAttempt(string hash, Guid nonce) => _discoveryMarkers.Complete(hash, nonce);
+    internal void ClearDiscoveryMarker(string hash) => _discoveryMarkers.ClearForManual(hash);
+    internal string? FindMoviePlaceholderDirectory(int tmdbId, string? imdbId)
+    {
+        var known = BuildPlaceholderIndex(GetCategoryRoots());
+        if (imdbId != null && known.TryGetValue(imdbId, out var imdbFolder) && Directory.Exists(imdbFolder)) return imdbFolder;
+        return known.TryGetValue(KeyTmdbMovie + tmdbId.ToString(CultureInfo.InvariantCulture), out var tmdbFolder) && Directory.Exists(tmdbFolder) ? tmdbFolder : null;
+    }
+    internal bool HasDiscoveryJournal(string hash) => File.Exists(DiscoveryPendingPath(hash) + ".rollback.json");
+
+    private sealed record DiscoveryRollback(string Directory, Dictionary<string, byte[]> Files);
+
+    internal bool RecoverDiscoveryJournal(string hash)
+    {
+        var path = DiscoveryPendingPath(hash) + ".rollback.json";
+        if (!File.Exists(path)) return true;
+        try
+        {
+            if (new FileInfo(path).Length > 4 * 1024 * 1024) return false;
+            if (HasCommittedDiscoveryStream(hash)) { File.Delete(path); return true; }
+            var journal = System.Text.Json.JsonSerializer.Deserialize<DiscoveryRollback>(File.ReadAllText(path));
+            var dir = Canonicalize(journal?.Directory);
+            var roots = GetCategoryRoots();
+            if (journal?.Files == null || journal.Files.Values.Any(v => v == null) || dir == null || !Directory.Exists(dir) || IsCategoryOrLibraryRoot(dir, roots) || FindContainingRoot(roots, dir) == null) return false;
+            if (journal.Files.Keys.Any(name => name != Path.GetFileName(name) || name is "." or ".." || name.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 ||
+                !(Path.GetExtension(name).Equals(".strm", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(name).Equals(".nfo", StringComparison.OrdinalIgnoreCase)))) return false;
+            // A new stream in this folder supersedes the old backup, even if TorrServer is offline.
+            foreach (var stream in Directory.GetFiles(dir).Where(p => Path.GetExtension(p).Equals(".strm", StringComparison.OrdinalIgnoreCase)))
+            {
+                var owner = TryReadStrmHash(stream);
+                if (owner == null || TorrentHash.Equal(owner, hash)) continue;
+                if (!journal.Files.TryGetValue(Path.GetFileName(stream), out var original) || !File.ReadAllBytes(stream).SequenceEqual(original))
+                {
+                    _altStore.Unregister(hash);
+                    File.Delete(path);
+                    return true;
+                }
+            }
+            _altStore.Unregister(hash);
+            var complete = true;
+            foreach (var file in Directory.GetFiles(dir))
+            {
+                var name = Path.GetFileName(file);
+                if (journal.Files.ContainsKey(name)) continue;
+                // Remove only files this commit could have introduced, never an unrelated version or sidecar.
+                var ours = Path.GetExtension(file).Equals(".strm", StringComparison.OrdinalIgnoreCase) && File.ReadAllText(file).Contains("link=" + hash, StringComparison.OrdinalIgnoreCase);
+                if (!ours) continue;
+                try { File.Delete(file); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { complete = false; }
+            }
+            foreach (var (name, content) in journal.Files)
+            {
+                try { File.WriteAllBytes(Path.Combine(dir, name), content); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { complete = false; }
+            }
+            NotifyPathChanged(dir);
+            if (complete) File.Delete(path);
+            return complete;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            _logger.LogWarning("Discovery rollback journal for {Hash} could not be restored ({Type})", hash, ex.GetType().Name);
+            return false;
+        }
+    }
+
+    internal void DiscardDiscoveryJournal(string hash) => File.Delete(DiscoveryPendingPath(hash) + ".rollback.json");
+
+    internal bool RecoverDiscoveryFolder(string folder)
+    {
+        foreach (var hash in GetDiscoveryPendingHashes().Where(HasDiscoveryJournal))
+        {
+            try
+            {
+                var path = DiscoveryPendingPath(hash) + ".rollback.json";
+                if (new FileInfo(path).Length > 4 * 1024 * 1024) return false;
+                var journal = System.Text.Json.JsonSerializer.Deserialize<DiscoveryRollback>(File.ReadAllText(path));
+                if (journal == null) return false;
+                if (!PathEquals(Canonicalize(journal.Directory) ?? string.Empty, Canonicalize(folder) ?? string.Empty)) continue;
+                if (HasCommittedDiscoveryStream(hash)) DiscardDiscoveryJournal(hash);
+                else if (!RecoverDiscoveryJournal(hash)) return false;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { return false; }
+        }
+        return true;
+    }
+
+    internal string[] GetDiscoveryPendingHashes()
+    {
+        var directory = Path.GetDirectoryName(DiscoveryPendingPath(new string('0', 40)))!;
+        if (!Directory.Exists(directory)) return Array.Empty<string>();
+        var names = Directory.GetFiles(directory).Select(Path.GetFileName).OfType<string>().ToArray();
+        return names.Select(n => n.EndsWith(".rollback.json", StringComparison.Ordinal) ? n[..^14] : n)
+            .Where(TorrentHash.IsValid).Distinct(StringComparer.OrdinalIgnoreCase).Where(h => _discoveryMarkers.Read(h) != null || HasDiscoveryJournal(h)).ToArray();
+    }
+
+    internal bool HasCommittedDiscoveryStream(string hash) => _altStore.TryGet(hash, out var entry) &&
+        File.Exists(entry.StrmPath) && File.ReadAllText(entry.StrmPath).Contains("link=" + hash, StringComparison.OrdinalIgnoreCase);
+
+    internal string? GetCommittedDiscoveryCategory(string hash) => _altStore.TryGet(hash, out var entry) && HasCommittedDiscoveryStream(hash)
+        ? GetCategoryNameForPath(entry.TargetDir) : null;
+
+    private async Task<AlternateStreamResultDto> AddAlternateStreamCoreAsync(
+        string targetDir, TorrTorrent torrent, AddAlternateStreamRequestDto request, bool lockAlreadyHeld, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(torrent);
         ArgumentNullException.ThrowIfNull(request);
@@ -2478,7 +2663,7 @@ public class StrmEngine
             return result;
         }
 
-        await _lock.WaitAsync(cancellationToken);
+        if (!lockAlreadyHeld) await _lock.WaitAsync(cancellationToken);
         try
         {
             var dir = Canonicalize(targetDir);
@@ -2486,6 +2671,12 @@ public class StrmEngine
             {
                 result.ErrorMessage = "The target directory does not exist.";
                 return result;
+            }
+
+            if (!lockAlreadyHeld)
+            {
+                if (!RecoverDiscoveryJournal(hash) || !RecoverDiscoveryFolder(dir)) { result.ErrorMessage = "discovery recovery pending"; return result; }
+                _discoveryMarkers.ClearForManual(hash);
             }
 
             var roots = GetCategoryRoots();
@@ -2640,7 +2831,7 @@ public class StrmEngine
         }
         finally
         {
-            _lock.Release();
+            if (!lockAlreadyHeld) _lock.Release();
         }
     }
 
@@ -3741,6 +3932,12 @@ public class StrmEngine
         await _lock.WaitAsync(ct);
         try
         {
+            if (!RecoverDiscoveryJournal(hash))
+            {
+                result.Message = "discovery recovery pending";
+                return result;
+            }
+            _discoveryMarkers.ClearForManual(hash);
             return await AddTorrentToSeriesCoreAsync(seriesDir, torrent, hash, result, ct);
         }
         finally

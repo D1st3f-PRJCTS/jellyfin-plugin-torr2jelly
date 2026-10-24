@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/main/logo.png",
     "versions": [
       {
+        "version": "1.0.24.1",
+        "changelog": "Fix movie details failing on newer Jellyfin versions because the library query return type changed. Existing-library links are optional and cannot break movie details or verified adds. Place Trending now directly below the media-library folders, including when those folders load late.",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/releases/download/v1.0.24.1/Torr2Jelly_1.0.24.1.zip",
+        "checksum": "9fbbf8f4f6c3c3f7945b756eb2fe6444",
+        "timestamp": "2026-10-24T23:35:26Z"
+      },
+      {
         "version": "1.0.24.0",
         "changelog": "Trending TMDB movies on the Jellyfin Web home screen, with movie details, cast, IMDb ratings and background Add jobs. Automatic torrent selection requires matching IDs, title, year, info-hash and movie files; otherwise a placeholder is kept. Ukrainian audio hints are preferred; freeleech and seeders are required. Durable quarantine and recovery protect rejected candidates and manual additions.",
         "targetAbi": "10.9.0.0",

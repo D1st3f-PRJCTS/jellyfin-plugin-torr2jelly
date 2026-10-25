@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/main/logo.png",
     "versions": [
       {
+        "version": "1.0.24.4",
+        "changelog": "Fix Trending now posters stacking vertically on mobile or clients without Jellyfin's optional scroller styles. Explicitly keep a single horizontal, scrollable row while retaining native responsive poster sizes and avoiding the managed itemsContainer lifecycle.",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/releases/download/v1.0.24.4/Torr2Jelly_1.0.24.4.zip",
+        "checksum": "0832d89544fa606e4ebf4d59f5a3a12d",
+        "timestamp": "2026-10-25T10:53:16Z"
+      },
+      {
         "version": "1.0.24.3",
         "changelog": "Native Jellyfin styling for Trending now and movie details: matching posters, spacing, typography, theme colors, icons, ratings and cast. Keep Trending directly below library folders. Improve keyboard focus and background refresh. Avoid native list lifecycle conflicts during navigation. Includes the newer-Jellyfin movie-details compatibility fix.",
         "targetAbi": "10.9.0.0",

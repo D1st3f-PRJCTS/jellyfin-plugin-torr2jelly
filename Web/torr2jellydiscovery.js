@@ -60,8 +60,8 @@ window._t2jCreateDiscovery = function (host) {
         .t2j-discovery-period .emby-tab-button{padding:.6em .9em}
         .t2j-discovery-scroll{overflow-x:auto;overflow-y:hidden;scrollbar-width:none;scroll-behavior:smooth}
         .t2j-discovery-scroll::-webkit-scrollbar{display:none}
-        .t2j-discovery-row{white-space:nowrap}
-        .t2j-discovery-card{cursor:pointer}
+        .t2j-discovery-row{display:flex;flex-flow:row nowrap;white-space:nowrap}
+        .t2j-discovery-card{flex:0 0 auto;cursor:pointer}
         .t2j-discovery-card .cardImageContainer{border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
         .t2j-discovery-poster{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover}
         .t2j-discovery-card .cardText{overflow:hidden;text-overflow:ellipsis}
@@ -337,6 +337,7 @@ window._t2jCreateDiscovery = function (host) {
                 + '<div class="emby-scroller padded-top-focusscale padded-bottom-focusscale t2j-discovery-scroll"><div class="scrollSlider focuscontainer-x t2j-discovery-row"></div></div>';
             // Jellyfin calls pause()/resume() on every .itemsContainer in its home view.
             // Keep our independently managed row out of that component lifecycle.
+            // Its flex layout is declared above; scrollSlider styling is not loaded on every client.
             position(home);
             var scroller = section.querySelector('.t2j-discovery-scroll');
             scroller.addEventListener('scroll', updateScroll, { passive: true });

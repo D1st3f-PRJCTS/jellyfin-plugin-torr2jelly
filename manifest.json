@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/main/logo.png",
     "versions": [
       {
+        "version": "1.0.24.2",
+        "changelog": "Native Jellyfin styling for Trending now: responsive poster cards, standard section spacing and scroll arrows, movie information and rating blocks, actor cards, theme colors and bundled icons. Improve screen-reader labels, focus restoration after Add, period switching and silent background refresh.",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/D1st3f-PRJCTS/jellyfin-plugin-torr2jelly/releases/download/v1.0.24.2/Torr2Jelly_1.0.24.2.zip",
+        "checksum": "8d7da4a06050f61d442e7e97ee9519c1",
+        "timestamp": "2026-10-25T03:29:09Z"
+      },
+      {
         "version": "1.0.24.1",
         "changelog": "Fix movie details failing on newer Jellyfin versions because the library query return type changed. Existing-library links are optional and cannot break movie details or verified adds. Place Trending now directly below the media-library folders, including when those folders load late.",
         "targetAbi": "10.9.0.0",

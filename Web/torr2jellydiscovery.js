@@ -208,7 +208,7 @@ window._t2jCreateDiscovery = function (host) {
             + '<div class="t2j-discovery-actions">' + button('', 'raised button-submit t2j-discovery-add', 'add') + button(t('Знайти вручну', 'Find manually'), 'button-flat t2j-discovery-manual', 'search') + '</div></div></div>'
             + '<div class="t2j-discovery-status" role="status" aria-live="polite"></div>'
             + '<p class="overview t2j-discovery-overview">' + esc(movie.Overview || t('Опис поки відсутній.', 'No overview available.')) + '</p>'
-            + '<h3 class="sectionTitle sectionTitle-cards">' + esc(t('Актори', 'Cast')) + '</h3><div class="itemsContainer t2j-discovery-cast">' + (movie.Actors || []).map(function (actor) {
+            + '<h3 class="sectionTitle sectionTitle-cards">' + esc(t('Актори', 'Cast')) + '</h3><div class="t2j-discovery-cast">' + (movie.Actors || []).map(function (actor) {
                 return '<div class="card portraitCard t2j-discovery-actor"><div class="cardBox cardBox-bottompadded"><div class="cardScalable"><div class="cardPadder cardPadder-portrait">' + icon('person', 'cardImageIcon') + '</div><div class="cardImageContainer coveredImage">' + image(actor.ImageUrl, 't2j-discovery-poster', actor.Name) + '</div></div><div class="cardText cardTextCentered cardText-first"><bdi>' + esc(actor.Name) + '</bdi></div><div class="cardText cardTextCentered cardText-secondary"><bdi>' + esc(actor.Character || '') + '</bdi></div></div></div>';
             }).join('') + '</div>'
             + '<div class="fieldDescription t2j-discovery-credit"><a class="button-link" href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a> · This product uses the TMDB API but is not endorsed or certified by TMDB.<br>'
@@ -334,7 +334,9 @@ window._t2jCreateDiscovery = function (host) {
             section.innerHTML = '<div class="t2j-discovery-head"><h2 class="sectionTitle sectionTitle-cards padded-left">' + esc(t('Популярне зараз', 'Trending now')) + '</h2><div class="emby-tabs-slider t2j-discovery-period" role="group" aria-label="' + esc(t('Період популярності', 'Trending period')) + '">'
                 + '<button type="button" is="emby-button" class="emby-tab-button emby-button" data-window="day">' + esc(t('Сьогодні', 'Today')) + '</button><button type="button" is="emby-button" class="emby-tab-button emby-button" data-window="week">' + esc(t('За тиждень', 'This week')) + '</button></div></div>'
                 + '<div class="emby-scrollbuttons padded-right"><button type="button" class="emby-scrollbuttons-button paper-icon-button-light" data-direction="left" aria-label="' + esc(t('Назад', 'Previous')) + '">' + icon('chevron_left') + '</button><button type="button" class="emby-scrollbuttons-button paper-icon-button-light" data-direction="right" aria-label="' + esc(t('Далі', 'Next')) + '">' + icon('chevron_right') + '</button></div>'
-                + '<div class="emby-scroller padded-top-focusscale padded-bottom-focusscale t2j-discovery-scroll"><div class="itemsContainer scrollSlider focuscontainer-x t2j-discovery-row"></div></div>';
+                + '<div class="emby-scroller padded-top-focusscale padded-bottom-focusscale t2j-discovery-scroll"><div class="scrollSlider focuscontainer-x t2j-discovery-row"></div></div>';
+            // Jellyfin calls pause()/resume() on every .itemsContainer in its home view.
+            // Keep our independently managed row out of that component lifecycle.
             position(home);
             var scroller = section.querySelector('.t2j-discovery-scroll');
             scroller.addEventListener('scroll', updateScroll, { passive: true });

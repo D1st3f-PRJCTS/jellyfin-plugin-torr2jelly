@@ -2545,7 +2545,7 @@
     // Page watchers
     var discovery = null;
     try { discovery = typeof window._t2jCreateDiscovery === 'function' ? window._t2jCreateDiscovery({
-        escape: escapeHtml, lang: getLang, auth: getAuthHeaders, url: getApiUrl,
+        escape: escapeHtml, lang: getLang, auth: getAuthHeaders, url: getApiUrl, icon: iconHtml,
         user: getCurrentUserIdSafe, admin: getIsAdminCached, toast: showToast,
         lock: lockBodyScroll, unlock: unlockBodyScroll, focusables: getDialogFocusables,
         closeOther: function () { closeStreamsDialog(true); }

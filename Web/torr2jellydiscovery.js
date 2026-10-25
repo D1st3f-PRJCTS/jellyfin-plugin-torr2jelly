@@ -6,11 +6,15 @@ window._t2jCreateDiscovery = function (host) {
     var cache = {}, loading = false, loadToken = 0, requestAbort = null;
     var busy = {}, outcomes = {}, currentMovie = null, lastLoadAt = 0;
     var esc = host.escape;
+    function icon(name, cls) { return host.icon ? host.icon(name, cls) : '<span class="material-icons ' + (cls || '') + '" aria-hidden="true">' + name + '</span>'; }
     function t(uk, en) { return host.lang().indexOf('uk') === 0 ? uk : en; }
-    function button(text, cls) { return '<button type="button" is="emby-button" class="emby-button ' + (cls || 'raised') + '">' + esc(text) + '</button>'; }
+    function button(text, cls, symbol) { return '<button type="button" is="emby-button" class="emby-button ' + (cls || 'raised') + '">' + (symbol ? icon(symbol) : '') + '<span>' + esc(text) + '</span></button>'; }
     function image(url, cls, alt) {
         if (!/^https:\/\/image\.tmdb\.org\/t\/p\/[a-z0-9]+\/[A-Za-z0-9._-]+$/.test(url || '')) return '';
         return '<img loading="lazy" class="' + cls + '" src="' + esc(url) + '" alt="' + esc(alt || '') + '">';
+    }
+    function imageFallbacks(root) {
+        root.querySelectorAll('img').forEach(function (img) { img.onerror = function () { img.remove(); }; });
     }
     function normalize(value) {
         // The host's JSON settings differ between Jellyfin versions; accept PascalCase and camelCase recursively.
@@ -47,14 +51,56 @@ window._t2jCreateDiscovery = function (host) {
     }
 
     var style = document.createElement('style');
-    style.textContent = '.t2j-discovery-head{display:flex;align-items:center;gap:1em;flex-wrap:wrap}.t2j-discovery-row{display:flex;gap:1em;overflow-x:auto;padding:.5em 0 1em;scroll-snap-type:x proximity}.t2j-discovery-card{flex:0 0 9em;min-width:0;color:inherit;background:none;border:0;padding:0;text-align:start;cursor:pointer;scroll-snap-align:start;font:inherit}.t2j-discovery-card:focus-visible{outline:2px solid var(--jf-palette-primary-main,#00a4dc);outline-offset:3px}.t2j-discovery-poster{display:block;width:100%;aspect-ratio:2/3;object-fit:cover;background:var(--jf-palette-background-paper,#202020);border-radius:var(--jf-shape-borderRadius,4px)}.t2j-discovery-card-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:.5em}.t2j-discovery-meta{display:block;font-size:90%;color:var(--jf-palette-text-secondary,rgba(255,255,255,.7))}.t2j-discovery-details-top{display:flex;gap:1.3em;align-items:start}.t2j-discovery-detail-poster{width:9em;flex:none;border-radius:var(--jf-shape-borderRadius,4px)}.t2j-discovery-info{flex:1;min-width:0}.t2j-discovery-info p{margin:.3em 0 .8em}.t2j-discovery-cast{display:flex;gap:1em;overflow-x:auto;padding:.5em 0}.t2j-discovery-actor{flex:0 0 5.5em;font-size:90%}.t2j-discovery-actor img{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:var(--jf-shape-borderRadius,4px)}.t2j-discovery-actions{display:flex;gap:.8em;flex-wrap:wrap;margin:1em 0}.t2j-discovery-overview{white-space:pre-line;line-height:1.5}.t2j-discovery-credit{font-size:80%;margin-top:1em}.t2j-discovery-status{margin:.7em 0;white-space:pre-line}@media(max-width:40em){.t2j-discovery-card{flex-basis:7.5em}.t2j-discovery-detail-poster{width:6em}}';
+    // Jellyfin supplies card sizes, typography, theme colors, focus and button treatment.
+    // These rules only arrange the discovery content inside those native components.
+    style.textContent = `
+        .t2j-discovery-head{display:flex;align-items:center;gap:1.2em;flex-wrap:wrap;padding-inline-end:7em}
+        .t2j-discovery-head .sectionTitle{margin-inline-end:0}
+        .t2j-discovery-period{display:flex;align-items:center}
+        .t2j-discovery-period .emby-tab-button{padding:.6em .9em}
+        .t2j-discovery-scroll{overflow-x:auto;overflow-y:hidden;scrollbar-width:none;scroll-behavior:smooth}
+        .t2j-discovery-scroll::-webkit-scrollbar{display:none}
+        .t2j-discovery-row{white-space:nowrap}
+        .t2j-discovery-card{cursor:pointer}
+        .t2j-discovery-card .cardImageContainer{border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
+        .t2j-discovery-poster{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover}
+        .t2j-discovery-card .cardText{overflow:hidden;text-overflow:ellipsis}
+        .t2j-discovery-indicator{display:flex;align-items:center;gap:.25em;padding:.25em .4em}
+        .t2j-discovery-indicator .material-icons{font-size:1em}
+        .t2j-discovery-state{white-space:normal;padding-block:1em}
+        .t2j-discovery-modal .t2j-discovery-dialog{width:64em;max-width:94vw;max-height:90vh}
+        .t2j-discovery-modal .t2j-dialog-body{padding:1em 1.5em 1.5em}
+        .t2j-discovery-details-top{display:flex;gap:2em;align-items:flex-start}
+        .t2j-discovery-detail-poster{width:12em;flex:none;aspect-ratio:2/3;object-fit:cover;border-radius:var(--jf-shape-borderRadius,4px)}
+        .t2j-discovery-info{flex:1;min-width:0}
+        .t2j-discovery-info .itemName{margin-top:0}
+        .t2j-discovery-info h2.itemName{font-size:2em;margin-bottom:.25em}
+        .t2j-discovery-info .originalTitle{margin-bottom:1em}
+        .t2j-discovery-info .itemMiscInfo{display:flex;flex-wrap:wrap;align-items:center;gap:.4em 1em;margin:.6em 0}
+        .t2j-discovery-info .mediaInfoItem{margin:0}
+        .t2j-discovery-rating-source{margin-inline-start:.4em;font-size:.85em}
+        .t2j-discovery-actions{display:flex;align-items:center;flex-wrap:wrap;gap:.5em;margin:1.3em 0}
+        .t2j-discovery-actions .material-icons{margin-inline-end:.4em}
+        .t2j-discovery-actions .emby-button{margin-inline-start:0}
+        .t2j-discovery-actions .button-submit{background:var(--jf-palette-primary-main,#00a4dc);color:var(--jf-palette-primary-contrastText,#fff)}
+        .t2j-discovery-overview{white-space:pre-line;line-height:1.5;margin:1.5em 0}
+        .t2j-discovery-cast{display:flex;overflow-x:auto;gap:0;scrollbar-width:thin}
+        .t2j-discovery-actor{flex:0 0 8em;min-width:0;white-space:normal}
+        .t2j-discovery-actor .cardImageContainer{position:absolute;inset:0}
+        .t2j-discovery-actor .cardText{white-space:normal}
+        .t2j-discovery-credit{margin-top:1.5em}
+        .t2j-discovery-status:empty{display:none}
+        .t2j-discovery-status{margin:.7em 0;white-space:pre-line}
+        @media(max-width:50em){.t2j-discovery-modal .t2j-discovery-dialog{width:100%;max-width:none;height:100%;max-height:none;border-radius:0}.t2j-discovery-modal .t2j-dialog-body{padding:1em}.t2j-discovery-details-top{gap:1em}.t2j-discovery-detail-poster{width:7em}.t2j-discovery-info h2.itemName{font-size:1.5em}.t2j-discovery-head{gap:0;justify-content:space-between;padding-inline-end:0}.t2j-discovery-period{padding-inline-end:3.3%}.t2j-discovery-actor{flex-basis:7em}}
+        @media(prefers-reduced-motion:reduce){.t2j-discovery-scroll{scroll-behavior:auto}}
+    `;
     document.head.appendChild(style);
 
     function cacheKey() { return user + ':' + host.lang() + ':' + windowName; }
     function stateLine(text, retry) {
         if (!section) return;
         var body = section.querySelector('.t2j-discovery-row');
-        body.innerHTML = '<div role="status">' + esc(text) + (retry ? button(t('Спробувати ще раз', 'Retry'), 'button-flat t2j-discovery-retry') : '') + '</div>';
+        body.innerHTML = '<div class="padded-left padded-right t2j-discovery-state" role="status">' + esc(text) + (retry ? button(t('Спробувати ще раз', 'Retry'), 'button-flat t2j-discovery-retry') : '') + '</div>';
         var retryButton = body.querySelector('button');
         if (retryButton) retryButton.onclick = function () { delete cache[cacheKey()]; load(); };
     }
@@ -62,15 +108,31 @@ window._t2jCreateDiscovery = function (host) {
         if (!section) return;
         if (!movies.length) { stateLine(t('Популярних фільмів поки немає.', 'No trending movies available.'), true); return; }
         var body = section.querySelector('.t2j-discovery-row');
+        var scroller = section.querySelector('.t2j-discovery-scroll'), offset = scroller.scrollLeft;
         body.innerHTML = movies.map(function (movie) {
             var state = movie.InLibraryAs === 'stream' ? t('У бібліотеці', 'In library') : movie.InLibraryAs === 'placeholder' ? t('Заглушка', 'Placeholder') : '';
-            return '<button type="button" class="t2j-discovery-card" data-tmdb="' + movie.TmdbId + '" aria-label="' + esc(movie.Title) + '">'
-                + (image(movie.PosterUrl, 't2j-discovery-poster', '') || '<span class="t2j-discovery-poster"></span>')
-                + '<span class="t2j-discovery-card-title">' + esc(movie.Title) + '</span><span class="t2j-discovery-meta">' + esc([movie.Year, state].filter(Boolean).join(' · ')) + '</span></button>';
+            return '<div class="card overflowPortraitCard card-hoverable t2j-discovery-card" data-tmdb="' + movie.TmdbId + '"><div class="cardBox cardBox-bottompadded"><div class="cardScalable">'
+                + '<div class="cardPadder cardPadder-overflowPortrait">' + icon('movie', 'cardImageIcon') + '</div>'
+                + '<button type="button" class="cardImageContainer coveredImage cardContent" aria-label="' + esc([movie.Title, movie.Year, state].filter(Boolean).join(' · ')) + '">'
+                + image(movie.PosterUrl, 't2j-discovery-poster', '') + '</button>'
+                + (state ? '<div class="cardIndicators" aria-hidden="true"><div class="indicator t2j-discovery-indicator" title="' + esc(state) + '">' + icon(movie.InLibraryAs === 'stream' ? 'check' : 'bookmark') + '</div></div>' : '')
+                + '</div><div class="cardText cardTextCentered cardText-first" title="' + esc(movie.Title) + '"><bdi>' + esc(movie.Title) + '</bdi></div>'
+                + '<div class="cardText cardTextCentered cardText-secondary"><bdi>' + esc(movie.Year || '') + '</bdi></div></div></div>';
         }).join('');
-        body.querySelectorAll('[data-tmdb]').forEach(function (card) { card.onclick = function () { open(parseInt(card.getAttribute('data-tmdb'), 10), card); }; });
+        body.querySelectorAll('[data-tmdb]').forEach(function (card) { card.onclick = function () { open(parseInt(card.getAttribute('data-tmdb'), 10), card.querySelector('button')); }; });
+        imageFallbacks(body);
+        scroller.scrollLeft = offset;
+        updateScroll();
     }
-    async function load() {
+    function updateScroll() {
+        if (!section) return;
+        var row = section.querySelector('.t2j-discovery-scroll');
+        var previous = section.querySelector('[data-direction="left"]'), next = section.querySelector('[data-direction="right"]');
+        var offset = Math.abs(row.scrollLeft), max = Math.max(0, row.scrollWidth - row.clientWidth);
+        previous.disabled = offset < 2;
+        next.disabled = offset >= max - 2;
+    }
+    async function load(keepCards) {
         var token = ++loadToken, myGeneration = generation, key = cacheKey(), selected = windowName;
         if (requestAbort) requestAbort.abort();
         requestAbort = new AbortController();
@@ -78,7 +140,7 @@ window._t2jCreateDiscovery = function (host) {
         var timeout = setTimeout(function () { abort.abort(); }, 25000);
         loading = true;
         lastLoadAt = Date.now();
-        stateLine(t('Завантаження…', 'Loading…'), false);
+        if (!keepCards) stateLine(t('Завантаження…', 'Loading…'), false);
         try {
             var movies = await request('Movies?window=' + selected, { signal: abort.signal });
             if (stopped || generation !== myGeneration || token !== loadToken) return;
@@ -98,7 +160,17 @@ window._t2jCreateDiscovery = function (host) {
         modal = null;
         document.removeEventListener('keydown', onKey, true);
         host.unlock();
-        if (!skipFocus && returnFocus && document.body.contains(returnFocus)) returnFocus.focus();
+        if (!skipFocus && returnFocus) {
+            var target = returnFocus;
+            // Completing Add redraws the row; restore focus to that movie's new poster button.
+            if (!document.body.contains(target) && section) {
+                var oldCard = target.closest('[data-tmdb]');
+                if (oldCard) section.querySelectorAll('[data-tmdb]').forEach(function (card) {
+                    if (card.getAttribute('data-tmdb') === oldCard.getAttribute('data-tmdb')) target = card.querySelector('button');
+                });
+            }
+            if (target && document.body.contains(target)) target.focus();
+        }
         returnFocus = null;
     }
     function onKey(event) {
@@ -122,20 +194,28 @@ window._t2jCreateDiscovery = function (host) {
         if (!modal) return;
         currentMovie = movie;
         var body = modal.querySelector('.t2j-dialog-body');
-        var score = function (n, votes) { return typeof n === 'number' ? n.toFixed(1) + '/10' + (votes ? ' · ' + Number(votes).toLocaleString() + ' ' + t('голосів', 'votes') : '') : t('немає даних', 'not available'); };
+        var rating = function (source, n, votes) {
+            var value = typeof n === 'number' ? n.toFixed(1) : t('немає даних', 'not available');
+            var title = source + ' ' + value + (votes ? ' · ' + Number(votes).toLocaleString() + ' ' + t('голосів', 'votes') : '');
+            return '<div class="starRatingContainer mediaInfoItem" title="' + esc(title) + '" aria-label="' + esc(title) + '">' + icon('star', 'starIcon') + esc(value) + '<span class="secondaryText t2j-discovery-rating-source">' + source + '</span></div>';
+        };
         body.innerHTML = '<div class="t2j-discovery-details-top">' + image(movie.PosterUrl, 't2j-discovery-detail-poster', movie.Title)
-            + '<div class="t2j-discovery-info"><h2>' + esc(movie.Title) + '</h2><p class="secondaryText">' + esc(movie.OriginalTitle || '') + '</p>'
-            + '<p>' + esc([movie.Year, movie.Runtime ? movie.Runtime + ' ' + t('хв', 'min') : '', (movie.Genres || []).join(', ')].filter(Boolean).join(' · ')) + '</p>'
-            + '<p>IMDb ' + esc(score(movie.ImdbRating, movie.ImdbVotes)) + '</p><p>TMDB ' + esc(score(movie.TmdbRating, movie.TmdbVotes)) + '</p></div></div>'
-            + '<p class="t2j-discovery-overview">' + esc(movie.Overview || t('Опис поки відсутній.', 'No overview available.')) + '</p>'
-            + '<div class="t2j-discovery-actions">' + button('', 'raised button-submit t2j-discovery-add') + button(t('Знайти вручну', 'Find manually'), 'button-flat t2j-discovery-manual') + '</div>'
+            + '<div class="t2j-discovery-info"><div class="nameContainer"><h2 class="itemName infoText" id="t2j-discovery-movie-title"><bdi>' + esc(movie.Title) + '</bdi></h2>'
+            + (movie.OriginalTitle && movie.OriginalTitle !== movie.Title ? '<h4 class="itemName infoText originalTitle">' + esc(movie.OriginalTitle) + '</h4>' : '') + '</div>'
+            + '<div class="itemMiscInfo itemMiscInfo-primary">' + [movie.Year, movie.Runtime ? movie.Runtime + ' ' + t('хв', 'min') : ''].filter(Boolean).map(function (value) { return '<div class="mediaInfoItem">' + esc(value) + '</div>'; }).join('') + '</div>'
+            + '<div class="itemMiscInfo">' + rating('IMDb', movie.ImdbRating, movie.ImdbVotes) + rating('TMDB', movie.TmdbRating, movie.TmdbVotes) + '</div>'
+            + '<p class="secondaryText">' + esc((movie.Genres || []).join(', ')) + '</p>'
+            + '<div class="t2j-discovery-actions">' + button('', 'raised button-submit t2j-discovery-add', 'add') + button(t('Знайти вручну', 'Find manually'), 'button-flat t2j-discovery-manual', 'search') + '</div></div></div>'
             + '<div class="t2j-discovery-status" role="status" aria-live="polite"></div>'
-            + '<h3>' + esc(t('Актори', 'Cast')) + '</h3><div class="t2j-discovery-cast">' + (movie.Actors || []).map(function (actor) {
-                return '<div class="t2j-discovery-actor">' + image(actor.ImageUrl, '', actor.Name) + '<div>' + esc(actor.Name) + '</div><div class="secondaryText">' + esc(actor.Character || '') + '</div></div>';
+            + '<p class="overview t2j-discovery-overview">' + esc(movie.Overview || t('Опис поки відсутній.', 'No overview available.')) + '</p>'
+            + '<h3 class="sectionTitle sectionTitle-cards">' + esc(t('Актори', 'Cast')) + '</h3><div class="itemsContainer t2j-discovery-cast">' + (movie.Actors || []).map(function (actor) {
+                return '<div class="card portraitCard t2j-discovery-actor"><div class="cardBox cardBox-bottompadded"><div class="cardScalable"><div class="cardPadder cardPadder-portrait">' + icon('person', 'cardImageIcon') + '</div><div class="cardImageContainer coveredImage">' + image(actor.ImageUrl, 't2j-discovery-poster', actor.Name) + '</div></div><div class="cardText cardTextCentered cardText-first"><bdi>' + esc(actor.Name) + '</bdi></div><div class="cardText cardTextCentered cardText-secondary"><bdi>' + esc(actor.Character || '') + '</bdi></div></div></div>';
             }).join('') + '</div>'
             + '<div class="fieldDescription t2j-discovery-credit"><a class="button-link" href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a> · This product uses the TMDB API but is not endorsed or certified by TMDB.<br>'
             + '<a class="button-link" href="https://data.imdb.com/non-commercial-datasets/" target="_blank" rel="noopener noreferrer">IMDb non-commercial datasets</a></div>';
         body.querySelector('.t2j-discovery-manual').onclick = function () { manual(movie); };
+        modal.querySelector('[role="dialog"]').setAttribute('aria-labelledby', 't2j-discovery-movie-title');
+        imageFallbacks(body);
         body.querySelector('.t2j-discovery-add').onclick = function () {
             if (movie.InLibraryAs === 'stream') manual(movie);
             else add(movie);
@@ -146,7 +226,8 @@ window._t2jCreateDiscovery = function (host) {
         if (!modal || currentMovie !== movie) return;
         var adding = !!busy[movie.TmdbId], btn = modal.querySelector('.t2j-discovery-add');
         btn.disabled = adding;
-        btn.textContent = adding ? t('Шукаємо та перевіряємо…', 'Searching and verifying…') : movie.InLibraryAs === 'stream' ? t('У бібліотеці', 'In library') : movie.InLibraryAs === 'placeholder' ? t('Шукати й додати', 'Search and add') : t('Додати', 'Add');
+        var label = adding ? t('Шукаємо та перевіряємо…', 'Searching and verifying…') : movie.InLibraryAs === 'stream' ? t('У бібліотеці', 'In library') : movie.InLibraryAs === 'placeholder' ? t('Шукати й додати', 'Search and add') : t('Додати', 'Add');
+        btn.innerHTML = icon(movie.InLibraryAs === 'stream' ? 'check' : 'add') + '<span>' + esc(label) + '</span>';
         var status = modal.querySelector('.t2j-discovery-status');
         if (adding) status.textContent = t('Це може зайняти кілька хвилин. Вікно можна закрити.', 'This may take a few minutes. You can close this dialog.');
         else if (outcomes[movie.TmdbId]) status.textContent = outcomeText(outcomes[movie.TmdbId]);
@@ -157,8 +238,8 @@ window._t2jCreateDiscovery = function (host) {
         returnFocus = opener;
         var root = document.createElement('div');
         root.className = 'dialogContainer t2j-discovery-modal';
-        root.innerHTML = '<div class="dialogBackdrop"></div><div role="dialog" aria-modal="true" aria-labelledby="t2j-discovery-title" class="focuscontainer dialog formDialog t2j-dialog">'
-            + '<div class="formDialogHeader"><button type="button" is="paper-icon-button-light" class="paper-icon-button-light t2j-discovery-close" aria-label="' + esc(t('Закрити', 'Close')) + '"><span class="material-icons" aria-hidden="true">close</span></button><h3 class="formDialogHeaderTitle" id="t2j-discovery-title">' + esc(t('Про фільм', 'Movie details')) + '</h3></div><div class="t2j-dialog-body" role="status">' + esc(t('Завантаження…', 'Loading…')) + '</div></div>';
+        root.innerHTML = '<div class="dialogBackdrop"></div><div role="dialog" aria-modal="true" aria-labelledby="t2j-discovery-title" class="focuscontainer dialog formDialog t2j-dialog t2j-discovery-dialog">'
+            + '<div class="formDialogHeader"><button type="button" is="paper-icon-button-light" class="paper-icon-button-light t2j-discovery-close" aria-label="' + esc(t('Закрити', 'Close')) + '">' + icon('close') + '</button><h2 class="formDialogHeaderTitle" id="t2j-discovery-title">' + esc(t('Про фільм', 'Movie details')) + '</h2></div><div class="t2j-dialog-body" role="status">' + esc(t('Завантаження…', 'Loading…')) + '</div></div>';
         modal = root;
         document.body.appendChild(root);
         host.lock();
@@ -249,13 +330,22 @@ window._t2jCreateDiscovery = function (host) {
         if (!home || home.closest('.hide')) return;
         if (!section || !document.body.contains(section)) {
             section = document.createElement('div');
-            section.className = 'verticalSection padded-left padded-right t2j-discovery';
-            section.innerHTML = '<div class="t2j-discovery-head"><h2 class="sectionTitle sectionTitle-cards">' + esc(t('Популярне зараз', 'Trending now')) + '</h2><div class="emby-tabs-slider" role="group" aria-label="' + esc(t('Період популярності', 'Trending period')) + '">'
-                + '<button type="button" is="emby-button" class="emby-tab-button" data-window="day">' + esc(t('Сьогодні', 'Today')) + '</button><button type="button" is="emby-button" class="emby-tab-button" data-window="week">' + esc(t('За тиждень', 'This week')) + '</button></div></div><div class="t2j-discovery-row"></div>';
+            section.className = 'verticalSection emby-scroller-container t2j-discovery';
+            section.innerHTML = '<div class="t2j-discovery-head"><h2 class="sectionTitle sectionTitle-cards padded-left">' + esc(t('Популярне зараз', 'Trending now')) + '</h2><div class="emby-tabs-slider t2j-discovery-period" role="group" aria-label="' + esc(t('Період популярності', 'Trending period')) + '">'
+                + '<button type="button" is="emby-button" class="emby-tab-button emby-button" data-window="day">' + esc(t('Сьогодні', 'Today')) + '</button><button type="button" is="emby-button" class="emby-tab-button emby-button" data-window="week">' + esc(t('За тиждень', 'This week')) + '</button></div></div>'
+                + '<div class="emby-scrollbuttons padded-right"><button type="button" class="emby-scrollbuttons-button paper-icon-button-light" data-direction="left" aria-label="' + esc(t('Назад', 'Previous')) + '">' + icon('chevron_left') + '</button><button type="button" class="emby-scrollbuttons-button paper-icon-button-light" data-direction="right" aria-label="' + esc(t('Далі', 'Next')) + '">' + icon('chevron_right') + '</button></div>'
+                + '<div class="emby-scroller padded-top-focusscale padded-bottom-focusscale t2j-discovery-scroll"><div class="itemsContainer scrollSlider focuscontainer-x t2j-discovery-row"></div></div>';
             position(home);
+            var scroller = section.querySelector('.t2j-discovery-scroll');
+            scroller.addEventListener('scroll', updateScroll, { passive: true });
+            section.querySelectorAll('[data-direction]').forEach(function (btn) { btn.onclick = function () {
+                var direction = (btn.getAttribute('data-direction') === 'left' ? -1 : 1) * (getComputedStyle(scroller).direction === 'rtl' ? -1 : 1);
+                scroller.scrollBy({ left: direction * scroller.clientWidth * .8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+            }; });
             section.querySelectorAll('[data-window]').forEach(function (btn) { btn.onclick = function () {
                 if (windowName === btn.getAttribute('data-window')) return;
                 windowName = btn.getAttribute('data-window');
+                scroller.scrollLeft = 0;
                 section.querySelectorAll('[data-window]').forEach(function (b) { var active = b === btn; b.classList.toggle('emby-tab-button-active', active); b.setAttribute('aria-pressed', active ? 'true' : 'false'); });
                 var entry = cache[cacheKey()];
                 if (entry && Date.now() - entry.at < 600000) { loadToken++; if (requestAbort) requestAbort.abort(); loading = false; renderMovies(entry.movies); }
@@ -265,9 +355,10 @@ window._t2jCreateDiscovery = function (host) {
             if (entry && Date.now() - entry.at < 600000) renderMovies(entry.movies);
             else if (!loading) load();
         }
-        else if (!loading && Date.now() - lastLoadAt >= 600000) load();
+        else if (!loading && Date.now() - lastLoadAt >= 600000) load(true);
         // Jellyfin may insert the library folders after this module's first check.
         position(home);
+        updateScroll();
     }
     return { check: check, close: close, dispose: function () { stopped = true; reset(); style.remove(); } };
 };

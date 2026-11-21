@@ -14,7 +14,11 @@ public static class MovieReleaseVerifier
     private static readonly Regex Episodes = Rx(@"(?:^|[^\p{L}\d])(?:s\d{1,2}(?:e\d+)?|\d{1,2}x\d{1,2}|(?:season|сезон|епізод|серія|серия)[\s._-]*\d+)(?:$|[^\p{L}\d])");
     private static readonly Regex Packs = Rx(@"(?:^|[^\p{L}\d])(?:collection|anthology|duology|trilogy|tetralogy|колекція|коллекция|трилогія|трилогия)(?:$|[^\p{L}\d])");
     private static readonly Regex Extras = Rx(@"(?:^|[/\\])(?:samples?|trailers?|extras?|featurettes?|bonus)(?:[/\\]|\.(?:mkv|mp4|avi|mov|m4v|webm|ts|wmv)$)");
-    private static readonly Regex Ukrainian = Rx(@"(?:^|[^\p{L}])(?:ukr|ua|ukrainian|українська|українською)(?:$|[^\p{L}])");
+    // A language token on its own, or behind a track count ("2xUkr/Eng", "[3xUKR_ENG]").
+    private static readonly Regex Ukrainian = Rx(@"(?:(?<=^|[^\p{L}])|(?<=\d[xх]))(?:ukr|ua|ukrainian|укр|українська|українською)(?=$|[^\p{L}])");
+    private static readonly Regex Subtitles = Rx(@"(?<!\p{L})(?:sub|subs|subtitles?|суб|субтитри)(?!\p{L})");
+    private static readonly Regex SubtitlesAhead = Rx(@"^[\s._-]*(?:sub|subs|subtitles?|суб|субтитри)(?!\p{L})");
+    private static readonly char[] SegmentSeparators = { '|', '[', ']', '(', ')' };
     private static readonly Regex Tech = Rx(@"(?:^|[\s._(\[-])(?:\d{3,4}[pi]|[248]k|web[ ._-]?dl|web[ ._-]?rip|blu[ ._-]?ray|bdrip|brrip|remux|h[ .]?26[45]|x26[45]|hevc|avc|dvdrip)(?:$|[^\p{L}\d])");
     private static readonly Regex Brackets = Rx(@"\[[^\]]*\]");
     private static Regex Rx(string pattern) => new(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
@@ -47,8 +51,24 @@ public static class MovieReleaseVerifier
         return null;
     }
 
-    public static bool HasUkrainianAudioHint(TorrentSearchResult release) => Ukrainian.IsMatch(release.Title) &&
-        !Regex.IsMatch(release.Title, @"(?:ukr|ua)[\s._-]*(?:sub|суб)|(?:sub|суб)[\s._-]*(?:ukr|ua)", RegexOptions.IgnoreCase, RegexTimeout);
+    /// <summary>
+    /// True when the release name lists Ukrainian among its audio tracks. A name usually lists the audio first and
+    /// the subtitles after a separator ("2xUkr/Eng | Sub Ukr/Eng"), so a Ukrainian token only counts when it is not
+    /// part of a subtitle list: no "Sub" before it in its own segment, and none right after it ("UKR Sub").
+    /// </summary>
+    public static bool HasUkrainianAudioHint(TorrentSearchResult release)
+    {
+        var title = release.Title ?? string.Empty;
+        if (title.Length > 2048) return false;
+        foreach (Match token in Ukrainian.Matches(title))
+        {
+            var segmentStart = token.Index == 0 ? 0 : title.LastIndexOfAny(SegmentSeparators, token.Index - 1) + 1;
+            if (Subtitles.IsMatch(title[segmentStart..token.Index])) continue;
+            if (SubtitlesAhead.IsMatch(title[(token.Index + token.Length)..])) continue;
+            return true;
+        }
+        return false;
+    }
 
     public static bool TitleMatches(DiscoveryMovieDto movie, string title, bool requireYear)
     {

@@ -381,6 +381,21 @@ using (var f = new Fixture())
     catch (InvalidDataException) { }
     Check((await f.Ratings.GetAsync("tt0133093"))?.Score == 8.7, "bad ratings refresh preserves the previous cache");
 }
+
+// Ukrainian audio in release names as the trackers actually write them.
+foreach (var (title, expected) in new[] {
+    ("Dune: Part Two (2024) BDRemux 1080p 2xUkr/Eng | Sub Ukr/Eng", true),
+    ("Dune. Part Two (2024) BDRip 1080p x265 [2xUKR_ENG] [Hurtom].mkv", true),
+    ("Spider-Man: Brand New Day (2026) WEB-DL 1080p Eng | sub Ukr/Multi", false),
+    ("The Matrix (1999) BDRip Ukr/Eng Sub Eng", true),
+    ("The Matrix 1999 1080p Eng Sub Ukr", false),
+    ("Subway.1985.1080p.UKR", true),
+    ("Матриця / The Matrix (1999) 3хУкр/Eng", true),
+    ("Dune.Part.Two.2024.BDRemux.2160p-UTOPIA.mkv", false) })
+{
+    var r = Release(); r.Title = title;
+    Check(MovieReleaseVerifier.HasUkrainianAudioHint(r) == expected, "Ukrainian audio hint: " + title);
+}
 Console.WriteLine($"{passed} checks passed.");
 
 public class Proxy : DispatchProxy

@@ -15,12 +15,14 @@ Torr2Jelly is a Jellyfin plugin that turns torrents into a streamable Jellyfin l
 ## Features
 
 - **Indexer search** through [Prowlarr](https://prowlarr.com) (JSON API) and/or any Torznab endpoint (for example [Jackett](https://github.com/Jackett/Jackett)). Results from several indexers are merged and de-duplicated by info-hash.
+- **Search by id, not only by name.** For a title that is already in the library (a movie's other versions, a series' new seasons, a trending movie) the indexers that support it are asked for its IMDb / TVDB / TMDb id, so the answer is exactly that title's releases whatever language their names are in. Indexers that only search names are asked by name at the same time; the two lists are merged and the releases that are certainly the title come first.
 - **Search where you already are.** Results appear as a "Torrents" section at the bottom of Jellyfin's own search page and on the plugin's admin page. One click adds a release to TorrServer and generates the files.
 - **Add by link or file.** Paste a magnet link or a `.torrent` URL on the admin page, or upload a `.torrent` file (also from a movie's or series' page). A file keeps the trackers and passkeys of private torrents, which a bare magnet link would lose.
 - **Extra versions of a movie** (admins). From a movie's page, add another release as an additional version, using Jellyfin's native multi-version switching. Versions can be replaced or deleted.
 - **New seasons for a series** (admins). From a series' page, add a release (for example a new season pack) and its episodes are written into that series' folder, season by season.
 - **Categories.** Each category has a name, a type (movie or show) and a folder. File and folder names follow configurable templates. Season packs, multi-file torrents and releases with Ukrainian or Russian titles are handled.
 - **Freeleech only.** One switch (on by default) hides every torrent that counts against your download statistics on the tracker, so searches show only freeleech releases. Trackers can also be enabled or disabled one by one.
+- **Trending movies** (admins). A "Trending now" row on the home screen of Jellyfin Web shows what is popular on TMDB today or this week. **Add** puts the movie into the library and attaches a release on its own when one can be verified as that movie; otherwise it leaves a placeholder for a manual choice.
 - **Placeholders.** Titles that have no stream yet can sit in the library as placeholders with their poster and metadata, for movies and for series. Add one from Jellyfin's search page, search TMDb by name on the admin page, or paste a whole list of titles. Adding a release later replaces the placeholder with the real stream.
 - **Library sync.** The scheduled task "Torr2Jelly Library Sync" keeps the files in step with TorrServer. "Scan library" on the admin page also removes `.strm` files of torrents that no longer exist in TorrServer.
 - **Optional TorrServer tuning.** Push cache settings (cache size, disk cache path, preload, read-ahead, disconnect timeout) and a VPN-forwarded peer port from the plugin. Off by default on new installs.
@@ -28,24 +30,6 @@ Torr2Jelly is a Jellyfin plugin that turns torrents into a streamable Jellyfin l
 - **Settings backup.** The plugin keeps JSON backups of its settings and restores them if its configuration file goes missing.
 
 ## How it works
-
-### Trending movies on the home screen
-
-Administrators using Jellyfin Web get a **Trending now** row with today's or this week's TMDB movies. Open a poster for the overview, cast, year, runtime, genres, and separately labeled TMDB and IMDb ratings. Configure the existing TMDB API key in Torr2Jelly settings first. IMDb ratings use IMDb's [daily non-commercial dataset](https://data.imdb.com/non-commercial-datasets/), refreshed in the background and kept compressed on disk. Missing or unavailable ratings are shown as unavailable.
-
-**Add** first creates a library placeholder, then searches the configured trackers. Automatic selection requires a matching IMDb or TMDB ID in the search result, a matching known title and release year, freeleech, and at least one seeder. A conflicting ID always rejects the release. Only candidates that pass these gates are ranked: explicit Ukrainian audio hints first, then seeders. There is no size or resolution limit; Remux releases are allowed. Audio hints come from tracker titles and are not a technical inspection of the audio tracks.
-
-Before TorrServer receives a candidate, the plugin downloads only its `.torrent` metadata (up to 4 MiB), checks the info-hash when provided, and requires one identifiable main movie file. Collections, episode releases and ambiguous files are rejected. There is no minimum movie-file size or camera-source filter in this unlimited profile. Magnet-only releases without inspectable `.torrent` metadata, disc images, v2/hybrid metadata and metadata links requiring redirects need manual selection. After upload, TorrServer's actual file list and file index are checked again before writing a stream. Tracker metadata can be wrong; these checks reduce mistaken matches but cannot certify the audiovisual contents.
-
-When no candidate passes, the placeholder stays and **Find manually** opens the existing release search. Tracker failures are reported separately from empty searches; a failed provider does not discard a healthy provider's results. Repeated adds do not duplicate a movie. Adds run as background jobs with a five-minute budget. Closing or reloading the page does not cancel a job; reopening the movie resumes status polling. Job history is held in memory for up to an hour and is lost on a server restart; retry after checking the library if the job has expired.
-
-Failed or interrupted intakes remain excluded from scheduled sync. Durable markers and rollback journals live under the Jellyfin data directory in `torr2jelly-discovery-pending/`. Startup and periodic recovery restore interrupted placeholder writes even while TorrServer is offline. A `pending` lease grants cleanup rights only while its unique temporary category still matches the torrent in TorrServer and no library stream references it. The category is explicitly set and read back after upload. Unprovable ownership keeps non-expiring suppression; a `rejected` marker is written only after confirmed absence or removal, suppresses stale sync for 15 minutes, and never grants removal rights. Explicit manual intake clears the suppression at the add step, including adds without library sync or a category; server mutations are serialized with automatic cleanup. Discovery never takes over a pre-existing torrent. A newer stream in a folder supersedes an old rollback journal, and a completed registered stream is preserved. Failure to finalize its normal category is retried in recovery without reporting the completed add as a failure. Scheduled and explicit sync fetch a fresh torrent list while holding the engine gate. Do not delete these recovery files manually.
-
-This row is an extension of Jellyfin Web; native clients need their own discovery UI. Library items and streams created by it work through the normal Jellyfin library.
-
-Server mutations are serialized to keep manual adoption and automatic cleanup consistent. A slow magnet add can delay another add, category change or removal for up to its 60-second server timeout. A cleanup that times out leaves its suppression marker for periodic recovery and preserves the original verification result. Automatic category backfill skips suppressed hashes and rechecks the current category before writing.
-
-Run the isolated safety checks with `.NET 8`: `dotnet run --project Tests/DiscoveryTests.csproj -c Release`. They use fake HTTP responses and temporary library folders, without touching a live Jellyfin or tracker.
 
 ```mermaid
 flowchart LR
@@ -72,7 +56,9 @@ flowchart LR
 | 10.9.x | supported (built against 10.9.11) |
 | 10.10.x | supported |
 | 10.11.x | supported |
-| 12.0 – 12.2 | supported, tested on 12.2.0 |
+| 12.0 – 12.4 | supported, tested on 12.4.0 |
+
+One binary serves all of these versions. Every build is checked against the assemblies of each release line (see [Checks](#checks)), because Jellyfin changes method signatures between releases and such a break only shows at run time.
 
 **Clients.** Playback of the generated items works in every Jellyfin client. The plugin's own UI (the search section, the versions dialog and the admin page) is part of the server's web client, so it is available wherever that web client is used: browsers, Jellyfin Media Player, and the mobile apps that load the server's web UI. Native TV apps (for example Android TV, Swiftfin, Roku, Kodi) can browse and play the added items but do not show the plugin UI.
 
@@ -119,7 +105,7 @@ A fresh install shows the admin page in Ukrainian. Change this under **Settings 
 
 ### On Jellyfin's search page
 
-Search for a title as usual. A "Torrents" section at the bottom lists matching releases from your indexers with their size and seeders; freeleech releases carry a **Freeleech** chip. Choose the target category or library and press **Add**. The first eight results are shown, with **Show all** for the rest. Administrators who find nothing on the trackers (or press **Not on trackers? Add a placeholder**) get a list of TMDb matches with a button to add a placeholder. Once TorrServer has loaded the torrent's metadata the real files replace the temporary single file (see [Troubleshooting](#troubleshooting)).
+Search for a title as usual. A "Torrents" section at the bottom lists matching releases from your indexers with their size and seeders; freeleech releases carry a **Freeleech** chip. An IMDb id typed as the query (`tt0133093`) is searched as an id. Choose the target category or library and press **Add**. The first eight results are shown, with **Show all** for the rest. Administrators who find nothing on the trackers (or press **Not on trackers? Add a placeholder**) get a list of TMDb matches with a button to add a placeholder. Once TorrServer has loaded the torrent's metadata the real files replace the temporary single file (see [Troubleshooting](#troubleshooting)).
 
 ### On a movie's page (admins)
 
@@ -127,13 +113,48 @@ Administrators see an icon button (tooltip "Torrent versions") next to the usual
 
 - **Versions** lists the movie's torrent versions and lets you delete one.
 - **Add .torrent file** (next to the search field) adds a release from a file instead of the search results.
-- **Find releases** searches for other releases (by IMDb id when the movie has one, otherwise by title and year). **Add as version** adds a release next to the existing ones; **Replace current** swaps it in. Replacing and deleting ask for confirmation.
+- **Find releases** searches for other releases: by the movie's IMDb id on the indexers that support id search, and by title and year on the others. Releases that are certainly this movie are listed first, then by seeders. **Add as version** adds a release next to the existing ones; **Replace current** swaps it in. Replacing and deleting ask for confirmation.
 
 Jellyfin then offers the versions in its normal version picker. A torrent is removed from TorrServer only when no remaining `.strm` file uses it.
 
 ### On a series page (admins)
 
-Administrators see an **Add torrents to this series** button on series pages. It opens a search prefilled with the series title (IMDb id first, when the series has one); you can also type your own query. **Add to this series** adds the release to TorrServer and writes its episodes straight into that series' existing folder, one `Season NN` folder per season, so a new season pack lands next to the seasons you already have. The series' own `tvshow.nfo` and artwork are left untouched. If TorrServer is still loading the torrent's file list, the episodes appear on the next sync.
+Administrators see an **Add torrents to this series** button on series pages. It opens with the releases of that series: found by its IMDb / TVDB id on the indexers that support id search, and by its name on the others (with and without the year the series began, so later seasons are not left out). Releases of the series itself come first, then by seeders. The search box is prefilled with a title the trackers can be searched for, and you can type your own query. **Add to this series** adds the release to TorrServer and writes its episodes straight into that series' existing folder, one `Season NN` folder per season, so a new season pack lands next to the seasons you already have. The series' own `tvshow.nfo` and artwork are left untouched. If TorrServer is still loading the torrent's file list, the episodes appear on the next sync.
+
+### Trending movies on the home screen (admins)
+
+Administrators using Jellyfin Web get a **Trending now** row below the library folders, with today's or this week's TMDB movies. A poster opens the overview, cast, year, runtime, genres and the TMDB and IMDb ratings (shown separately). The row needs the TMDb API key from **Settings → Indexers**. IMDb ratings come from IMDb's [daily non-commercial dataset](https://data.imdb.com/non-commercial-datasets/), which is refreshed in the background and kept compressed on disk; a rating that is missing there is shown as unavailable.
+
+This row is an extension of Jellyfin Web; native clients do not show it. The items and streams it creates are ordinary library items.
+
+**Add** first creates a placeholder in the library, then looks for a release it can prove is that movie:
+
+1. The indexers are asked for the movie's IMDb id and, for indexers without id search, for its titles and year.
+2. A search result is only a candidate when it is freeleech, has at least one seeder, carries an IMDb or TMDB id that matches (a conflicting id always rejects it; a result without any id is not enough), and has a known title of the movie followed by its release year in its name. Episodes, collections and packs are rejected.
+3. Candidates are tried in this order: releases whose name lists Ukrainian audio first (`2xUkr/Eng`, `[UKR_ENG]`; "Sub Ukr" does not count), then by seeders. There is no size or resolution limit, so a Remux can win. Audio languages come from the release name, not from an inspection of the tracks.
+4. Only the `.torrent` metadata of a candidate is downloaded (up to 4 MiB). Its info-hash must match the search result, and it must contain exactly one identifiable movie file. Disc images, v2 / hybrid torrents, magnet-only results and links that need a redirect are left for a manual choice.
+5. After the upload, TorrServer's own file list and file index are compared with the metadata before the stream is written.
+
+Tracker metadata can be wrong: these checks reduce mistaken matches, they cannot certify what the video contains.
+
+When no candidate passes, the placeholder stays and **Find manually** opens the release search for that movie. A tracker that fails is reported as a failed search, not as "no releases", and does not discard the results of the trackers that answered. Adding the same movie twice does not duplicate it.
+
+An add runs as a background job with a five-minute budget. Closing or reloading the page does not cancel it, and reopening the movie resumes the status display. Job history is kept in memory for an hour and is lost when the server restarts; check the library before retrying then.
+
+<details>
+<summary>Recovery and safety details</summary>
+
+- A torrent whose add failed or was interrupted is excluded from the scheduled sync. The markers and rollback journals for this live in `torr2jelly-discovery-pending/` under the Jellyfin data directory. Do not delete them by hand.
+- Interrupted placeholder writes are restored at startup and periodically, also while TorrServer is offline. A newer stream in the folder supersedes an old rollback journal, and a completed, registered stream is always kept.
+- While an add is running, the torrent carries a unique temporary category in TorrServer. Only that lease allows the plugin to remove a rejected torrent again, and only while the category still matches and no library stream uses the torrent. The category is set and read back after the upload.
+- When ownership cannot be proven, the torrent stays in TorrServer and stays excluded from sync. A "rejected" marker is written only after the torrent is confirmed gone; it suppresses a stale sync for 15 minutes and never gives the right to remove anything.
+- Discovery never takes over a torrent that was already in TorrServer.
+- Adding a release manually clears the suppression for it at once, including adds without a category or without library sync.
+- A stream that was written but whose final category could not be saved is not reported as a failure; recovery finishes the category later.
+- Changes to TorrServer are made one at a time, so manual adds and automatic cleanup cannot interleave. A slow magnet add can therefore delay another add, category change or removal by up to its 60-second timeout. A cleanup that times out leaves its marker for the next recovery run.
+- The scheduled and the explicit sync fetch a fresh torrent list while holding the engine lock, and the automatic category backfill skips suppressed torrents.
+
+</details>
 
 ### Admin page (Dashboard → Torr2Jelly)
 
@@ -199,6 +220,8 @@ A placeholder is a library entry without a stream: Jellyfin shows the poster and
 
 With **Push cache settings to TorrServer** ticked, the plugin applies the cache size, disk cache on/off and path, preload, read-ahead and disconnect timeout from the settings page to TorrServer when you save and about once a minute afterwards. Leave it off if you manage TorrServer yourself. It also switches TorrServer's `RemoveCacheOnDrop` option off.
 
+Keep the disk cache path outside Jellyfin's own cache directory. Jellyfin's "Clean Cache Directory" task treats everything in there as its own: every day it tries to delete the old files, which either removes pieces of TorrServer's cache behind its back or, when Jellyfin lacks the permission, writes an error with a stack trace into the Jellyfin log for each file.
+
 The plugin can additionally push a VPN-forwarded peer port. Set `ForwardedPortFilePath` to the file that holds the port; several candidate files can be given, separated by `;`, and the first one that exists and holds a valid port is used. This setting has no field on the settings page: set it through the plugin's settings API (`POST /Plugins/Torr2Jelly/Settings`, administrators only) or in the plugin's configuration file. It only takes effect while cache settings are pushed.
 
 ## Permissions and safety
@@ -211,7 +234,7 @@ All plugin API endpoints require a Jellyfin login. The one exception is the stat
 | Add a release (magnet link, `.torrent` URL or info-hash) | yes | yes |
 | See server folder paths | no | yes |
 | Settings, torrent list, category changes, deleting torrents, Scan Library, TorrServer status | no | yes |
-| Torrent versions on a movie's page, adding torrents to a series, placeholders and TMDb search | no | yes |
+| Torrent versions on a movie's page, adding torrents to a series, placeholders, TMDb search, the Trending now row | no | yes |
 
 Anyone with a Jellyfin account can add torrents to your TorrServer, so hand out accounts accordingly or keep the freeleech-only switch on.
 
@@ -253,6 +276,20 @@ dotnet build -c Release
 ```
 
 The plugin is `bin/Release/net8.0/Jellyfin.Plugin.Torr2Jelly.dll`. To install it by hand, copy it into `<jellyfin config>/plugins/Torr2Jelly_<version>/` (use the version from the `.csproj`) and restart Jellyfin.
+
+### Checks
+
+Both run in the GitHub Actions workflow on every push and need nothing but the .NET 8 SDK:
+
+```bash
+# Behaviour: search, release verification, intake, rollback and recovery, against fake HTTP responses and
+# temporary library folders. No live Jellyfin, TorrServer or tracker is touched.
+dotnet run --project Tests/DiscoveryTests.csproj -c Release
+
+# Compatibility: every Jellyfin type and member the built plugin uses must exist, with the same signature, in the
+# listed Jellyfin versions ("latest" is the newest stable release on NuGet).
+dotnet run --project tools/AbiCheck -c Release -- bin/Release/net8.0/Jellyfin.Plugin.Torr2Jelly.dll 10.9.11 10.10.7 10.11.11 12.0.0 latest
+```
 
 **Releases.** Pushing a `v*` tag runs the GitHub Actions workflow, which builds the plugin and attaches `Torr2Jelly_<version>.zip` to a GitHub release. The same workflow also builds on pushes to `main` and on pull requests, without publishing. `manifest.json` lists every version with its download URL and the MD5 checksum of that zip.
 

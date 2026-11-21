@@ -1716,6 +1716,14 @@
         }
     }
 
+    // The server words its status in English ("Connected (MatriX.136)"). A reachable TorrServer is shown in the
+    // page's language; a failure keeps the server's text, which names the cause.
+    function daemonStatusText(running, serverText, t) {
+        var text = String(serverText || '');
+        if (!running) return text || t.torrServerOffline;
+        return /^Connected\b/.test(text) ? t.statusOnline + text.slice('Connected'.length) : (text || t.statusOnline);
+    }
+
     // Status check
     async function checkStatus() {
         var page = getPage();
@@ -1727,14 +1735,13 @@
             var res = await fetch(getApiUrl('Plugins/Torr2Jelly/Status'), { headers: getAuthHeaders() });
             if (res.ok) {
                 var data = await res.json();
-                var daemonVer = data.DaemonVersion || data.daemonVersion || 'MatriX';
                 var activeCount = data.ActiveTorrentsCount !== undefined ? data.ActiveTorrentsCount : (data.activeTorrentsCount !== undefined ? data.activeTorrentsCount : 0);
                 var statusMsg = data.StatusMessage || data.statusMessage || '';
 
                 // A 200 only means the plugin answered; whether TorrServer is reachable is IsDaemonRunning.
                 var running = (data.IsDaemonRunning !== undefined ? data.IsDaemonRunning : data.isDaemonRunning) === true;
                 window.t2jState.activeCount = activeCount;
-                renderDaemonState(page, running, statusMsg || (running ? (t.statusOnline + ' (' + daemonVer + ')') : t.torrServerOffline));
+                renderDaemonState(page, running, daemonStatusText(running, statusMsg, t));
             } else {
                 window.t2jState.activeCount = null;
                 renderDaemonState(page, false, t.torrServerOffline);
@@ -2801,7 +2808,7 @@
             }
             // 200 only means the plugin answered; "success" says whether TorrServer is really reachable.
             var online = res.ok && (data.success === true || data.Success === true);
-            renderDaemonState(page, online, data.status || (online ? 'Connected' : t.torrServerOffline));
+            renderDaemonState(page, online, daemonStatusText(online, data.status, t));
             checkStatus();
         } catch (e) {
             if (restartDaemonBtn) {

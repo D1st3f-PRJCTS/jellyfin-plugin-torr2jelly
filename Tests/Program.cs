@@ -88,6 +88,13 @@ foreach (var (name, valid) in new[] { ("The.Matrix.1999.mkv", true), ("The.Matri
 Check(TorrentMetadata.Read(Fixture.Single("../The.Matrix.1999.mkv")) == null, "path traversal rejected");
 Check(TorrentMetadata.Read(Encoding.UTF8.GetBytes("not a torrent")) == null, "invalid bencode rejected");
 Check(TorrentMetadata.Read(Encoding.UTF8.GetBytes("d4:infod6:lengthi900000000e4:name19:The.Matrix.1999.mkv12:meta versioni2eee")) == null, "v2 metadata fails closed");
+byte[] Bencoded(params object[] parts) => parts.SelectMany(part => part as byte[] ?? Encoding.UTF8.GetBytes((string)part)).ToArray();
+var digest = Enumerable.Range(0, 16).Select(i => (byte)(0xF0 + i)).ToArray();
+var withDigest = TorrentMetadata.Read(Bencoded("d4:infod4:ed2k16:", digest, "6:lengthi900000000e4:name19:The.Matrix.1999.mkvee"));
+Check(withDigest != null && withDigest.Files.Single().Path == "The.Matrix.1999.mkv", "a binary digest next to the names does not make a torrent unreadable");
+var legacyName = TorrentMetadata.Read(Bencoded("d4:infod6:lengthi900000000e4:name4:", new byte[] { 0xCC, 0xE0, 0xF2, 0xF0 }, "10:name.utf-819:The.Matrix.1999.mkvee"));
+Check(legacyName?.Name == "The.Matrix.1999.mkv", "the UTF-8 name is used when the legacy name is in another code page");
+Check(TorrentMetadata.Read(Bencoded("d4:infod6:lengthi900000000e4:name4:", new byte[] { 0xCC, 0xE0, 0xF2, 0xF0 }, "ee")) == null, "a name that is not valid UTF-8 fails closed");
 var pack = new TorrentMetadata(new string('a', 40), "Pack", new() { new() { Path = "The.Matrix.1999.mkv", Length = 900000000 }, new() { Path = "The.Matrix.Reloaded.2003.mkv", Length = 900000000 } });
 Check(MovieReleaseVerifier.CheckFiles(Movie(), pack, out _) == "ambiguous_files", "multiple movies rejected");
 var attrs = typeof(MovieDiscoveryController).GetCustomAttributes<AuthorizeAttribute>();

@@ -40,17 +40,20 @@ public sealed record TorrentMetadata(string Hash, string Name, List<TorrTorrentF
             if (files.Select(f => f.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count() != files.Count) return null;
             return new TorrentMetadata(hash, name!, files);
         }
-        catch (Exception ex) when (ex is FormatException or OverflowException or DecoderFallbackException) { return null; }
+        catch (Exception ex) when (ex is FormatException or OverflowException or ArgumentException or IndexOutOfRangeException) { return null; }
     }
 
     private static string? Text(Dictionary<string, object> d, string k) => d.GetValueOrDefault(k) as string;
-    private static bool SafeSegment(string? text) => !string.IsNullOrEmpty(text) && text.Length <= 1024 && text is not ("." or "..") && !text.Any(c => char.IsControl(c) || c is '/' or '\\' or ':');
+    // A name that is not valid UTF-8 decodes with U+FFFD: it cannot be compared with TorrServer's file list, so it fails closed.
+    private static bool SafeSegment(string? text) => !string.IsNullOrEmpty(text) && text.Length <= 1024 && text is not ("." or "..") && !text.Any(c => char.IsControl(c) || c is '/' or '\\' or ':' or '\uFFFD');
 
     private sealed class Reader(byte[] data)
     {
         private int _at;
         private int _nodes;
-        private static readonly UTF8Encoding Utf8 = new(false, true);
+        // Lenient: torrents carry binary values next to the text (per-file "ed2k" / "filehash" / "sha1" digests) and
+        // legacy-codepage names beside their "*.utf-8" twins. Those must not fail the whole file; names are checked later.
+        private static readonly UTF8Encoding Utf8 = new(false, false);
 
         public object Value(int depth = 0)
         {

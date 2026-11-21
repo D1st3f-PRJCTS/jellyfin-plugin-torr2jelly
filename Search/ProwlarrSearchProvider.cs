@@ -103,6 +103,12 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
 {
     public string Name => "Prowlarr";
 
+    private const string TextSearchType = "search";
+    private const int TextSearchLimit = 60;
+
+    // An id search returns one title only, so every release of it is wanted.
+    private const int IdSearchLimit = 100;
+
     private static readonly JsonSerializerOptions ItemJsonOptions = new(JsonSerializerDefaults.Web)
     {
         NumberHandling = JsonNumberHandling.AllowReadingFromString
@@ -182,13 +188,49 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
     }
 
     public Task<List<TorrentSearchResult>> SearchAsync(string query, IEnumerable<int>? categories = null, CancellationToken cancellationToken = default)
-        => SearchCoreAsync(query, categories, cancellationToken, false);
+        => SearchCoreAsync(query, TextSearchType, TextSearchLimit, categories, cancellationToken, false);
 
     public Task<List<TorrentSearchResult>> SearchCheckedAsync(string query, IEnumerable<int>? categories, CancellationToken cancellationToken)
-        => SearchCoreAsync(query, categories, cancellationToken, true);
+        => SearchCoreAsync(query, TextSearchType, TextSearchLimit, categories, cancellationToken, true);
+
+    public Task<List<TorrentSearchResult>> SearchByIdAsync(MediaSearchIds ids, IEnumerable<int>? categories = null, CancellationToken cancellationToken = default)
+        => SearchByIdCoreAsync(ids, categories, cancellationToken, false);
+
+    public Task<List<TorrentSearchResult>> SearchByIdCheckedAsync(MediaSearchIds ids, IEnumerable<int>? categories, CancellationToken cancellationToken)
+        => SearchByIdCoreAsync(ids, categories, cancellationToken, true);
+
+    private Task<List<TorrentSearchResult>> SearchByIdCoreAsync(
+        MediaSearchIds ids,
+        IEnumerable<int>? categories,
+        CancellationToken cancellationToken,
+        bool reportErrors)
+    {
+        var query = BuildIdQuery(ids);
+        return query == null
+            ? Task.FromResult(new List<TorrentSearchResult>())
+            : SearchCoreAsync(query, ids.IsSeries ? "tvsearch" : "movie", IdSearchLimit, categories, cancellationToken, reportErrors);
+    }
+
+    /// <summary>
+    /// Prowlarr reads ids from tokens inside the query text (<c>{ImdbId:tt0133093}</c>, <c>{TvdbId:121361}</c>,
+    /// <c>{TmdbId:603}</c>) of a <c>movie</c> / <c>tvsearch</c> request and only asks indexers that support the id.
+    /// The plain text <c>tt0133093</c> is searched as a release name and finds nothing.
+    /// </summary>
+    internal static string? BuildIdQuery(MediaSearchIds ids)
+    {
+        return ids.Preferred() switch
+        {
+            ("imdb", var value) => "{ImdbId:" + value + "}",
+            ("tvdb", var value) => "{TvdbId:" + value + "}",
+            ("tmdb", var value) => "{TmdbId:" + value + "}",
+            _ => null
+        };
+    }
 
     private async Task<List<TorrentSearchResult>> SearchCoreAsync(
         string query,
+        string searchType,
+        int limit,
         IEnumerable<int>? categories,
         CancellationToken cancellationToken,
         bool reportErrors)
@@ -202,7 +244,7 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
 
         var urlBuilder = new List<string>
         {
-            $"{baseUrl}/api/v1/search?query={Uri.EscapeDataString(query)}&type=search&limit=60"
+            $"{baseUrl}/api/v1/search?query={Uri.EscapeDataString(query)}&type={searchType}&limit={limit}"
         };
 
         if (categories != null)
@@ -389,7 +431,8 @@ public class ProwlarrSearchProvider : ITorrentSearchProvider
             Categories = item.Categories?.Where(c => c != null).Select(c => c.Id).ToList() ?? new List<int>(),
             PosterUrl = !string.IsNullOrWhiteSpace(item.PosterUrl) ? ProwlarrLinks.StripApiKey(item.PosterUrl.Trim()) : null,
             ImdbId = item.ImdbId.HasValue && item.ImdbId.Value > 0 ? $"tt{item.ImdbId.Value:D7}" : null,
-            TmdbId = item.TmdbId.HasValue && item.TmdbId.Value > 0 ? item.TmdbId.Value : null
+            TmdbId = item.TmdbId.HasValue && item.TmdbId.Value > 0 ? item.TmdbId.Value : null,
+            TvdbId = item.TvdbId.HasValue && item.TvdbId.Value > 0 ? item.TvdbId.Value : null
         };
     }
 }

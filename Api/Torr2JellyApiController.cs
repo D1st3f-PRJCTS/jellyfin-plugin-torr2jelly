@@ -728,31 +728,14 @@ public class Torr2JellyApiController : ControllerBase
         var imdbId = item.GetProviderId(MediaBrowser.Model.Entities.MetadataProvider.Imdb);
         var tmdbStr = item.GetProviderId(MediaBrowser.Model.Entities.MetadataProvider.Tmdb);
         int? tmdbId = int.TryParse(tmdbStr, out var tid) ? tid : null;
+        var tvdbStr = item.GetProviderId(MediaBrowser.Model.Entities.MetadataProvider.Tvdb);
+        int? tvdbId = int.TryParse(tvdbStr, out var tvid) ? tvid : null;
 
-        var searchResults = new List<TorrentSearchResult>();
-
-        // 1. Try search by IMDb ID if available
-        if (!string.IsNullOrWhiteSpace(imdbId))
-        {
-            searchResults = await _searchService.SearchAsync(imdbId, null, null, isUserAdmin: isAdmin, cancellationToken);
-        }
-
-        // 2. Fallback to original / clean title + year
-        if (searchResults.Count == 0)
-        {
-            var searchTitle = !string.IsNullOrWhiteSpace(item.OriginalTitle) ? item.OriginalTitle : item.Name;
-            var yearStr = item.ProductionYear.HasValue ? item.ProductionYear.Value.ToString() : string.Empty;
-            var query = $"{searchTitle} {yearStr}".Trim();
-            searchResults = await _searchService.SearchAsync(query, null, null, isUserAdmin: isAdmin, cancellationToken);
-        }
-
-        // 3. If still empty and item.Name is localized (different from originalTitle), try localized name
-        if (searchResults.Count == 0 && !string.IsNullOrWhiteSpace(item.Name) && !item.Name.Equals(item.OriginalTitle, StringComparison.OrdinalIgnoreCase))
-        {
-            var yearStr = item.ProductionYear.HasValue ? item.ProductionYear.Value.ToString() : string.Empty;
-            var query = $"{item.Name} {yearStr}".Trim();
-            searchResults = await _searchService.SearchAsync(query, null, null, isUserAdmin: isAdmin, cancellationToken);
-        }
+        // By id on the indexers that support it, by name on the others (the original title first, then the
+        // localized one); see TorrentSearchService.SearchForItemAsync.
+        var ids = new MediaSearchIds(item is MediaBrowser.Controller.Entities.TV.Series, imdbId, tmdbId, tvdbId);
+        var titles = new[] { item.OriginalTitle, item.Name };
+        var searchResults = await _searchService.SearchForItemAsync(ids, titles, item.ProductionYear, isAdmin, cancellationToken);
 
         var resp = new MovieAlternativesResponseDto
         {
@@ -762,6 +745,9 @@ public class Torr2JellyApiController : ControllerBase
             Year = item.ProductionYear,
             ImdbId = imdbId,
             TmdbId = tmdbId,
+
+            // What to put into the dialog's search box: a title the trackers can actually be searched for.
+            SearchQuery = titles.FirstOrDefault(SearchTitles.IsSearchable)?.Trim() ?? string.Empty,
             ExistingStreams = existingStreams,
             Alternatives = searchResults
         };

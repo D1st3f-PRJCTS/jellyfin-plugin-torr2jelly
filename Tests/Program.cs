@@ -403,6 +403,96 @@ foreach (var (title, expected) in new[] {
     var r = Release(); r.Title = title;
     Check(MovieReleaseVerifier.HasUkrainianAudioHint(r) == expected, "Ukrainian audio hint: " + title);
 }
+
+// Searching by id.
+Check(ProwlarrSearchProvider.BuildIdQuery(new MediaSearchIds(false, "TT0133093", 603)) == "{ImdbId:tt0133093}", "Prowlarr id query prefers the IMDb id");
+Check(ProwlarrSearchProvider.BuildIdQuery(new MediaSearchIds(true, null, 1399, 121361)) == "{TvdbId:121361}", "a series without an IMDb id is asked for by TVDB id");
+Check(ProwlarrSearchProvider.BuildIdQuery(new MediaSearchIds(false, "not-an-id", 603, 121361)) == "{TmdbId:603}", "a movie never uses a TVDB id and ignores a malformed IMDb id");
+Check(ProwlarrSearchProvider.BuildIdQuery(new MediaSearchIds(false, null, null)) == null, "no ids means no id search");
+Check(TorznabSearchProvider.BuildIdParameter(new MediaSearchIds(false, "tt0133093", 603)) == ("imdbid", "0133093"), "Torznab gets the IMDb digits without the tt prefix");
+var matrixIds = new MediaSearchIds(false, "tt0133093", 603);
+Check(matrixIds.Matches("tt0133093", null) == true && matrixIds.Matches(null, 603) == true, "one matching id identifies a release");
+Check(matrixIds.Matches("tt0133093", 604) == false && matrixIds.Matches("tt0234215", 603) == false, "one conflicting id disqualifies a release");
+Check(matrixIds.Matches(null, null) == null && matrixIds.Matches("", 0) == null, "a release without ids is neither confirmed nor refuted");
+
+// Titles as search queries.
+foreach (var (title, searchable) in new[] { ("House of the Dragon", true), ("Дім дракона", true), ("Amélie", true), ("1917", true), ("ダンダダン", false), ("君の名は。", false), ("", false), ("...", false) })
+    Check(SearchTitles.IsSearchable(title) == searchable, "searchable title: '" + title + "'");
+Check(SearchTitles.BuildQueries(new[] { "ダンダダン", "ДанДаДан", "дандадан", null }, null).SequenceEqual(new[] { "ДанДаДан" }), "a series is searched by its searchable names, once each, without a year");
+Check(SearchTitles.BuildQueries(new[] { "Dune: Part Two", "Дюна: Частина друга" }, 2024).SequenceEqual(new[] { "Dune: Part Two 2024", "Дюна: Частина друга 2024" }), "a movie is searched by name and year");
+
+// Ranking the releases found for one library item.
+TorrentSearchResult Found(string title, int seeders, string? imdb = null, int? tmdb = null, string hash = "", string link = "") =>
+    new() { Title = title, Seeders = seeders, ImdbId = imdb, TmdbId = tmdb, InfoHash = hash, DownloadUrl = link, Indexer = "T", Id = title };
+var houseIds = new MediaSearchIds(true, "tt0412142", 1408, 73255);
+var ranked = TorrentSearchService.RankForItem(new[] {
+    Found("House of the Dragon (S3) (2026) WEB-DL 1080p", 52),
+    Found("Desperate Housewives (S1-8) (2004-2012)", 25),
+    Found("House.of.Flying.Daggers.2004.1080p", 30, imdb: "tt0385004"),
+    Found("House M.D. (S1) (2004-2005) BDRip 1080p", 20),
+    Found("Dr.House.S01.1080p", 5, imdb: "tt0412142"),
+    Found("Доктор Хаус / House M.D. (S1-8)", 1) }, houseIds, new[] { "House", "Доктор Хаус" }, 2004);
+Check(ranked.Select(r => r.Seeders).SequenceEqual(new[] { 20, 5, 1, 52, 25, 30 }), "series releases: the series itself first, other titles containing its name next, unrelated ones after, a conflicting id last");
+Check(ranked.Count == 6, "ranking never drops a release");
+var dragonIds = new MediaSearchIds(true, null, null);
+var dragon = TorrentSearchService.RankForItem(new[] {
+    Found("House of the Dragon: Behind the Scenes", 90),
+    Found("House of the Dragon (S1) (2022) BDRip", 28),
+    Found("House.of.the.Dragon.S03E01.1080p.WEB", 40),
+    Found("Дім дракона (Сезон 3) / House of the Dragon (Season 3) (2026)", 52) }, dragonIds, new[] { "House of the Dragon", "Дім дракона" }, 2022);
+Check(dragon.Select(r => r.Seeders).SequenceEqual(new[] { 52, 40, 28, 90 }), "later seasons rank with the first one although they carry another year");
+var duneIds = new MediaSearchIds(false, null, null);
+var dune = TorrentSearchService.RankForItem(new[] {
+    Found("Dune (1984) BDRip 1080p", 60),
+    Found("Dune: Part One (2021) UHD BDRemux", 59),
+    Found("Дюна / Dune (2021) WEB-DL", 12) }, duneIds, new[] { "Dune", "Дюна" }, 2021);
+Check(dune.Select(r => r.Seeders).SequenceEqual(new[] { 59, 12, 60 }), "a movie's remake from another year ranks below the releases of its own year");
+foreach (var (name, title, expected) in new[] {
+    ("House of the Dragon (S3) (2026)", "House of the Dragon", TitleMatch.Exact), ("House of the Dragon (S3) (2026)", "House", TitleMatch.Contained),
+    ("Spartacus: House of Ashur (S1)", "House", TitleMatch.Contained), ("Desperate Housewives", "House", TitleMatch.None),
+    ("House 2004 DVDRip", "House", TitleMatch.Exact), ("Rocky 2 (1979)", "Rocky", TitleMatch.Contained),
+    ("Amelie.2001.1080p", "Amélie", TitleMatch.Exact), ("Oceans Eleven (2001)", "Ocean's Eleven", TitleMatch.Exact),
+    ("Серіал / Доктор Хаус (Сезон 1)", "Доктор Хаус", TitleMatch.Exact) })
+    Check(SearchTitles.Match(name, new[] { SearchTitles.Tokenize(title) }) == expected, "title match: '" + title + "' in '" + name + "'");
+var merged = TorrentSearchService.MergeDistinct(
+    new[] { Found("A", 1, hash: new string('a', 40)), Found("B", 1, link: "http://x/b") },
+    new[] { Found("A again", 9, hash: new string('A', 40)), Found("B again", 9, link: "http://x/b"), Found("C", 2, link: "http://x/c") });
+Check(merged.Select(r => r.Title).SequenceEqual(new[] { "A", "B", "C" }), "merging keeps the first copy of a release found by two searches");
+
+using (var f = new Fixture())
+{
+    var added = await f.Service.AddAsync(603, default);
+    Check(added.Status == "stream", "discovery still adds a verified release when searching by id");
+    Check(f.Searches.Any(q => q.Contains("type=movie") && q.Contains("query={ImdbId:tt0133093}")), "discovery asks the indexers for the movie by its IMDb id");
+    Check(!f.Searches.Any(q => q.Contains("query=tt0133093")), "an IMDb id is never sent as a release-name query");
+    Check(f.Searches.Any(q => q.Contains("type=search") && q.Contains("query=The Matrix 1999")), "discovery also searches by name for indexers without id search");
+}
+using (var f = new Fixture())
+{
+    var search = f.Search;
+    var series = await search.SearchForItemAsync(new MediaSearchIds(true, "tt11198330", 94997, 371572), new[] { "House of the Dragon", "Дім дракона" }, 2022);
+    Check(f.Searches.Any(q => q.Contains("type=tvsearch") && q.Contains("query={ImdbId:tt11198330}")), "a series is asked for by id with a tv search");
+    Check(f.Searches.Any(q => q.Contains("type=search") && q.Contains("query=House of the Dragon&")), "a series is searched by its name alone, so later seasons are not hidden behind its first year");
+    Check(f.Searches.Any(q => q.Contains("type=search") && q.Contains("query=House of the Dragon 2022&")), "a series is also searched by name and year, which narrows a common name down");
+    Check(f.Searches.Count == 3, "a title that finds something makes the item's other titles unnecessary");
+    Check(series.Count == 1, "the same release found by id and by name is listed once");
+    f.Searches.Clear();
+    await search.SearchForItemAsync(new MediaSearchIds(false, null, null), new[] { "ダンダダン", "ДанДаДан" }, 2024);
+    Check(f.Searches.Count == 1 && f.Searches[0].Contains("query=ДанДаДан 2024"), "a title in a script the trackers do not use is skipped in favour of the localized one");
+    f.Searches.Clear();
+    await search.SearchAsync("tt0133093");
+    Check(f.Searches.Count == 2 && f.Searches.Any(q => q.Contains("type=movie")) && f.Searches.Any(q => q.Contains("type=tvsearch")), "a typed IMDb id searches movies and series by id");
+}
+using (var f = new Fixture())
+{
+    Plugin.Instance!.Configuration.EnableProwlarr = false;
+    Plugin.Instance.Configuration.EnableTorznab = true;
+    Plugin.Instance.Configuration.TorznabUrl = "http://torznab.test/api";
+    Plugin.Instance.Configuration.TorznabApiKey = "test";
+    var found = await f.Search.SearchForItemAsync(new MediaSearchIds(false, "tt0133093", 603), new[] { "The Matrix" }, 1999);
+    Check(f.Searches.Any(q => q.Contains("t=movie") && q.Contains("imdbid=0133093")) && f.Searches.Any(q => q.Contains("t=search") && q.Contains("q=The Matrix 1999")), "Torznab is asked by id and by name");
+    Check(found.Count == 1 && found[0].ImdbId == "tt0133093", "Torznab id results are merged with the name results");
+}
 Console.WriteLine($"{passed} checks passed.");
 
 public class Proxy : DispatchProxy
@@ -434,7 +524,11 @@ public sealed class Fixture : HttpMessageHandler, IHttpClientFactory, IDisposabl
     public StrmEngine Engine;
     public ImdbRatings Ratings;
     public MovieDiscoveryService Service;
+    public TorrentSearchService Search;
     public TorrClientService Client;
+
+    // Every indexer search request, as "path?query" with the query unescaped.
+    public List<string> Searches = new();
     private byte[] _torrent = Single("The.Matrix.1999.mkv");
     public HttpClient CreateClient(string name) => new(this, false);
     public static byte[] Single(string name) => Encoding.UTF8.GetBytes("d4:infod6:lengthi900000000e4:name" + Encoding.UTF8.GetByteCount(name) + ":" + name + "ee");
@@ -463,7 +557,7 @@ public sealed class Fixture : HttpMessageHandler, IHttpClientFactory, IDisposabl
         Engine = new StrmEngine(NullLogger<StrmEngine>.Instance, lib, DispatchProxy.Create<ILibraryMonitor, Proxy>(), paths, daemon, this);
         Ratings = new ImdbRatings(paths, this, NullLogger<ImdbRatings>.Instance);
         var tmdb = new TmdbClient(NullLogger<TmdbClient>.Instance, this);
-        var search = new TorrentSearchService(NullLogger<TorrentSearchService>.Instance, new ProwlarrSearchProvider(NullLogger<ProwlarrSearchProvider>.Instance, this), new TorznabSearchProvider(NullLogger<TorznabSearchProvider>.Instance, this));
+        var search = Search = new TorrentSearchService(NullLogger<TorrentSearchService>.Instance, new ProwlarrSearchProvider(NullLogger<ProwlarrSearchProvider>.Instance, this), new TorznabSearchProvider(NullLogger<TorznabSearchProvider>.Instance, this));
         Client = new TorrClientService(NullLogger<TorrClientService>.Instance, this, daemon, paths);
         Service = new MovieDiscoveryService(tmdb, Ratings, Engine, search, Client, new TorrentLinkResolver(NullLogger<TorrentLinkResolver>.Instance, this), this, lib, NullLogger<MovieDiscoveryService>.Instance);
     }
@@ -490,6 +584,7 @@ public sealed class Fixture : HttpMessageHandler, IHttpClientFactory, IDisposabl
         if (uri.Host == "indexer.test")
         {
             if (uri.AbsolutePath.StartsWith("/download")) return new(HttpStatusCode.OK) { Content = new ByteArrayContent(_torrent) };
+            lock (Searches) Searches.Add(uri.AbsolutePath + Uri.UnescapeDataString(uri.Query));
             if (SearchFails) return new(HttpStatusCode.ServiceUnavailable);
             return Json(new[] { new { title = "The Matrix 1999 2160p Remux UKR", size = 900000000, seeders = 7, protocol = "torrent", indexer = "Test", infoHash = WrongSearchHash ? new string('b', 40) : Metadata.Hash, downloadUrl = "http://indexer.test/download/fixture", imdbId = MissingIds ? (long?)null : 133093, tmdbId = MissingIds ? (int?)null : 603, indexerFlags = new[] { "freeleech" } } });
         }
@@ -532,6 +627,7 @@ public sealed class Fixture : HttpMessageHandler, IHttpClientFactory, IDisposabl
             }
             return Json(new { });
         }
+        if (uri.Host == "torznab.test") lock (Searches) Searches.Add(uri.AbsolutePath + Uri.UnescapeDataString(uri.Query));
         if (uri.Host == "torznab.test") return new(HttpStatusCode.OK)
         {
             Content = new StringContent("<rss xmlns:torznab='http://torznab.com/schemas/2015/feed'><channel><item><title>The Matrix 1999 2160p UKR</title><enclosure url='http://indexer.test/download/fixture' length='900000000' type='application/x-bittorrent'/><torznab:attr name='imdb' value='tt0133093'/><torznab:attr name='tmdbid' value='603'/><torznab:attr name='seeders' value='7'/><torznab:attr name='downloadvolumefactor' value='0'/></item></channel></rss>", Encoding.UTF8, "application/xml")

@@ -573,6 +573,22 @@
         return s.replace(/[\u0000-ɏḀ-ỿ -⁯℀-⅏]/g, '') === '';
     }
 
+    // True when the text is written in a script the trackers' release names use (Latin or Cyrillic). A title in
+    // another script (Japanese, Korean, ...) is useless as a search query. Mirrors SearchTitles.IsSearchable.
+    function isSearchableTitle(text) {
+        var s = String(text || '').trim();
+        if (!/[0-9A-Za-z\u00C0-\u024F\u0400-\u052F]/.test(s)) return false;
+        // Latin, Cyrillic, and the punctuation / symbol blocks that titles are decorated with.
+        return !/[^\u0000-\u024F\u0400-\u052F\u1E00-\u1EFF\u2000-\u214F]/.test(s);
+    }
+
+    // What goes into a dialog's search box: the first of the item's titles that can be searched for.
+    function pickSearchTitle(originalTitle, name) {
+        if (isSearchableTitle(originalTitle)) return String(originalTitle).trim();
+        if (isSearchableTitle(name)) return String(name).trim();
+        return String(originalTitle || name || '').trim();
+    }
+
     // The title a placeholder folder is named after: the original title when it is Latin-script, else the TMDb title.
     function placeholderTitle(item) {
         var original = String(item.OriginalTitle || '').trim();
@@ -1712,6 +1728,7 @@
                     data.Year = loaded.Year || null;
                 }
                 data.OriginalTitle = (loaded && loaded.OriginalTitle) || '';
+                if (loaded && loaded.SearchQuery && !data.SearchQuery) data.SearchQuery = String(loaded.SearchQuery);
                 updateDrawerItemTitle();
             } else {
                 var authMsg = authErrorMessage(res.status, i18n);
@@ -1863,7 +1880,7 @@
         }
 
         var alts = data.Alternatives;
-        var queryVal = (data.typedQuery != null) ? data.typedQuery : (data.SearchQuery || (data.OriginalTitle || data.Title || ''));
+        var queryVal = (data.typedQuery != null) ? data.typedQuery : (data.SearchQuery || pickSearchTitle(data.OriginalTitle, data.Title));
 
         var activeList = alts;
 
@@ -2121,7 +2138,7 @@
                 data.Title = String(item.Name);
                 setDialogSubtitle(data.Title);
             }
-            prefillSeriesQuery(item.OriginalTitle || item.Name);
+            prefillSeriesQuery(pickSearchTitle(item.OriginalTitle, item.Name));
         });
         loadSeriesAlternatives();
     }
@@ -2167,7 +2184,7 @@
         renderSeriesResults();
     }
 
-    // Initial results: the same IMDb-then-title search the movie "Find releases" tab starts with.
+    // Initial results: the same id-plus-title search the movie "Find releases" tab starts with.
     function loadSeriesAlternatives() {
         var data = _seriesData;
         if (!data) return;
@@ -2177,7 +2194,7 @@
                 setDialogSubtitle(d.Title);
             }
             d.OriginalTitle = (loaded && loaded.OriginalTitle) || '';
-            prefillSeriesQuery(d.OriginalTitle || d.Title);
+            prefillSeriesQuery((loaded && loaded.SearchQuery) || pickSearchTitle(d.OriginalTitle, d.Title));
             return (loaded && Array.isArray(loaded.Alternatives)) ? loaded.Alternatives : [];
         });
     }

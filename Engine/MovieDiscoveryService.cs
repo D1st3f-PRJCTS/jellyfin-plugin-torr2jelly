@@ -66,13 +66,17 @@ public sealed class MovieDiscoveryService(TmdbClient tmdb, ImdbRatings ratings, 
             var result = new DiscoveryAddResultDto { ItemId = FindItem(id, movie.ImdbId) };
             var releases = new List<TorrentSearchResult>();
             var searchFailed = false;
-            var queries = new[] { movie.ImdbId, (movie.OriginalTitle ?? movie.Title) + " " + movie.Year, movie.Title + " " + movie.Year }
-                .Where(q => !string.IsNullOrWhiteSpace(q)).Distinct(StringComparer.OrdinalIgnoreCase);
-            foreach (var query in queries)
+            // By id first: indexers that support it return every release of this movie, each carrying the ids the
+            // verifier requires. Then by name, for the indexers that only search release names.
+            var ids = new MediaSearchIds(false, movie.ImdbId, id);
+            var searches = new List<Func<Task<CheckedSearchResult>>> { () => search.SearchCheckedByIdAsync(ids, category.Name, ct) };
+            foreach (var query in SearchTitles.BuildQueries(new[] { folderTitle, movie.OriginalTitle, movie.Title }, movie.Year))
+                searches.Add(() => search.SearchCheckedAsync(query, category.Name, ct));
+            foreach (var run in searches)
             {
                 try
                 {
-                    var found = await search.SearchCheckedAsync(query!, category.Name, ct);
+                    var found = await run();
                     releases.AddRange(found.Results);
                     searchFailed |= found.HadFailures;
                 }

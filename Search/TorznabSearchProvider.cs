@@ -43,7 +43,13 @@ public class TorznabSearchProvider : ITorrentSearchProvider
     /// (e.g. <c>.../api?apikey=...</c>), in which case the new parameters are joined with '&amp;'.
     /// The API key is added only when the base URL does not already carry one.
     /// </summary>
-    private static string BuildUrl(string baseUrl, string apiKey, string function, string? query = null, IEnumerable<int>? categories = null)
+    private static string BuildUrl(
+        string baseUrl,
+        string apiKey,
+        string function,
+        string? query = null,
+        IEnumerable<int>? categories = null,
+        (string Name, string Value)? idParameter = null)
     {
         var url = baseUrl;
         var first = true;
@@ -75,6 +81,11 @@ public class TorznabSearchProvider : ITorrentSearchProvider
         if (query != null)
         {
             Append($"q={Uri.EscapeDataString(query)}");
+        }
+
+        if (idParameter is { } id)
+        {
+            Append($"{id.Name}={Uri.EscapeDataString(id.Value)}");
         }
 
         if (!string.IsNullOrWhiteSpace(apiKey) && !ProwlarrLinks.HasApiKey(baseUrl))
@@ -117,25 +128,56 @@ public class TorznabSearchProvider : ITorrentSearchProvider
     }
 
     public Task<List<TorrentSearchResult>> SearchAsync(string query, IEnumerable<int>? categories = null, CancellationToken cancellationToken = default)
-        => SearchCoreAsync(query, categories, cancellationToken, false);
+        => SearchCoreAsync(query, null, categories, cancellationToken, false);
 
     public Task<List<TorrentSearchResult>> SearchCheckedAsync(string query, IEnumerable<int>? categories, CancellationToken cancellationToken)
-        => SearchCoreAsync(query, categories, cancellationToken, true);
+        => SearchCoreAsync(query, null, categories, cancellationToken, true);
 
+    public Task<List<TorrentSearchResult>> SearchByIdAsync(MediaSearchIds ids, IEnumerable<int>? categories = null, CancellationToken cancellationToken = default)
+        => SearchCoreAsync(null, ids, categories, cancellationToken, false);
+
+    public Task<List<TorrentSearchResult>> SearchByIdCheckedAsync(MediaSearchIds ids, IEnumerable<int>? categories, CancellationToken cancellationToken)
+        => SearchCoreAsync(null, ids, categories, cancellationToken, true);
+
+    /// <summary>
+    /// The Torznab parameter of an id search: <c>imdbid</c> carries the digits only (the form Radarr and Sonarr send),
+    /// <c>tvdbid</c> / <c>tmdbid</c> the number.
+    /// </summary>
+    internal static (string Name, string Value)? BuildIdParameter(MediaSearchIds ids)
+    {
+        return ids.Preferred() switch
+        {
+            ("imdb", _) => ("imdbid", ids.ImdbDigits!),
+            ("tvdb", var value) => ("tvdbid", value),
+            ("tmdb", var value) => ("tmdbid", value),
+            _ => null
+        };
+    }
+
+    // Either a search by name (query) or a search by id (ids): t=search&q=..., or t=movie / t=tvsearch with the id.
     private async Task<List<TorrentSearchResult>> SearchCoreAsync(
-        string query,
+        string? query,
+        MediaSearchIds? ids,
         IEnumerable<int>? categories,
         CancellationToken cancellationToken,
         bool reportErrors)
     {
         var (baseUrl, apiKey) = GetConfig();
-        if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(query))
+        var idParameter = ids == null ? null : BuildIdParameter(ids);
+        if (ids != null && idParameter == null)
+        {
+            return new List<TorrentSearchResult>();
+        }
+
+        if (string.IsNullOrWhiteSpace(baseUrl) || (ids == null && string.IsNullOrWhiteSpace(query)))
         {
             if (reportErrors) throw new InvalidOperationException("search_unavailable");
             return new List<TorrentSearchResult>();
         }
 
-        var url = BuildUrl(baseUrl, apiKey, "search", query, categories);
+        var url = ids == null
+            ? BuildUrl(baseUrl, apiKey, "search", query, categories)
+            : BuildUrl(baseUrl, apiKey, ids.IsSeries ? "tvsearch" : "movie", null, categories, idParameter);
 
         try
         {
@@ -160,6 +202,17 @@ public class TorznabSearchProvider : ITorrentSearchProvider
 
             if (string.Equals(doc.Root?.Name.LocalName, "error", StringComparison.OrdinalIgnoreCase))
             {
+                // An indexer without movie / tv search answers an id search with "function not available": that is
+                // its normal answer, not a failure of the search (the search by name still covers it).
+                if (ids != null)
+                {
+                    _logger.LogDebug(
+                        "Torznab does not support this id search: {Code} {Description}",
+                        doc.Root?.Attribute("code")?.Value,
+                        doc.Root?.Attribute("description")?.Value);
+                    return new List<TorrentSearchResult>();
+                }
+
                 if (reportErrors) throw new InvalidOperationException("search_failed");
                 _logger.LogWarning(
                     "Torznab returned an error: {Code} {Description}",
@@ -252,6 +305,7 @@ public class TorznabSearchProvider : ITorrentSearchProvider
         string? posterUrl = null;
         string? imdbId = null;
         int? tmdbId = null;
+        int? tvdbId = null;
         double? downloadFactor = null;
         double? uploadFactor = null;
         var tags = new TagCollector();
@@ -342,6 +396,14 @@ public class TorznabSearchProvider : ITorrentSearchProvider
                     if (SearchParse.TryInt(attrVal, out var tid) && tid > 0)
                     {
                         tmdbId = tid;
+                    }
+
+                    break;
+                case "tvdb":
+                case "tvdbid":
+                    if (SearchParse.TryInt(attrVal, out var tvid) && tvid > 0)
+                    {
+                        tvdbId = tvid;
                     }
 
                     break;
@@ -447,7 +509,8 @@ public class TorznabSearchProvider : ITorrentSearchProvider
             Tags = tags.ToList(),
             PosterUrl = posterUrl != null ? ProwlarrLinks.StripApiKey(posterUrl) : null,
             ImdbId = imdbId,
-            TmdbId = tmdbId
+            TmdbId = tmdbId,
+            TvdbId = tvdbId
         };
     }
 }

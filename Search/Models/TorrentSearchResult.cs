@@ -39,6 +39,7 @@ public class TorrentSearchResult
     public string? PosterUrl { get; set; }
     public string? ImdbId { get; set; }
     public int? TmdbId { get; set; }
+    public int? TvdbId { get; set; }
 
     private static readonly string[] SizeSuffixes = { "B", "KB", "MB", "GB", "TB", "PB", "EB" };
 

@@ -63,16 +63,166 @@ public class TorrentSearchService
         bool? onlyGold = null, // obsolete: accepted for compatibility, ignored (see PluginConfiguration.FreeleechOnly)
         bool isUserAdmin = true,
         CancellationToken cancellationToken = default)
-        => await SearchCoreAsync(query, category, isUserAdmin, cancellationToken, false);
+    {
+        // A bare IMDb id ("tt0133093") names one title, but says nothing about its kind: ask for both.
+        var imdbId = MediaSearchIds.NormalizeImdb(query);
+        if (imdbId != null)
+        {
+            var movie = RunAsync(ProviderQuery.ById(new MediaSearchIds(false, imdbId, null)), category, cancellationToken, false);
+            var series = RunAsync(ProviderQuery.ById(new MediaSearchIds(true, imdbId, null)), category, cancellationToken, false);
+            await Task.WhenAll(movie, series);
+            return MergeDistinct(movie.Result, series.Result).OrderByDescending(r => r.Seeders).ToList();
+        }
+
+        return await RunAsync(ProviderQuery.ByText(query), category, cancellationToken, false);
+    }
 
     public async Task<CheckedSearchResult> SearchCheckedAsync(string query, string category, CancellationToken ct)
     {
         var failed = false;
-        var results = await SearchCoreAsync(query, category, true, ct, true, () => failed = true);
+        var results = await RunAsync(ProviderQuery.ByText(query), category, ct, true, () => failed = true);
         return new CheckedSearchResult(results, failed);
     }
 
-    private async Task<List<TorrentSearchResult>> SearchCoreAsync(string query, string? category, bool isUserAdmin, CancellationToken cancellationToken, bool reportErrors, Action? onFailure = null)
+    /// <summary>The id search of <see cref="SearchCheckedAsync"/>: failures are reported instead of looking like "no releases".</summary>
+    public async Task<CheckedSearchResult> SearchCheckedByIdAsync(MediaSearchIds ids, string category, CancellationToken ct)
+    {
+        if (!ids.HasAny)
+        {
+            return new CheckedSearchResult(new List<TorrentSearchResult>(), false);
+        }
+
+        var failed = false;
+        var results = await RunAsync(ProviderQuery.ById(ids), category, ct, true, () => failed = true);
+        return new CheckedSearchResult(results, failed);
+    }
+
+    /// <summary>
+    /// The releases of one library item (a movie's other versions, a series' seasons). Two kinds of search run side
+    /// by side: by id, for the indexers that support it (exact, and independent of the language of the release
+    /// names), and by name, for the others. A movie is searched by name and year. A series is searched by its name
+    /// alone as well, because later seasons carry the year they aired in, not the year the series began. A title in
+    /// a script the trackers do not use (e.g. Japanese) is not searched; the item's next title is only tried when
+    /// the one before it found nothing.
+    /// </summary>
+    public async Task<List<TorrentSearchResult>> SearchForItemAsync(
+        MediaSearchIds ids,
+        IReadOnlyList<string?> titles,
+        int? year,
+        bool isUserAdmin = true,
+        CancellationToken cancellationToken = default)
+    {
+        Task<List<TorrentSearchResult>> ByName(string title)
+        {
+            var queries = new List<string> { SearchTitles.WithYear(title, year) };
+            if (ids.IsSeries && year is > 0)
+            {
+                queries.Insert(0, title);
+            }
+
+            return RunManyAsync(queries.Select(ProviderQuery.ByText), cancellationToken);
+        }
+
+        var names = SearchTitles.Searchable(titles);
+        var byId = ids.HasAny
+            ? RunAsync(ProviderQuery.ById(ids), null, cancellationToken, false)
+            : Task.FromResult(new List<TorrentSearchResult>());
+        var byName = names.Count > 0 ? ByName(names[0]) : Task.FromResult(new List<TorrentSearchResult>());
+        await Task.WhenAll(byId, byName);
+
+        var named = byName.Result;
+        for (var i = 1; i < names.Count && named.Count == 0; i++)
+        {
+            named = await ByName(names[i]);
+        }
+
+        return RankForItem(MergeDistinct(byId.Result, named), ids, titles, year);
+    }
+
+    private async Task<List<TorrentSearchResult>> RunManyAsync(IEnumerable<ProviderQuery> queries, CancellationToken cancellationToken)
+    {
+        var results = await Task.WhenAll(queries.Select(query => RunAsync(query, null, cancellationToken, false)));
+        return MergeDistinct(results);
+    }
+
+    /// <summary>
+    /// Orders the releases found for one item by how sure it is that they are that title, then by seeders:
+    /// first the releases with a matching id, or with the item's title as a whole part of their name, or with the
+    /// title and the item's year (a movie needs the year: a remake shares the title); then the ones that only contain
+    /// the title; then the ones that do not; last the ones whose id names another title. Nothing is removed: a
+    /// tracker can file a release under a wrong id, and a name can be written in a way this does not recognise.
+    /// </summary>
+    internal static List<TorrentSearchResult> RankForItem(
+        IEnumerable<TorrentSearchResult> results,
+        MediaSearchIds ids,
+        IReadOnlyList<string?> titles,
+        int? year)
+    {
+        var phrases = titles.Select(title => SearchTitles.Tokenize(title)).Where(words => words.Length > 0).ToList();
+
+        int Relevance(TorrentSearchResult result)
+        {
+            switch (ids.Matches(result.ImdbId, result.TmdbId, result.TvdbId))
+            {
+                case true:
+                    return 3;
+                case false:
+                    return 0;
+            }
+
+            var match = SearchTitles.Match(result.Title, phrases);
+            if (match == TitleMatch.None)
+            {
+                return 1;
+            }
+
+            var hasYear = SearchTitles.ContainsYear(result.Title, year);
+            var certain = ids.IsSeries
+                ? match == TitleMatch.Exact || hasYear
+                : hasYear || (match == TitleMatch.Exact && year is not > 0);
+            return certain ? 3 : 2;
+        }
+
+        return results
+            .Select(r => (Result: r, Relevance: Relevance(r)))
+            .OrderByDescending(x => x.Relevance)
+            .ThenByDescending(x => x.Result.Seeders)
+            .Select(x => x.Result)
+            .ToList();
+    }
+
+    /// <summary>One search as the providers see it: by name, or by id.</summary>
+    private readonly record struct ProviderQuery(string? Text, MediaSearchIds? Ids)
+    {
+        public static ProviderQuery ByText(string text) => new(text, null);
+
+        public static ProviderQuery ById(MediaSearchIds ids) => new(null, ids);
+    }
+
+    private Task<List<TorrentSearchResult>> QueryProviderAsync(
+        ITorrentSearchProvider provider,
+        ProviderQuery query,
+        IEnumerable<int>? categoryIds,
+        bool reportErrors,
+        CancellationToken cancellationToken)
+    {
+        if (!reportErrors)
+        {
+            return SearchProviderAsync(provider, query, categoryIds, cancellationToken);
+        }
+
+        // The checked variants throw instead of answering with an empty list.
+        return (provider, query.Ids) switch
+        {
+            (ProwlarrSearchProvider prowlarr, null) => prowlarr.SearchCheckedAsync(query.Text!, categoryIds, cancellationToken),
+            (ProwlarrSearchProvider prowlarr, var ids) => prowlarr.SearchByIdCheckedAsync(ids, categoryIds, cancellationToken),
+            (TorznabSearchProvider torznab, null) => torznab.SearchCheckedAsync(query.Text!, categoryIds, cancellationToken),
+            (TorznabSearchProvider torznab, var ids) => torznab.SearchByIdCheckedAsync(ids, categoryIds, cancellationToken),
+            _ => SearchProviderAsync(provider, query, categoryIds, cancellationToken)
+        };
+    }
+
+    private async Task<List<TorrentSearchResult>> RunAsync(ProviderQuery query, string? category, CancellationToken cancellationToken, bool reportErrors, Action? onFailure = null)
     {
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
 
@@ -92,12 +242,12 @@ public class TorrentSearchService
         var searches = new List<Task<List<TorrentSearchResult>>>();
         if (config.EnableProwlarr)
         {
-            searches.Add(reportErrors ? _prowlarr.SearchCheckedAsync(query, categoryIds, cancellationToken) : SearchProviderAsync(_prowlarr, query, categoryIds, cancellationToken));
+            searches.Add(QueryProviderAsync(_prowlarr, query, categoryIds, reportErrors, cancellationToken));
         }
 
         if (config.EnableTorznab)
         {
-            searches.Add(reportErrors ? _torznab.SearchCheckedAsync(query, categoryIds, cancellationToken) : SearchProviderAsync(_torznab, query, categoryIds, cancellationToken));
+            searches.Add(QueryProviderAsync(_torznab, query, categoryIds, reportErrors, cancellationToken));
         }
 
         if (reportErrors && searches.Count == 0) throw new InvalidOperationException("search_unavailable");
@@ -161,13 +311,16 @@ public class TorrentSearchService
     /// </summary>
     private async Task<List<TorrentSearchResult>> SearchProviderAsync(
         ITorrentSearchProvider provider,
-        string query,
+        ProviderQuery query,
         IEnumerable<int>? categoryIds,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await provider.SearchAsync(query, categoryIds, cancellationToken) ?? new List<TorrentSearchResult>();
+            var results = query.Ids != null
+                ? await provider.SearchByIdAsync(query.Ids, categoryIds, cancellationToken)
+                : await provider.SearchAsync(query.Text ?? string.Empty, categoryIds, cancellationToken);
+            return results ?? new List<TorrentSearchResult>();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -221,6 +374,51 @@ public class TorrentSearchService
         }
 
         return deduped;
+    }
+
+    /// <summary>
+    /// Joins the results of several searches for the same title, in the given order, without repeating a release
+    /// that an earlier list already holds (same info-hash, same download link, or same indexer entry).
+    /// </summary>
+    internal static List<TorrentSearchResult> MergeDistinct(params IEnumerable<TorrentSearchResult>[] lists)
+    {
+        // Ordinal: download links carry case-sensitive tokens.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var merged = new List<TorrentSearchResult>();
+
+        foreach (var result in lists.SelectMany(list => list))
+        {
+            var keys = new List<string>(3);
+            var hash = InfoHashHelper.Normalize(result.InfoHash);
+            if (hash.Length > 0)
+            {
+                keys.Add("hash:" + hash);
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.DownloadUrl))
+            {
+                keys.Add("link:" + result.DownloadUrl.Trim());
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.Id))
+            {
+                keys.Add("id:" + result.Indexer + "\u001f" + result.Id.Trim());
+            }
+
+            if (keys.Any(seen.Contains))
+            {
+                continue;
+            }
+
+            foreach (var key in keys)
+            {
+                seen.Add(key);
+            }
+
+            merged.Add(result);
+        }
+
+        return merged;
     }
 
     private static bool IsBetterCopy(TorrentSearchResult candidate, TorrentSearchResult current)

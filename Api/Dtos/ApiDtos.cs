@@ -286,6 +286,10 @@ public class MovieAlternativesResponseDto
     public int? Year { get; set; }
     public string? ImdbId { get; set; }
     public int? TmdbId { get; set; }
+
+    /// <summary>The item's first title that the indexers can be searched for (empty when it has none).</summary>
+    public string SearchQuery { get; set; } = string.Empty;
+
     public List<MovieStreamInfoDto> ExistingStreams { get; set; } = new();
     public List<TorrentSearchResult> Alternatives { get; set; } = new();
 }

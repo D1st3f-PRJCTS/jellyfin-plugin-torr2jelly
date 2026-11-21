@@ -28,4 +28,8 @@
     <EmbeddedResource Include="Web\**\*.html;Web\**\*.js;Web\**\*.css" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="DiscoveryTests" />
+  </ItemGroup>
+
 </Project>

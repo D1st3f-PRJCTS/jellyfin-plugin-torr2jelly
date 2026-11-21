@@ -14,9 +14,9 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <Compile Remove="Tests\**\*.cs" />
-    <EmbeddedResource Remove="Tests\**\*" />
-    <None Remove="Tests\**\bin\**;Tests\**\obj\**" />
+    <Compile Remove="Tests\**\*.cs;tools\**\*.cs" />
+    <EmbeddedResource Remove="Tests\**\*;tools\**\*" />
+    <None Remove="Tests\**\bin\**;Tests\**\obj\**;tools\**\bin\**;tools\**\obj\**" />
   </ItemGroup>
 
   <ItemGroup>
